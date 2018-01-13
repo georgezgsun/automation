@@ -87,6 +87,12 @@ int main()
         read_size = read(connfd, receiveBuff, 64);
         if (read_size <= 0)
         {
+            if (clock() > timeout)  // no new command after timeout, connection lost
+            {
+                close(connfd);
+                printf("Timeout, close current connection, waiting for future connect.");
+                connfd = 0;
+            }
             continue;
         }
 
@@ -185,12 +191,6 @@ int main()
             connfd = 0;
         }
 
-        if (clock() > timeout)
-        {
-            close(connfd);
-            printf("Timeout, close current connection, waiting for future connection.");
-            connfd = 0;
-        }
         usleep(10*1000);
     }
 
