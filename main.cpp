@@ -66,121 +66,99 @@ int main()
     int tempfd = 0;
     string reply = "";
     GPIO_Handler * gpio = new GPIO_Handler();
-    clock_t timeout = 0;
+    clock_t timeout = clock() + 60 *1000;
     int read_size = 0;
     int write_size = 0;
     bool received = false;
-    string command = "";
+    int command = 0;
     int num = 0;
     string id = "";
 
     bool testEnd = false;
-    while(!testEnd)
+    while(1)
     {
-        tempfd = accept(listenfd, (struct sockaddr*)&cli_addr, &client);
-        if (tempfd > 0)
+        if (connfd <= 0)
         {
-            printf("New Client connected @ %d\r\n", tempfd);
+            connfd = accept(listenfd, (struct sockaddr*)&cli_addr, &client);
             if (connfd > 0)
             {
-                printf("Closed the previous connection @ %d\r\n", connfd);
-                close(connfd);
+                printf("New Client connected @ %d\r\n", tempfd);
             }
-            connfd = tempfd;
         }
-
-        if (connfd > 0)
+        else
         {
             read_size = read(connfd, receiveBuff, 64);
             if (read_size > 0)
             {
                 printf("Received command from the automation server: %s with size %d\n",receiveBuff,read_size);
+                timeout = clock() + 60 * 1000;  \\timeout to be 1 min
                 if (read_size > 10)
                 {
                     testEnd = true;
                     printf("Change the test flag to true. \n");
                 }
             }
-            else
-            {
-                write_size = write(connfd, "Waiting for new command.", 24);
-                printf(".");
-            }
 
             if (read_size >= 3)
             {
-                command = receiveBuff[0];
-                num = receiveBuff[1]-48;
+                command = (receiveBuff[0]-97) * 8 + receiveBuff[1] - 48;
                 id = receiveBuff[2];
-                received = true;
                 read_size = 0;
 
                 reply = "";
-                bool result = false;
-                if (command == "t")
+                switch (command)
                 {
-                    switch (num) 
-                    {
-                        case 1 :
-                            gpio->Enable_Trigger_1();
-                            usleep(1000*1000);
-                            gpio->Disable_Trigger_1();
-                            reply = "OK";
-                            break;
-                        case 3 :
-                            gpio->Enable_Trigger_2();
-                            usleep(1000*1000);
-                            gpio->Disable_Trigger_2();
-                            reply = "OK";
-                            break;
-                        case 4 :
-                            gpio->Enable_Trigger_3();
-                            usleep(1000*1000);
-                            gpio->Disable_Trigger_3();
-                            reply = "OK";
-                            break;
-                        case 5 :
-                            gpio->Enable_Trigger_4();
-                            usleep(1000*1000);
-                            gpio->Disable_Trigger_4();
-                            reply = "OK";
-                            break;
-                        case 6 :
-                            gpio->Enable_Trigger_5();
-                            usleep(1000*1000);
-                            gpio->Disable_Trigger_5();
-                            reply = "OK";
-                            break;
-                        case 7 :
-                            gpio->Enable_Trigger_6();
-                            usleep(1000*1000);
-                            gpio->Disable_Trigger_6();
-                            reply = "OK";
-                    }
-                }
-
-                if (command == "r")
-                {
-                    reply = "OK";
-                }
-
-                if (command == "m")
-                {
-                    switch (num) 
-                    {
-                        case 1 :
-                            gpio->Enable_Mic_Trigger_1();
-                            usleep(1000*1000);
-                            gpio->Disable_Mic_Trigger_1();
-                            reply = "OK";
-                            break;
-                        case 2 :
-                            gpio->Enable_Mic_Trigger_2();
-                            usleep(1000*1000);
-                            gpio->Disable_Mic_Trigger_2();
-                            reply = "OK";
-                            break;
-                    }
+                    case 153 :  \\ "t1"=(116-97)*8+1=153
+                        gpio->Enable_Trigger_1();
+                        usleep(1000*1000);
+                        gpio->Disable_Trigger_1();
+                        reply = "OK";
+                        break;
+                    case 155 : \\ "t3"=(116-97)*8+3=155
+                        gpio->Enable_Trigger_2();
+                        usleep(1000*1000);
+                        gpio->Disable_Trigger_2();
+                        reply = "OK";
+                        break;
+                    case 156 :  \\ "t4"=(116-97)*8+4=156
+                        gpio->Enable_Trigger_3();
+                        usleep(1000*1000);
+                        gpio->Disable_Trigger_3();
+                        reply = "OK";
+                        break;
+                    case 157 :  \\ "t1"=(116-97)*8+5=157
+                        gpio->Enable_Trigger_4();
+                        usleep(1000*1000);
+                        gpio->Disable_Trigger_4();
+                        reply = "OK";
+                        break;
+                    case 158 :  \\ "t1"=(116-97)*8+6=158
+                        gpio->Enable_Trigger_5();
+                        usleep(1000*1000);
+                        gpio->Disable_Trigger_5();
+                        reply = "OK";
+                        break;
+                    case 159 :  \\ "t1"=(116-97)*8+7=159
+                        gpio->Enable_Trigger_6();
+                        usleep(1000*1000);
+                        gpio->Disable_Trigger_6();
+                        reply = "OK";
+                        break;
+                    case 97 : \\ "m1"=(109-97)*8+1=97
+                        gpio->Enable_Mic_Trigger_1();
+                        usleep(1000*1000);
+                        gpio->Disable_Mic_Trigger_1();
+                        reply = "OK";
+                        break;                    
+                    case 98 : \\ "m1"=(109-98)*8+1=98
+                        gpio->Enable_Mic_Trigger_2();
+                        usleep(1000*1000);
+                        gpio->Disable_Mic_Trigger_2();
+                        reply = "OK";
+                        break;
+                    case 97 : \\ "r1"=(114-97)*8+1=145
+                        reply = "OK";
+                        break;                    
                 }
 
                 if (reply == "OK")
@@ -197,6 +175,13 @@ int main()
                     printf("Unknown command.\n");
                 }
             } //end of size == 3
+            
+            if (clock() > timeout)
+            {
+                close(connfd);
+                printf("Timeout, close current connection, waiting for future connection.");
+                connfd = 0;
+            }
         } // end of connfd > 0
         else
         {
