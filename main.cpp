@@ -79,118 +79,119 @@ int main()
     {
         if (connfd <= 0)
         {
-            tempfd = accept4(listenfd, (struct sockaddr*)&cli_addr, &client, SOCK_NONBLOCK);
-            if (tempfd > 0)
-            {
-                printf("New Client connected @ %d\r\n", tempfd);
-                connfd = tempfd
-            }
-            else
-            {
-                continue;
-            }
+            connfd = accept(listenfd, (struct sockaddr*)&cli_addr, &client);
+            printf("New Client connected @ %d\r\n", tempfd);
+            continue;
         }
-        
+
         read_size = read(connfd, receiveBuff, 64);
         if (read_size <= 0)
         {
             continue;
         }
-        printf("Received command from the automation server: %s with size %d\n",receiveBuff,read_size)
-        timeout = clock() + 60 * 1000;  \\timeout to be 1 min
+
+        printf("Received command from the automation server: %s with size %d\n",receiveBuff,read_size);
+        timeout = clock() + 60 * 1000;  //timeout to be 1 min
         if (read_size > 10)
         {
             testEnd = true;
             printf("Change the test flag to true. \n");
             break;
         }
-         
+
         if (read_size < 3)
         {
-            printf("Invalid command %s\n", receiveBuff)
+            printf("Invalid command %s\n", receiveBuff);
             continue;
         }
-            
+
         command = (receiveBuff[0]-97) * 8 + receiveBuff[1] - 48;
         id = receiveBuff[2];
         read_size = 0;
         reply = "";
         switch (command)
         {
-            case 153 :  \\ "t1"=(116-97)*8+1=153
+            case 153 :  // "t1"=(116-97)*8+1=153
                 gpio->Enable_Trigger_1();
                 usleep(1000*1000);
                 gpio->Disable_Trigger_1();
                 reply = "OK";
                 break;
-            case 155 : \\ "t3"=(116-97)*8+3=155
+            case 155 : // "t3"=(116-97)*8+3=155
                 gpio->Enable_Trigger_2();
                 usleep(1000*1000);
                 gpio->Disable_Trigger_2();
                 reply = "OK";
                 break;
-            case 156 :  \\ "t4"=(116-97)*8+4=156
+            case 156 :  // "t4"=(116-97)*8+4=156
                 gpio->Enable_Trigger_3();
                 usleep(1000*1000);
                 gpio->Disable_Trigger_3();
                 reply = "OK";
                 break;
-            case 157 :  \\ "t5"=(116-97)*8+5=157
+            case 157 :  // "t5"=(116-97)*8+5=157
                 gpio->Enable_Trigger_4();
                 usleep(1000*1000);
                 gpio->Disable_Trigger_4();
                 reply = "OK";
                 break;
-            case 158 :  \\ "t6"=(116-97)*8+6=158
+            case 158 :  // "t6"=(116-97)*8+6=158
                 gpio->Enable_Trigger_5();
                 usleep(1000*1000);
                 gpio->Disable_Trigger_5();
                 reply = "OK";
                 break;
-            case 159 :  \\ "t7"=(116-97)*8+7=159
+            case 159 :  // "t7"=(116-97)*8+7=159
                 gpio->Enable_Trigger_6();
-                        usleep(1000*1000);
-                        gpio->Disable_Trigger_6();
-                        reply = "OK";
-                        break;
-                    case 97 : \\ "m1"=(109-97)*8+1=97
-                        gpio->Enable_Mic_Trigger_1();
-                        usleep(1000*1000);
-                        gpio->Disable_Mic_Trigger_1();
-                        reply = "OK";
-                        break;                    
-                    case 98 : \\ "m1"=(109-98)*8+1=98
-                        gpio->Enable_Mic_Trigger_2();
-                        usleep(1000*1000);
-                        gpio->Disable_Mic_Trigger_2();
-                        reply = "OK";
-                        break;
-                    case 97 : \\ "r1"=(114-97)*8+1=145
-                        reply = "OK";
-                        break;                    
+                usleep(1000*1000);
+                gpio->Disable_Trigger_6();
+                reply = "OK";
+                break;
+            case 97 : // "m1"=(109-97)*8+1=97
+                gpio->Enable_Mic_Trigger_1();
+                usleep(1000*1000);
+                gpio->Disable_Mic_Trigger_1();
+                reply = "OK";
+                break;                    
+            case 98 : // "m1"=(109-98)*8+1=98
+                gpio->Enable_Mic_Trigger_2();
+                usleep(1000*1000);
+                gpio->Disable_Mic_Trigger_2();
+                reply = "OK";
+                break;
+            case 145 : // "r1"=(114-97)*8+1=145
+                reply = "OK";
+                break;
         }
 
         if (reply == "OK")
         {
-                    printf("Trigger %s%d signal was sent sucessfully.\n", command, num);
-                    reply = reply + receiveBuff[2]; 
-                    std::copy(reply.begin(), reply.begin() + 3, sendBuff);
-                    write_size = write(connfd, sendBuff, 3);
-                    printf("Reply %s was sent.\n", sendBuff);
+            printf("Trigger %s signal was executed.\n", receiveBuff);
+            reply = reply + receiveBuff[2];
+            std::copy(reply.begin(), reply.begin() + 3, sendBuff);
+            write_size = write(connfd, sendBuff, 3);
+            printf("Reply %s was sent.\n", sendBuff);
         }
-        else                
+        else
         {
-           write_size = write(connfd, "Unknown command.", 16);
-           printf("Unknown command.\n");
+            write_size = write(connfd, "Unknown command.", 16);
+            printf("Unknown command %s.\n", receiveBuff);
         }
-            
+
+        if (write_size <= 0)
+        {
+            close(connfd);
+            printf("Write error, close current connection, waiting for future connection.");
+            connfd = 0;
+        }
+
         if (clock() > timeout)
         {
             close(connfd);
             printf("Timeout, close current connection, waiting for future connection.");
             connfd = 0;
         }
-        usleep(100*1000);
+        usleep(10*1000);
     }
 
     printf("Test finished.\n");
