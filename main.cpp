@@ -59,6 +59,7 @@ int main()
     }
     listen(listenfd, 10);
 
+    printf("Clocks in one second is %d. \r\n", CLOCKS_PER_SEC);
     printf("Waiting for connection on port %d \r\n", port);
     socklen_t client = sizeof(cli_addr);
     connfd = 0;
@@ -66,7 +67,7 @@ int main()
     int tempfd = 0;
     string reply = "";
     GPIO_Handler * gpio = new GPIO_Handler();
-    clock_t timeout = clock() + 60 *1000;
+    clock_t timeout = clock() + CLOCKS_PER_SEC * 60;
     int read_size = 0;
     int write_size = 0;
     bool received = false;
@@ -75,29 +76,39 @@ int main()
     string id = "";
 
     bool testEnd = false;
-    while(1)
+    while(!testEnd)
     {
         if (connfd <= 0)
         {
-            connfd = accept(listenfd, (struct sockaddr*)&cli_addr, &client);
-            printf("New Client connected @ %d\r\n", tempfd);
-            continue;
+            tempfd = accept(listenfd, (struct sockaddr*)&cli_addr, &client);
+            if (tempfd > 0)
+            {
+                printf("New Client connected @ %d\r\n", tempfd);
+                if (connfd > 0) 
+                {
+                    printf("Close previous connection @ %d\r\n", connfd);
+                    close(connfd);
+                }
+                connfd = tempfd;
+                timeout = clock() + CLOCKS_PER_SEC * 60;
+                continue;
+            }
         }
 
         read_size = read(connfd, receiveBuff, 64);
         if (read_size <= 0)
         {
-            if (clock() > timeout)  // no new command after timeout, connection lost
+            if (clock() > timeout)
             {
                 close(connfd);
-                printf("Timeout, close current connection, waiting for future connect.");
+                printf("Timeout, close current connection @ %d, waiting for future connection.\n", connfd);
                 connfd = 0;
             }
             continue;
         }
 
         printf("Received command from the automation server: %s with size %d\n",receiveBuff,read_size);
-        timeout = clock() + 60 * 1000;  //timeout to be 1 min
+        timeout = clock() + 60 * CLOCKS_PER_SEC;  //timeout to be 1 min
         if (read_size > 10)
         {
             testEnd = true;
@@ -168,6 +179,14 @@ int main()
             case 145 : // "r1"=(114-97)*8+1=145
                 reply = "OK";
                 break;
+            case 56 : // "h0"=(104-97)*8+0=56
+                gpioreading = gpio->Read_Inputs();
+                reply = "OK";
+                break;
+            case 128 : // "q0"=(113-97)*8+0=128
+                testEnd = true;
+                reply = "OK";
+                break;
         }
 
         if (reply == "OK")
@@ -187,7 +206,7 @@ int main()
         if (write_size <= 0)
         {
             close(connfd);
-            printf("Write error, close current connection, waiting for future connection.");
+            printf("Write error, close current connection @%d, waiting for future connection.\n", connfd);
             connfd = 0;
         }
 
