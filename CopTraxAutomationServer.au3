@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.11.29.78
+#AutoIt3Wrapper_Res_Fileversion=2.11.29.102
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -44,6 +44,9 @@ Local $port = 16869
 Local $ipRaspberryPi = TCPNameToIP("10.0.9.199")
 Local $portRaspberryPi = 8080
 Global $socketRaspberryPi = -1
+Global $piHeartbeatTime = 0
+Global $piHeartbeatInterval = 30 * 1000
+Local $piTimeout = 0
 Global $workDir = "C:\CopTraxTest\"
 
 OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when the script is closed.
@@ -104,7 +107,6 @@ Global $gGUI[$maxConnections + 3]
 Global $pGUI[$maxConnections + 1]
 Global $nGUI[$maxConnections + 1]
 Global $totalCommands[$maxConnections + 1]
-Global $commandsExcuted[$maxConnections + 1]
 Global $testEndTime[$maxConnections + 1]
 Global $offsetX[$maxConnections + 3]
 Global $offsetY[$maxConnections + 3]
@@ -157,9 +159,12 @@ For $i = 1 To $maxConnections
 	$pGUI[$i] = GUICtrlCreateProgress(105, 10 + ($i - 1) * 30, 360, 20)
 	$nGUI[$i] =	GUICtrlCreateLabel("        ", 5, 13+ ($i - 1) * 30, 100, 20)
 Next
-$nGUI[0] = GUICtrlCreateLabel("Test remains 00:00:00", 240 - 50, 313, 100, 20)
+$nGUI[0] = GUICtrlCreateLabel("Time remains", 240 - 130, 320, 150, 20)
+GUICtrlSetFont($nGUI[0], 12, 400, 0, "Courier New")
+$nGUI[0] = GUICtrlCreateLabel("00:00:00", 240, 320, 81, 18)
 GUICtrlSetColor($nGUI[0], $COLOR_GREEN)
-GUICtrlSetBgColor($nGUI[0], $COLOR_BLACK)
+GUICtrlSetBkColor($nGUI[0], $COLOR_BLACK)
+GUICtrlSetFont($nGUI[0], 12, 400, 0, "Courier New")
 GUISetState(@SW_SHOW)
 WinMove($hGUI[12], "", $offsetX[12], $offsetY[12])
 
@@ -167,84 +172,110 @@ Global $hTimer = TimerInit()	; global timer handle
 Global $testEnd = False
 Global $commandsNumber = 0
 Global $totalTestTime = 0
-Global $batchAlign = False   ; $batchAlign turned to true only when all connected clients in batch hold
-Global $batchMode = False   ; change to true When any client get a batchalign command
+Global $batchSync = False
+Global $batchMode = False	; Not in batch mode until get a batch align command
+Local $commandsExcuted
+Local $timeRemains
+Local $progressPercentage
 Local $lastEndTime = 0
-
 While Not $testEnd
 	AcceptConnection()	; accept new client's connection requist
 
 	Local $Recv
 	Local $currentTime = TimerDiff($hTimer)	; get current timer elaspe
+	If $socketRaspberryPi <= 0 Then
+		If $batchMode Then
+			$socketRaspberryPi = TCPConnect($ipRaspberryPi, $portRaspberryPi)	; When not connected, try to connect
+		EndIf
 
-    If $socketRaspberryPi > 0 Then
-		$Recv = TCPRecv($socketRaspberryPi,10000)
+		If $socketRaspberryPi > 0 Then
+			LogWrite($automationLogPort, "Raspberry Pi simulator connected.")
+			MsgBox($MB_OK, "CopTrax Remote Test Server", "Raspberry Pi simulator connected.",2)
+			$piTimeout = $currentTime + 2 * 60 * 1000
+			$piHeartbeatTime = $currentTime + $piHeartbeatInterval
+		EndIf
+	Else
+		$Recv = TCPRecv($socketRaspberryPi,10000)	; when connected, try to receive message
 		If $Recv <> "" Then
 			LogWrite($automationLogPort, "(Raspberry Pi) Replied " & $Recv & " .")
+			$piTimeout = $currentTime + 2 * 60 * 1000
 		EndIf
-    Else
-        If $batchMode Then  ; connect to Raspberry Pi when $batchMode turned to true
-            $socketRaspberryPi = TCPConnect($ipRaspberryPi, $portRaspberryPi)
-        Endif
-        If $socketRaspberryPi > 0 Then
-        LogWrite($automationLogPort, "Raspberry Pi simulator connected.")
-        MsgBox($MB_OK, "CopTrax Remote Test Server", "Raspberry Pi simulator connected.",2)
-        EndIf
+
+		If $currentTime > $piHeartbeatTime Then
+			SendCommand(0, "h0")
+			LogWrite($automationLogPort, "Sent Raspberry Pi simulator heartbeat command.")
+		EndIf
+
+		If $currentTime > $piTimeout Then
+			LogWrite($automationLogPort, "Raspberry Pi simulator connection lost.")
+			MsgBox($MB_OK, "CopTrax Remote Test Server", "Raspberry Pi simulator connection lost.",2)
+			$socketRaspberryPi = -1
+		EndIf
 	EndIf
 
 	$batchSync = True
-    $sockets[0] = 0
-    $connectionPattern = ""
-    For $i = 1 To $maxConnections
+	$sockets[0] = 0
+	$connectionPattern = ""
+	$lastEndTime = 0
+	For $i = 1 To $maxConnections
 		If $sockets[$i] <= 0 Then
-            $connectionPattern &= "0"
-            ContinueLoop
-        Endif
+			$connectionPattern &= "0"
+			ContinueLoop
+		Endif
 
-        $sockets[0] += 1
-        $connectionPattern &= "x"
-        $Recv = TCPRecv($sockets[$i],1000000)
-        If $Recv <> "" Then
-            ProcessReply($i, $Recv)
-            $connectionTimers[$i] = $currentTime + 2000*60 ; renew the connection check timer
-        EndIf
+		$sockets[0] += 1
+		$connectionPattern &= "x"
+		$Recv = TCPRecv($sockets[$i],1000000)
+		If $Recv <> "" Then
+			ProcessReply($i, $Recv)
+			$connectionTimers[$i] = $currentTime + 2000*60 ; renew the connection check timer
+		EndIf
 
-        If $currentTime > $commandTimers[$i] Then	; check if it is time for next command
-            ParseCommand($i)	; get the new test command executed, the new timer is set in it
-        Else
-            $timeRemains = CorrectRange($testEndTime[$n] - $currentTime, 0, 9999)
-            GUICtrlSetData($nGUI[$n], $boxID[$n] & " " & toHMS($timeRemains))
-        EndIf
+		If $currentTime > $commandTimers[$i] Then	; check if it is time for next command
+			ParseCommand($i)	; get the new test command executed, the new timer is set in it
+			$estimate = EstimateCommands($commands[$i])
+			$commandsExecuted = CorrectRange($totalCommands[$i] - Int(GetParameter($estimate, "count")), 0, 9999)
+			$timeRemains = Round(($commandTimers[$i] - $currentTime) / 1000) + Int(GetParameter($estimate, "time"))	; next (command time- current time) in seconds plus the remain test time
+			$testEndTime[$i] = $timeRemains
+			LogWrite($i, "(Server) " & $commandsExecuted & " test commands executed. Next command in " & Int(($commandTimers[$i] - $currentTime) / 1000) & " seconds. Test remains " & $timeRemains & " seconds.")
 
-        If ($currentTime > $heartBeatTimers[$i]) And ($currentTime < $commandTimers[$i] - 50*1000) Then ; check the heart-beat timer
-            If $transFiles[$i] = "" Then	; This indicates there is no file transfer in-progress
-                SendCommand($i, "heartbeat")	; send a command for heart_beat
-                PushCommand($i, "hold")	; hold any new command from executing only after get a continue response from the client
-                $heartBeatTimers[$i] = $currentTime + 60*1000;
-                LogWrite($i, "(Server) Send heartbeat command to client.")
-            Else
-                $heartBeatTimers[$i] += 10 * 1000	; wait 10 more sec for end of file transfer
-            EndIf
-        EndIf
+			$progressPercentage = CorrectRange(100 * $commandsExecuted/$totalCommands[$i], 0, 100)
+			GUICtrlSetData($pGUI[$i], $progressPercentage)
+		Else
+			$timeRemains = CorrectRange($testEndTime[$i] - $currentTime / 1000, 0, 3600*24*3)
+		EndIf
+		GUICtrlSetData($nGUI[$i], $boxID[$i] & " " & toHMS($timeRemains))
 
-        If $currentTime > $connectionTimers[$i] Then	; test if the client is alive
-            LogWrite($i, "(Server) No reply from the client. Connection to client lost.")
-            LogWrite($automationLogPort, $boxID[$i] & " connection lost.")
-            CloseConnection($i)
-        EndIf
+		If ($currentTime > $heartBeatTimers[$i]) And ($currentTime < $commandTimers[$i] - 50*1000) Then ; check the heart-beat timer
+			If $transFiles[$i] = "" Then	; This indicates there is no file transfer in-progress
+				SendCommand($i, "heartbeat")	; send a command for heart_beat
+				PushCommand($i, "hold")	; hold any new command from executing only after get a continue response from the client
+				$heartBeatTimers[$i] = $currentTime + 60*1000;
+				LogWrite($i, "(Server) Send heartbeat command to client.")
+			Else
+				$heartBeatTimers[$i] += 10 * 1000	; wait 10 more sec for end of file transfer
+			EndIf
+		EndIf
 
-        If Not $batchWait[$i] Then
-            $batchAlign = False
-        EndIf
+		If $currentTime > $connectionTimers[$i] Then	; test if the client is alive
+			LogWrite($i, "(Server) No reply from the client. Connection to client lost.")
+			LogWrite($automationLogPort, $boxID[$i] & " connection lost.")
+			CloseConnection($i)
+		EndIf
 
-        If $testEndTime[$n] > $lastEndTime Then
-            $lastEndTime = $testEndTime[$n]
+		If Not $batchWait[$i] Then
+			$batchSync = False
+		EndIf
+
+		If $timeRemains > $lastEndTime Then
+            $lastEndTime = $timeRemains
         Endif
 	Next
 
-    $timeRemains = $CorrectRange($lastEndTime - $currentTime, 0, 9999)
-    GUICtrlSetData($nGUI[0], "Test remains " & toHMS($timeRemains))
- WEnd
+	GUICtrlSetData($nGUI[0], toHMS($lastEndTime))
+WEnd
+
+SendCommand(0, "q0") ; letRaspberryPi to quit
 
 OnAutoItExit()
 
@@ -255,7 +286,7 @@ Func CloseConnection($n)
 	$s &= $s & $s
 	LogWrite($n, $s)
 	LogWrite($n, " ")
-
+	; FileClose($logFiles[$n])	; Close the log file
 	GUIDelete($hGUI[$n])
 	TCPCloseSocket($sockets[$n])	; Close the TCP connection to the client
 	$boxIP[$n] = ""
@@ -265,8 +296,7 @@ Func CloseConnection($n)
 		$sockets[0] -= 1 ; reduce the total number of connection
 	EndIf
 	$connectionTimers[$n] += 60*10000
-	$connectionPattern = StringMid($connectionPattern, 1, $n-1) & "0" & StringMid($connectionPattern, $n+1)
-	LogWrite($automationLogPort, "Current " & $sockets[0] & " connected." & $connectionPattern)
+	LogWrite($automationLogPort, "Current " & $sockets[0] & " connected.")
 EndFunc
 
 Func ParseCommand($n)
@@ -311,7 +341,6 @@ Func ParseCommand($n)
 			$interval = Int($arg)
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			$commandTimers[$n] +=  ($interval * 60 - 15)* 1000	; set the next command timer 10 mins later
-			$commandsExcuted[$n] += 1
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client. Pause for " & $interval & " mins till next command.")
 
 		Case "settings", "createprofile", "upload"
@@ -319,64 +348,57 @@ Func ParseCommand($n)
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "(Server) Sent " & $newCommand & " " & $arg & " command to client.")
-			$commandTimers[$n] += 15*1000	; add 10 more seconds
-			$commandsExcuted[$n] += 1
+			$commandTimers[$n] += 20*1000	; add 10 more seconds
 
 		Case "checkfirmware", "checkapp", "checklibrary"
 			$arg = PopCommand($n)
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "(Server) Sent " & $newCommand & " " & $arg & " command to client.")
-			$commandsExcuted[$n] += 1
 
 		Case "pause"
 			$arg = PopCommand($n)
 			$commandTimers[$n] +=  (Int($arg) * 60 - 10)* 1000	; set the next command timer $arg2 mins later
 			LogWrite($n, "(Server) Pause for " & $arg & " minutes.")
-			$commandsExcuted[$n] += 1
 
 		Case "siren", "lightbar", "aux4", "aux5", "aux6", "startstop"
 			$arg = PopCommand($n)
-            local $duration = CorrectRange(Int(arg), 1, 60)
-            Local $aCommand = "trigger"
-            Local $piCommand = "t1"
-            If $newCommand = "siren" Then $piCommand = "t1"
-            If $newCommand = "lightbar" Then $piCommand = "t3"
-            If $newCommand = "aux4" Then $piCommand = "t4"
-            If $newCommand = "aux5" Then $piCommand = "t5"
-            If $newCommand = "aux6" Then $piCommand = "t6"
-            If $newCommand = "startstop" Then
-                $piCommand = "t7"
-                $aCommand = $newCommand
-            Endif
+			local $duration = CorrectRange(Int($arg), 1, 60)
+			Local $aCommand = "trigger"
+			Local $piCommand = "t1"
+			If $newCommand = "siren" Then $piCommand = "t1"
+			If $newCommand = "lightbar" Then $piCommand = "t3"
+			If $newCommand = "aux4" Then $piCommand = "t4"
+			If $newCommand = "aux5" Then $piCommand = "t5"
+			If $newCommand = "aux6" Then $piCommand = "t6"
+			If $newCommand = "startstop" Then
+				$piCommand = "t7"
+				$aCommand = $newCommand
+			Endif
 
-            SendCommand($n, $aCommand)    ; send new test command to client
-            SendCommand(0, $piCommand)
-            LogWrite($n, "(Server) Sent " & $aCommand & " command to client.")
-            LogWrite($n, "(Server) Sent " & $piCommand & " command to Raspberry Pi.")
-            $commandTimers[$n] +=  ($duration * 60 - 10)* 1000    ; add $duration mins
+			SendCommand($n, $aCommand)    ; send new test command to client
+			SendCommand(0, $piCommand)
+			LogWrite($n, "(Server) Sent " & $aCommand & " command to client.")
+			LogWrite($n, "(Server) Sent " & $piCommand & " command to Raspberry Pi.")
+			$commandTimers[$n] +=  ($duration * 60 - 10)* 1000    ; add $duration mins
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
-			$commandsExcuted[$n] += 1
 
 		Case "review", "photo", "info", "status", "eof", "checkrecord", "radar", "stopapp", "runapp", "camera"
 			SendCommand($n, $newCommand)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
 			If $newCommand = "checkrecord" Then $commandTimers[$n] += 10*1000	; add 10 more seconds
-			$commandsExcuted[$n] += 1
 
 		Case "cleanup", "quit", "reboot", "restart", "endtest", "restarttest"
 			SendCommand($n, $newCommand)	; send new test command to client
 			$commands[$n] = ""	; clear any further commands
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
-			$commandsExcuted[$n] += 1
 
 		Case "synctime"
 			$arg = @YEAR & @MON & @MDAY & @HOUR & @MIN & @SEC
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "(Server) Sent " & $newCommand & " " & $arg & " command to client.")
-			$commandsExcuted[$n] += 1
 
 		Case "synctmz"
 			Local $tmzarg = _Date_Time_GetTimeZoneInformation ( )
@@ -384,7 +406,6 @@ Func ParseCommand($n)
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "(Server) Sent " & $newCommand & " " & $arg & " command to client.")
-			$commandsExcuted[$n] += 1
 
 		Case "update"
 			Local $fileName = PopCommand($n)
@@ -404,7 +425,6 @@ Func ParseCommand($n)
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
 			LogWrite($n, "(Server) Sending " & $sourceFileName & " in server to update " & $fileName & " in client.")
 			PushCommand($n, "hold send hold")	; hold any new command from executing only after get a continue response from the client
-			$commandsExcuted[$n] += 1
 
 		Case "send"
 			SendCommand($n, $fileToBeSent[$n])	; send file to client
@@ -418,23 +438,15 @@ Func ParseCommand($n)
 			$batchWait[$n] = True	; indicates client $n in batch wait mode now
 			If Not $batchSync Then
 				PushCommand($n, "batchhold")	; the batchhold command can only be cleared by all active clients entering batch wait mode
+			Else
+				LogWrite($n, "(Server) All clients aligned.")
 			EndIf
 
-		Case "batchwait"
+		Case "batchalign"
+			LogWrite($n, "(Server) Wait till all clients aligned.")
 			PushCommand($n, "batchhold")
-			$commandsExcuted[$n] += 1
-            $batchMode = True
-
+			$batchMode = True
 	EndSwitch
-    Local $commandsRemains = $totalCommands[$n] - $commandsExcuted[$n]
-    $estimate = EstimateCommands($commands[$n])
-    $commandsRemains = Int(GetParameter($estimate, "count"))
-    Local $timeRemains = Int(GetParameter($estimate, "time"))
-    $testEndTime[$n] = $commandTimers[$n] + $timeRemains
-
-    Local $progressPercentage = CorrectRange(100 * $commandsExecutes/$totalCommands[$n], 0, 100)
-	GUICtrlSetData($pGUI[$n], $progressPercentage)
-    GUICtrlSetData($nGUI[$n], $boxID[$n] & " " & toHMS($timeRemains))
 EndFunc
 
 Func LogWrite($n,$s)
@@ -446,7 +458,7 @@ Func toHMS($time)
     Local $hms = ""
     Local $t = $time
     Local $h = Floor($t / 3600)
-    If $h > 10 Then
+    If $h >= 10 Then
         $hms = $h & ":"
     Else
         $hms = "0" & $h & ":"
@@ -454,92 +466,35 @@ Func toHMS($time)
 
     $t -= $h * 3600
     Local $m = Floor($t / 60)
-    If $m > 10 Then
+    If $m >= 10 Then
         $hms &= $m & ":"
     Else
-        $hms = "0" & $m & ":"
+        $hms &= "0" & $m & ":"
     Endif
 
-    $t -= $m * 60
-    Local $s = Round($t)
-    If $s > 10 Then
+    Local $s = Round($t -$m * 60)
+    If $s >= 10 Then
         $hms &= $s
     Else
-        $hms = "0" & $s
+        $hms &= "0" & $s
     Endif
 
     Return $hms
 EndFunc
 
 Func ReadTestCase($fileName)
-	Local $testFile = FileOpen($fileName,0)	; for test case reading, read only
-	Local $aLine
-	Local $aCommand = ""
-	Local $testCase = ""
-	Local $eof = false
-	$commandsNumber = 0
-	$totalTestTime = 0
-	Do
-		$aLine = FileReadLine($testFile)
-		$eof = (@error = -1)
-
-		$aLine = StringRegExpReplace($aLine, "(;.*)", "")
-		If $aLine = "" Then	ContinueLoop
-
-		$aCommand = ReadCommand($aLine)
-		If $aCommand = "" Then ContinueLoop
-
-		$parameters = ReadParameters($aLine, $aCommand)
-		If $aCommand = "record" Then
-			Local $duration = CorrectRange(Int(GetParameter($parameters, "duration")), 1, 999)
-			Local $repeat = CorrectRange(Int(GetParameter($parameters, "repeat")), 1, 99)
-			Local $interval = Int(GetParameter($parameters, "interval"))
-			If $interval < 1 Or $interval > 10 Then $interval = 10
-			$commandsNumber += $repeat
-			$totalTestTime += $repeat * ($duration + $interval) * 60
-			$testCase &= "record duration=" & $duration
-			If $repeat > 1 Then $testCase &= "|repeat=" & $repeat
-			If $interval < 10 Then $testCase &= "|interval=" & $interval
-			$testCase &= " "
-		Else
-			$commandsNumber += 1
-			If $aCommand = "pause" Then
-				$parameters = CorrectRange(Int($parameters), 1, 999)
-				$totalTestTime += $parameters * 60
-				$testCase &= $aCommand & " " & $parameters & " "
-			Else
-				If $parameters = "" Then
-					$testCase &= $aCommand & " "
-				Else
-					$testCase &= $aCommand & " " & $parameters & " "
-				EndIf
-				$totalTestTime += 20
-			EndIf
-		EndIf
-
-		If $aCommand = "cleanup" Or $aCommand = "endtest" Or $aCommand = "restarttest" Or $aCommand = "reboot" Then
-			$eof = True
-		EndIf
-	Until $eof
-	FileClose($testFile)
-	$totalTestTime = Int($totalTestTime / 60)
-	Return $testCase
-EndFunc
-
-Func ReadTestCase1($fileName)
     Local $testFile = FileOpen($fileName,0)    ; for test case reading, read only
     Local $aLine
     Local $aCommand = ""
     Local $testCase = ""
     Local $eof = false
-    $commandsNumber = 0
-    $totalTestTime = 0
+
     Do
         $aLine = FileReadLine($testFile)
-        If @error <= 0 Then ExitLoop
+		If @error < 0 Then ExitLoop
 
         $aLine = StringRegExpReplace($aLine, "(;.*)", "")
-        If $aLine = "" Then    ContinueLoop
+        If $aLine = "" Then ContinueLoop
 
         $aCommand = ReadCommand($aLine)
         If $aCommand = "" Then ContinueLoop
@@ -554,7 +509,7 @@ Func ReadTestCase1($fileName)
         If $aCommand = "cleanup" Or $aCommand = "endtest" Or $aCommand = "restarttest" Or $aCommand = "reboot" Then
             ExitLoop
         EndIf
-    Until Not $eof
+    Until $eof
 
     FileClose($testFile)
     Return $testCase
@@ -573,15 +528,18 @@ Func EstimateCommands($aCommand)
     Local $testTime = 0
     Local $i
     Local $j
+
     For $i = 0 To $commandList[0]
         For $j = 0 To $maxCommands-1
-            If StringInStr($allCommands[$j]), $commandList[$i]) Then
+			If StringInStr($allCommands[$j], $commandList[$i]) Then
                 $count += 1
                 ExitLoop
-        Next
-        If $j >= $maxCommands Then ExitLoop
+			EndIf
+		Next
 
-        If $j = 1 Then  ; record
+        If $j >= $maxCommands Then ContinueLoop
+
+        If $j = 0 Then  ; record
             $parameters = $commandList[$i+1]
             $duration = CorrectRange(Int(GetParameter($parameters, "duration")), 1, 999)
             $repeat = CorrectRange(Int(GetParameter($parameters, "repeat")), 1, 99)
@@ -590,7 +548,7 @@ Func EstimateCommands($aCommand)
             $count += $repeat - 1
             $testTime += $repeat * ($duration + $interval) * 60
         Else
-            If StringInStr($allCommands[$j]), "duration") Then
+            If StringInStr($allCommands[$j], "duration") Then
                 $parameters = $commandList[$i+1]
                 $duration = CorrectRange(Int(GetParameter($parameters, "duration")), 1, 999)
                 $testTime += $duration * 60
@@ -610,7 +568,7 @@ Func CorrectRange($num, $lowerBand = 1, $upperBand = 999)
 EndFunc
 
 Func ReadCommand($line)
-	Local $readTxt = StringRegExp($line, "(?:^\s*)([a-zA-Z]+)", $STR_REGEXPARRAYMATCH)
+	Local $readTxt = StringRegExp($line, "(?:^\s*)([a-zA-Z][a-zA-Z0-9]+)", $STR_REGEXPARRAYMATCH)
 	If $readTxt = "" Then Return ""
 	Local $readCommand = StringLower($readTxt[0])
 	Local $i
@@ -664,7 +622,7 @@ Func GetParameter($parameters, $keyword)
 			Return $parameter[0]
 		EndIf
 	Else
-		Return $parameters
+		Return ""
 	EndIf
 EndFunc
 
@@ -694,7 +652,7 @@ Func ProcessReply($n, $reply)
 
 	Switch StringLower($msg[1])
 		Case "file"
-            If $msg[0] <3 Then
+			If $msg[0] <3 Then
                 LogWrite($n, "(Server) Unknown reply from server")
                 Return
             Endif
@@ -712,17 +670,15 @@ Func ProcessReply($n, $reply)
 			LogWrite($n, "(Server) sent send command to client.")
 
 		Case "name"
-            If $msg[0] < 4 Then
-                LogWrite($n, "(Server) Unknown reply from server")
-                Return
-            Endif
-
-			Local $filename = $workDir & "log\" & $msg[2] & ".log"
-			$logFiles[$n] = FileOpen($filename, 1+8) ; open log file for append write in text mode
+			If $msg[0] < 4 Then
+				LogWrite($n, "(Server) Unknown reply from server")
+				Return
+			Endif
 			$boxID[$n] = $msg[2]	; get the boxID from client
+			Local $filename = $workDir & "log\" & $boxID[$n] & ".log"
+			$logFiles[$n] = FileOpen($filename, 1+8) ; open log file for append write in text mode
 			Local $boxUser = $msg[3]	; get the CopTrax App current username
-			Local $clientVersion = $msg[4]	; get the automation client version
-			Local $latestVersion = FileGetVersion($workDir & "latest\CopTraxAutomationClient.exe")
+
 			LogWrite($automationLogPort, $boxID[$n] & " connected on " & $boxIP[$n] & ".")
 			LogWrite($automationLogPort, "Current " & $sockets[0] & " connected. " & $connectionPattern)
 
@@ -748,7 +704,6 @@ Func ProcessReply($n, $reply)
                 PushCommand($n, "synctime")
                 PushCommand($n, "status")
             EndIf
-
             Local $estimate = EstimateCommands($commands[$n])
             $commandsNumber = Int(GetParameter($estimate, "count"))
             $totalTestTime = Floor(Int(GetParameter($estimate, "time")) /60) + 1
@@ -760,9 +715,13 @@ Func ProcessReply($n, $reply)
 			LogWrite($n, " Automation test for CopTrax DVR box " & $boxID[$n])
 			LogWrite($n, " Current version of the test server : " & FileGetVersion ( @ScriptFullPath ))
 
-			If _VersionCompare($clientVersion, $latestVersion) < 0 Then
+			Local $clientVersion = $msg[4]	; get the automation client version
+			Local $latestVersion = FileGetVersion($workDir & "latest\CopTraxAutomationClient.exe")
+			If _VersionCompare($clientVersion, $latestVersion) <> 0 Then
 				PushCommand($n, "update C:\CopTraxAutomation\tmp\CopTraxAutomationClient.exe restart")
 				LogWrite($n, "Find latest automation tester in Server. Updating client to " & $latestVersion & ". Test will restart.")
+			Else
+				LogWrite($n, "The latest automation test app version is " & $latestVersion & ". App in client is up-to-date.")
 			EndIf
 
 			If Not StringRegExp($boxID[$n], "[A-Za-z]{2}[0-9]{6}")  Then
@@ -779,8 +738,6 @@ Func ProcessReply($n, $reply)
 			LogWrite($automationLogPort, "START AUTOMATION TEST for CopTrax DVR " & $boxID[$n])
 			LogWrite($automationLogPort, $boxID[$n] & " Number of test commands: " & $commandsNumber & ". Estimated test time in minutes: " & $totalTestTime & ".")
 			$totalCommands[$n] = $commandsNumber
-			$commandsExcuted[$n] = 0
-
 	EndSwitch
 
 	If StringInStr(StringLower($reply), "failed") Then
@@ -795,10 +752,8 @@ Func ProcessReply($n, $reply)
 	EndIf
 
 	If StringInStr(StringLower($reply), "quit") Then
-        If PopCommand($n) <> "" Then
-        ;If $commandsExcuted[$n] < $totalCommands[$n] Then
-        If $commandsRemains > 1 Then
-            LogWrite($automationLogPort, $boxID[$n] & " Tests will continue.")
+		If PopCommand($n) Then
+			LogWrite($automationLogPort, $boxID[$n] & " Tests will continue.")
 			GUICtrlSetData($nGUI[$n], $boxID[$n] & " continue")
 		Else
 			If $testFailures[$n] = 0 Then
@@ -847,7 +802,7 @@ Func AcceptConnection ()
 	Local $i = 0
 	Local $port = 0
 	For $i = $maxConnections To 1 Step -1
-        If $boxIP[$i] = $IP Then    ; Find the last socket with the same IP address
+		If $boxIP[$i] = $IP Then
 			If $sockets[$i] > 0 Then
 				TCPCloseSocket($sockets[$i])
 				$sockets[$i] = -1
@@ -906,7 +861,47 @@ Func SendCommand($n, $command)
 			LogWrite($automationLogPort, "(Server) Connection to Raspberry Pi was lost.")
 			$socketRaspberryPi = 0
 		EndIf
+		$piHeartbeatTime = TimerDiff($hTimer) + $piHeartbeatInterval;
 	EndIf
+EndFunc
+
+Func Trigger($arg)
+	If Not $socketRaspberryPi < 0 Then Return False
+
+	Local $cmd = ""
+	Switch StringLower($arg)
+		Case "siren"
+			$cmd = " t1"
+
+		Case "lightbar"
+			$cmd = " t3"
+
+		Case "aux4"
+			$cmd = " t4"
+
+		Case "aux5"
+			$cmd = " t5"
+
+		Case "aux6"
+			$cmd = " t6"
+
+		Case "startstop"
+			$cmd = " t7"
+
+		Case "microphone"
+			$cmd = " m0"
+
+	EndSwitch
+	If $cmd = "" Then Return False
+
+	If TCPSend($socketRaspberryPi, $cmd) = 0 Then
+		LogWrite($automationLogPort, "Connection to Raspberry Pi lost.")
+		TCPCloseSocket($socketRaspberryPi)
+		$socketRaspberryPi = -1
+		Return False
+	EndIf
+
+	Return True
 EndFunc
 
 Func HotKeyPressed()
