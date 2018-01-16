@@ -72,7 +72,7 @@ $allCommands[13] = "siren duration"
 $allCommands[14] = "aux4 duration"
 $allCommands[15] = "aux5 duration"
 $allCommands[16] = "aux6 duration"
-$allCommands[17] = "startstop duration"
+$allCommands[17] = "lightswitch duration"
 $allCommands[18] = "mic1trigger duration"
 $allCommands[19] = "mic2trigger duration"
 $allCommands[20] = "endrecord duration"
@@ -153,7 +153,7 @@ GUISetState(@SW_SHOW)
 WinMove($hGUI[$automationLogPort], "", $offsetX[$automationLogPort], $offsetY[$automationLogPort])
 $logFiles[$automationLogPort] =FileOpen($workDir & "log\automationtest.log", 1+8) 	; Clear the client name for future updating from the client
 
-; the window 12 will display the test progression
+; the window 12 will display the test progress and time remains
 $hGUI[12] = GUICreate("Automation Server", 480,360)
 For $i = 1 To $maxConnections
 	$pGUI[$i] = GUICtrlCreateProgress(105, 10 + ($i - 1) * 30, 360, 20)
@@ -170,11 +170,10 @@ WinMove($hGUI[12], "", $offsetX[12], $offsetY[12])
 
 Global $hTimer = TimerInit()	; global timer handle
 Global $testEnd = False
-Global $commandsNumber = 0
 Global $totalTestTime = 0
 Global $batchSync = False
 Global $batchMode = False	; Not in batch mode until get a batch align command
-Local $commandsExcuted
+Local $commandsRemains
 Local $timeRemains
 Local $progressPercentage
 Local $lastEndTime = 0
@@ -233,13 +232,14 @@ While Not $testEnd
 
 		If $currentTime > $commandTimers[$i] Then	; check if it is time for next command
 			ParseCommand($i)	; get the new test command executed, the new timer is set in it
+
 			$estimate = EstimateCommands($commands[$i])
-			$commandsExecuted = CorrectRange($totalCommands[$i] - Int(GetParameter($estimate, "count")), 0, 9999)
+			$commandsRemains = Int(GetParameter($estimate, "count"))
 			$timeRemains = Round(($commandTimers[$i] - $currentTime) / 1000) + Int(GetParameter($estimate, "time"))	; next (command time- current time) in seconds plus the remain test time
 			$testEndTime[$i] = $timeRemains
-			LogWrite($i, "(Server) " & $commandsExecuted & " test commands executed. Next command in " & Int(($commandTimers[$i] - $currentTime) / 1000) & " seconds. Test remains " & $timeRemains & " seconds.")
+			LogWrite($i, "(Server) " & $commandsRemains & " test commands executed. Next command in " & Int(($commandTimers[$i] - $currentTime) / 1000) & " seconds. Test remains " & $timeRemains & " seconds.")
 
-			$progressPercentage = CorrectRange(100 * $commandsExecuted/$totalCommands[$i], 0, 100)
+			$progressPercentage = CorrectRange(100 * (1-$commandsRemains/$totalCommands[$i]), 0, 100)
 			GUICtrlSetData($pGUI[$i], $progressPercentage)
 		Else
 			$timeRemains = CorrectRange($testEndTime[$i] - $currentTime / 1000, 0, 3600*24*3)
@@ -275,7 +275,7 @@ While Not $testEnd
 	GUICtrlSetData($nGUI[0], toHMS($lastEndTime))
 WEnd
 
-SendCommand(0, "q0") ; letRaspberryPi to quit
+SendCommand(0, "q0") ; let RaspberryPi to quit
 
 OnAutoItExit()
 
@@ -361,7 +361,7 @@ Func ParseCommand($n)
 			$commandTimers[$n] +=  (Int($arg) * 60 - 10)* 1000	; set the next command timer $arg2 mins later
 			LogWrite($n, "(Server) Pause for " & $arg & " minutes.")
 
-		Case "siren", "lightbar", "aux4", "aux5", "aux6", "startstop"
+		Case "siren", "lightbar", "aux4", "aux5", "aux6", "lightswitch"
 			$arg = PopCommand($n)
 			local $duration = CorrectRange(Int($arg), 1, 60)
 			Local $aCommand = "trigger"
@@ -371,17 +371,17 @@ Func ParseCommand($n)
 			If $newCommand = "aux4" Then $piCommand = "t4"
 			If $newCommand = "aux5" Then $piCommand = "t5"
 			If $newCommand = "aux6" Then $piCommand = "t6"
-			If $newCommand = "startstop" Then
+			If $newCommand = "lightswitch" Then
 				$piCommand = "t7"
-				$aCommand = $newCommand
+				$aCommand = "startstop"
 			Endif
 
 			SendCommand($n, $aCommand)    ; send new test command to client
-			SendCommand(0, $piCommand)
+            SendCommand(0, $piCommand)  ; send pi its command
 			LogWrite($n, "(Server) Sent " & $aCommand & " command to client.")
 			LogWrite($n, "(Server) Sent " & $piCommand & " command to Raspberry Pi.")
 			$commandTimers[$n] +=  ($duration * 60 - 10)* 1000    ; add $duration mins
-			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
+			PushCommand($n, "hold")	; hold any new command from executing only after get a passed/continue response from the client
 
 		Case "review", "photo", "info", "status", "eof", "checkrecord", "radar", "stopapp", "runapp", "camera"
 			SendCommand($n, $newCommand)	; send new test command to client
@@ -410,16 +410,33 @@ Func ParseCommand($n)
 		Case "update"
 			Local $fileName = PopCommand($n)
 			Local $file
-			Local $netFileName = StringSplit($fileName, "\")
-			Local $sourceFileName = $workDir & "latest\" & $netFileName[$netFileName[0]]	; all file need to be update shall sit in \latest folder
+            Local $netFileName
+            Local $sourceFileName
+            If StringInStr($filename, "\") Then
+			    $netFileName = StringSplit($fileName, "\")
+                $sourceFileName = $workDir & "latest\" & $netFileName[$netFileName[0]]    ; all file need to be update shall sit in \latest folder
+            Else
+                $sourceFileName = $workDir & "latest\" & $fileName
+            Endif
+
+;            $file = FileOpen($sourceFileName,16)
+;            $fileToBeSent[$n] = FileRead($file)
+;            FileClose($file)
+
+;While BinaryLen($sImgbuffer) ;LarryDaLooza's idea to send in chunks to reduce stress on the application
+;$a = TCPSend($sSocket,$sImgbuffer)
+;$sImgbuffer = BinaryMid($sImgbuffer,$a+1,BinaryLen($sImgbuffer)-$a)
+;WEnd
+
 			If FileGetSize($sourceFileName) > 50000 Then
 				$file = FileOpen($sourceFileName,16)	; open file for read only in binary mode
 			Else
-				$file = FileOpen($sourceFileName,0)	; open file for read only in binary mode
+				$file = FileOpen($sourceFileName,0)	; open file for read only in text mode
 			EndIf
 			$fileToBeSent[$n] = FileRead($file)
 			FileClose($file)
 			Local $fLen = StringLen($fileToBeSent[$n])
+;            Local $fLen = BinaryLen($fileToBeSent[$n])
 			$newCommand &= " " & $fileName & " " & $fLen
 			SendCommand($n, $newCommand)	; send new test command to client
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
@@ -591,7 +608,7 @@ Func ReadParameters($line, $aCommand)
 		$parameter = StringRegExp($line, "(?:" & $acommand & "\s+)([a-zA-Z0-9=\.]+)", $STR_REGEXPARRAYMATCH)
 		If $parameter = "" Then Return "NULL"
 		If StringInStr($parameter[0], "=") Then
-			Local $temp = StringRegExp($parameter[0], "(" & $keywords[2] & "=[a-zA-Z0-9]+)")
+        Local $temp = StringRegExp($parameter[0], "(?:\s" & $keywords[2] & "=)([a-zA-Z0-9\.\-_:\\]+)")
 			Return $temp
 		Else
 			Return $parameter[0]
@@ -600,7 +617,7 @@ Func ReadParameters($line, $aCommand)
 
 	Local $parameters = ""
 	For $i = 2 To $keywords[0]
-		$parameter = StringRegExp($line, "(?:\s)(" & $keywords[$i] & "=[a-zA-Z0-9]+)", $STR_REGEXPARRAYMATCH)
+    $parameter = StringRegExp($line, "(?:\s)(" & $keywords[$i] & "=[a-zA-Z0-9\.\-_:\\]+)", $STR_REGEXPARRAYMATCH)
 		If $parameter <> "" Then
 			$parameters &= $parameter[0] & "|"
 		EndIf
@@ -622,7 +639,7 @@ Func GetParameter($parameters, $keyword)
 			Return $parameter[0]
 		EndIf
 	Else
-		Return ""
+		Return $parameters
 	EndIf
 EndFunc
 
@@ -691,8 +708,6 @@ Func ProcessReply($n, $reply)
 			GUISetState(@SW_SHOW)
 			WinMove($hGUI[$n], "", $offsetX[$n], $offsetY[$n])
 			GUICtrlSetData($nGUI[$n], $boxID[$n] & " testing")
-			GUICtrlSetColor($nGUI[$n], $COLOR_BLACK)
-			GUICtrlSetColor($pGUI[$n], $COLOR_GREEN)
 
 			$filename = $workdir & $boxID[$n] & ".txt"	; try to find if any individual test case exits
 			If Not FileExists($filename) Then
@@ -705,7 +720,7 @@ Func ProcessReply($n, $reply)
                 PushCommand($n, "status")
             EndIf
             Local $estimate = EstimateCommands($commands[$n])
-            $commandsNumber = Int(GetParameter($estimate, "count"))
+            Local $commandsNumber = Int(GetParameter($estimate, "count"))
             $totalTestTime = Floor(Int(GetParameter($estimate, "time")) /60) + 1
 
 			Local $splitChar = "==================================="
