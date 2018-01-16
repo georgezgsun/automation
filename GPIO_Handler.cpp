@@ -14,6 +14,9 @@ GPIO_Handler::GPIO_Handler()
     Power_Mic->Set_Configuration(0xF0);
     Power_Mic->Set_Outputs(Power_Mic_Enables.Data);
     Power_Mic->Set_Polarity(0x00);
+
+//    Input_Bank = new GPIO_Bank(0x1A);
+//    Input_Bank->Set_Configuration(0xF0);
 }
 
 GPIO_Handler::~GPIO_Handler()
@@ -29,6 +32,7 @@ void GPIO_Handler::Send_Triggers()
 void GPIO_Handler::Send_Power_Mic_Enables()
 {
     Power_Mic->Set_Outputs(Power_Mic_Enables.Data);
+    printf("Send Power_Mic triggers: %d\r\n",Power_Mic_Enables.Data);
 }
 
 void GPIO_Handler::Enable_Trigger_1()

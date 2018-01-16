@@ -12,7 +12,7 @@ const int Radar_Simulator::Battery_Charger_Disable_Buffer_Size = 1;
 
 Radar_Simulator::Radar_Simulator()
 {
-    Current_Transmitting_Format = eNONE;
+    Current_Transmitting_Format = eB_FORMAT;
     Open_Serial_Port();
 }
 

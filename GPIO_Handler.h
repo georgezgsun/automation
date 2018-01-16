@@ -13,7 +13,8 @@ class GPIO_Handler
             char Trigger4:1;
             char Trigger5:1;
             char Trigger6:1;
-            char unused:2;
+            char Audio_Bank:1;
+            char unused:1;
         }Bits;
     }Triggers;
 
@@ -22,11 +23,13 @@ class GPIO_Handler
         unsigned char Data;
         struct
         {
+            char Trigger8_9:1;
+            char Trigger8_10:1;
             char Power:1;
             char Ignition:1;
             char Mic_Trigger_1:1;
             char Mic_Trigger_2:1;
-            char unused:4;
+            char unused:2;
         }Bits;
     }Power_Mic_Enables;
 
