@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 2.12.20.67)
+#pragma compile(FileVersion, 2.12.20.69)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -83,9 +83,6 @@ Else
 EndIf
 
 Global $chunkTime = 30
-Global $videoFilesCam1 = 0
-Global $videoFilesCam2 = 0
-Global $tStartRecord = 0
 
 Global $sendBlock = False
 Global $mCopTrax = 0
@@ -337,16 +334,6 @@ Func StartRecord($click)
 	If Not ReadyForTest() Then  Return False
 
 	LogUpload("Testing start record function.")
-
-	Local $path0 = @MyDocumentsDir & "\CopTraxTemp"
-	Local $path1 = GetVideoFilePath()
-	Local $path2 = $path1 & "\cam2"
-
-	$videoFilesCam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4")
-	$videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi")
-	LogUpload("Today the main camera has recorded " & $videoFilesCam1 & " video files. The rear camera has recorded " & $videoFilesCam2 & " video files.")
-	$tStartRecord = TimerDiff($hTimer)
-
 	If $click Then
 		If IsRecording() Then	; check if a recording in-progress or not
 			LogUpload("Another recording is already in progress or have not yet completed.")
@@ -392,18 +379,11 @@ Func EndRecording($click)
 	EndIf
 
 	Local $hEndRecord = WinActivate($titleEndRecord)
-   ;ControlClick($titleEndRecord,"","[CLASS:WindowsForms10.COMBOBOX.app.0.182b0e9_r11_ad1; INSTANCE:2]")
-   ;ControlClick($titleEndRecord,"","[INSTANCE:2]")
 	AutoItSetOption("SendKeyDelay", 100)
 	Sleep(200)
 	Send("tt{Tab}")
 	Sleep(200)
 
-   ;ControlClick($titleEndRecord,"","[CLASS:WindowsForms10.COMBOBOX.app.0.182b0e9_r11_ad1; INSTANCE:1]")
-   ;Send("jj{ENTER}")
-   ;Sleep(100)
-
-   ;ControlClick($titleEndRecord,"","[CLASS:WindowsForms10.EDIT.app.0.182b0e9_r11_ad1; INSTANCE:1]")
 	Send("This is a test input by CopTrax testing team.")
 	Sleep(100)
 	MouseClick("", 670,90)
@@ -411,31 +391,14 @@ Func EndRecording($click)
 	ControlClick($hEndRecord,"","OK")
 	Sleep(100)
 
-	While WinWaitClose($hEndRecord,"",10) = 0
+	If WinWaitClose($hEndRecord,"",10)  Then
+		Return True
+	Else
 		MsgBox($MB_OK,  $mMB, "Click on the OK button failed",2)
 		LogUpload("Click on the OK button to stop record failed. ")
 		WinClose($hEndRecord)
-	WEnd
-
-	If $tStartRecord < 1 Then Return True
-
-	Local $duration = (TimerDiff($hTimer) - $tStartRecord) / 1000
-	Local $numFiles = Floor($duration / 60 / $chunkTime) + 1
-	Local $path1 = GetVideoFilePath()
-	Local $path2 = $path1 & "\cam2"
-	Local $path0 = @MyDocumentsDir & "\CopTraxTemp"
-	Local $cam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4") - $videoFilesCam1
-	Local $cam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi") - $videoFilesCam2
-	LogUpload("There shall be at least " & $numFiles & " video files in this " & Floor($duration) & " secs, with the chunk time set to " & $chunkTime & " minutes." )
-	LogUpload("The main camera generates " & $cam1 & " video files and the rear camera generates " & $cam2 & " video files.")
-	If ($cam1 >= $numFiles) And ($cam2 >= $numFiles) Then
-		LogUpload("The number chunked files is correct.")
-		Return True
-	Else
-		LogUpload("The number chunked files is in-correct.")
-		Return True
+		Return False
 	EndIf
-
 EndFunc
 
 Func TestSettingsFunction($arg)
@@ -774,7 +737,7 @@ EndFunc
 
 Func IsRecording()
 	Local $path = @MyDocumentsDir & "\CopTraxTemp"
-	Local $filter = @MDAY & "*.mp4"
+	Local $filter = "*.JPG"
 	Local $aFileList = _FileListToArray($path, $filter, 0, True)
 	If @error > 0 Then
 		Return False
@@ -784,13 +747,16 @@ Func IsRecording()
 EndFunc
 
 Func CheckRecordedFiles()
-   LogUpload("Begin to review the records to check the chunk time.")
+	LogUpload("Begin to review the records to check the chunk time.")
 
-   Local $path1 = GetVideoFilePath
-   Local $path2 = $path1 & "\cam2"
-   Local $fileTypes = ["*.*","*.wmv", "*.jpg", "*.gps", "*.txt", "*.rdr", "*.vm", "*.trax", "*.rp"]
-   Local $latestFiles[9+9]
-   LogUpload("The setup chunk time is " & $chunkTime & " minutes.")
+	Local $path0 = @MyDocumentsDir & "\CopTraxTemp"
+	Local $path1 = GetVideoFilePath
+	Local $path2 = $path1 & "\cam2"
+	Local $fileTypes = ["*.*","*.wmv", "*.jpg", "*.gps", "*.txt", "*.rdr", "*.vm", "*.trax", "*.rp"]
+	Local $latestFiles[9+9]
+	Local $videoFilesCam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4")
+	Local $videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi")
+	LogUpload("Today the main camera has recorded " & $videoFilesCam1 & " video files. The rear camera has recorded " & $videoFilesCam2 & " video files. The setup chunk time is " & $chunkTime & " minutes.")
 
    Local $i
    For	$i = 0 To 8
@@ -954,28 +920,19 @@ Func ListenToNewCommand()
 				LogUpload("FAILED to start a record.")
 			EndIf
 
-		Case "trigger" ; Get a trigger command, going to test the trigger record function
-			MsgBox($MB_OK, $mMB, "Testing the trigger function",2)
-			If StartRecord(False) Then
-				LogUpload("PASSED the test on trigger a record function.")
-			Else
-				LogUpload("FAILED to trigger a record.")
-			EndIf
-
-		Case "startstop" ; Get a startstop trigger command
-			MsgBox($MB_OK, $mMB, "Testing the trigger startstop button function",2)
+		Case "startstop", "lightswitch" ; Get a startstop trigger command
+			MsgBox($MB_OK, $mMB, "Testing the trigger Light switch button function",2)
 			If WinWaitActive($titleEndRecord, "", 2) Then	; check if a recording progress exists
 				If EndRecording(False) Then
-					LogUpload("PASSED the test to end the record by trigger startstop button.")
+					LogUpload("PASSED the test to end the record by trigger Light switch button.")
 				Else
-					LogUpload("FAILED to end the record by trigger startstop button.")
+					LogUpload("FAILED to end the record by trigger Light switch button.")
 				EndIf
 			Else
-				LogUpload("No recording is in-progress. Try to start a new one by trigger startstop button.")
 				If StartRecord(False) Then
-					LogUpload("PASSED the test to start a record by trigger startstop button.")
+					LogUpload("PASSED the test to start a record by trigger Light switch button.")
 				Else
-					LogUpload("FAILED to start a record by trigger startstop button.")
+					LogUpload("FAILED to start a record by trigger Light switch button.")
 				EndIf
 			EndIf
 

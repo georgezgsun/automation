@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.11.29.102
+#AutoIt3Wrapper_Res_Fileversion=2.11.29.106
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -63,7 +63,7 @@ $allCommands[4] = "update file"
 $allCommands[5] = "checkapp version"
 $allCommands[6] = "checkfirmware version"
 $allCommands[7] = "checklibrary version"
-$allCommands[8] = "batchalign maxwait"
+$allCommands[8] = "batchmode status"
 $allCommands[9] = "pause duration"
 $allCommands[10] = "checkrecord files"
 $allCommands[11] = "radar speed"
@@ -237,7 +237,7 @@ While Not $testEnd
 			$commandsRemains = Int(GetParameter($estimate, "count"))
 			$timeRemains = Round(($commandTimers[$i] - $currentTime) / 1000) + Int(GetParameter($estimate, "time"))	; next (command time- current time) in seconds plus the remain test time
 			$testEndTime[$i] = $timeRemains
-			LogWrite($i, "(Server) " & $commandsRemains & " test commands executed. Next command in " & Int(($commandTimers[$i] - $currentTime) / 1000) & " seconds. Test remains " & $timeRemains & " seconds.")
+			LogWrite($i, "(Server) " & $commandsRemains & " test commands remains. Next command in " & Int(($commandTimers[$i] - $currentTime) / 1000) & " seconds. Test remains " & $timeRemains & " seconds.")
 
 			$progressPercentage = CorrectRange(100 * (1-$commandsRemains/$totalCommands[$i]), 0, 100)
 			GUICtrlSetData($pGUI[$i], $progressPercentage)
@@ -387,7 +387,9 @@ Func ParseCommand($n)
 			SendCommand($n, $newCommand)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
-			If $newCommand = "checkrecord" Then $commandTimers[$n] += 10*1000	; add 10 more seconds
+			If ($newCommand = "checkrecord") Or ($newCommand = "camera") Then
+				$commandTimers[$n] += 10*1000	; add 10 more seconds
+			EndIf
 
 		Case "cleanup", "quit", "reboot", "restart", "endtest", "restarttest"
 			SendCommand($n, $newCommand)	; send new test command to client
@@ -419,24 +421,11 @@ Func ParseCommand($n)
                 $sourceFileName = $workDir & "latest\" & $fileName
             Endif
 
-;            $file = FileOpen($sourceFileName,16)
-;            $fileToBeSent[$n] = FileRead($file)
-;            FileClose($file)
-
-;While BinaryLen($sImgbuffer) ;LarryDaLooza's idea to send in chunks to reduce stress on the application
-;$a = TCPSend($sSocket,$sImgbuffer)
-;$sImgbuffer = BinaryMid($sImgbuffer,$a+1,BinaryLen($sImgbuffer)-$a)
-;WEnd
-
-			If FileGetSize($sourceFileName) > 50000 Then
-				$file = FileOpen($sourceFileName,16)	; open file for read only in binary mode
-			Else
-				$file = FileOpen($sourceFileName,0)	; open file for read only in text mode
-			EndIf
+			$file = FileOpen($sourceFileName,16)	; open file for read only in binary mode
 			$fileToBeSent[$n] = FileRead($file)
 			FileClose($file)
-			Local $fLen = StringLen($fileToBeSent[$n])
-;            Local $fLen = BinaryLen($fileToBeSent[$n])
+            Local $fLen = StringLen($fileToBeSent[$n])
+			If $fLen < 10000 Then $fLen = BinaryLen($fileToBeSent[$n])
 			$newCommand &= " " & $fileName & " " & $fLen
 			SendCommand($n, $newCommand)	; send new test command to client
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
@@ -459,10 +448,23 @@ Func ParseCommand($n)
 				LogWrite($n, "(Server) All clients aligned.")
 			EndIf
 
-		Case "batchalign"
-			LogWrite($n, "(Server) Wait till all clients aligned.")
-			PushCommand($n, "batchhold")
-			$batchMode = True
+		Case "batchmode"
+			$arg = StringLower(PopCommand($n))
+			If $arg = "on" Then
+				LogWrite($n, "(Server) Wait till all clients aligned.")
+				PushCommand($n, "batchhold")
+				$batchMode = True
+			Else
+				$batchMode = False
+				If $socketRaspberryPi Then
+					TCPCloseSocket($socketRaspberryPi)
+				EndIf
+				$socketRaspberryPi = -1
+			EndIf
+
+		Case Else
+			LogWrite($n, "Unknown command " & $newCommand)
+
 	EndSwitch
 EndFunc
 
@@ -505,6 +507,11 @@ Func ReadTestCase($fileName)
     Local $aCommand = ""
     Local $testCase = ""
     Local $eof = false
+	Local $endofTestCase = ""
+	Local $i
+	For $i = $maxCommands-5 To $maxCommands - 1
+		$endofTestCase &= $allCommands[$i]
+	Next
 
     Do
         $aLine = FileReadLine($testFile)
@@ -523,7 +530,7 @@ Func ReadTestCase($fileName)
             $testCase &= $aCommand & " " & $parameters & " "
         EndIf
 
-        If $aCommand = "cleanup" Or $aCommand = "endtest" Or $aCommand = "restarttest" Or $aCommand = "reboot" Then
+        If StringInStr($endofTestCase, $aCommand) Then
             ExitLoop
         EndIf
     Until $eof
@@ -546,8 +553,8 @@ Func EstimateCommands($aCommand)
     Local $i
     Local $j
 
-    For $i = 0 To $commandList[0]
-        For $j = 0 To $maxCommands-1
+    For $i = 1 To $commandList[0] - 1
+        For $j = 0 To $maxCommands - 1
 			If StringInStr($allCommands[$j], $commandList[$i]) Then
                 $count += 1
                 ExitLoop
@@ -605,11 +612,10 @@ Func ReadParameters($line, $aCommand)
 	Local $parameter
 	If $keywords[0] <= 1 Then Return ""	; no keywords so no parameters
 	If $keywords[0] = 2 Then ; only 1 parameter, try to eliminate the keyword
-		$parameter = StringRegExp($line, "(?:" & $acommand & "\s+)([a-zA-Z0-9=\.]+)", $STR_REGEXPARRAYMATCH)
+		$parameter = StringRegExp($line, "(?:" & $acommand & "\s+)([a-zA-Z0-9=:_\\\-\.]+)", $STR_REGEXPARRAYMATCH)
 		If $parameter = "" Then Return "NULL"
 		If StringInStr($parameter[0], "=") Then
-        Local $temp = StringRegExp($parameter[0], "(?:\s" & $keywords[2] & "=)([a-zA-Z0-9\.\-_:\\]+)")
-			Return $temp
+			Return StringRegExpReplace($parameter[0], "(" & $keywords[2] & "=)", "")
 		Else
 			Return $parameter[0]
 		EndIf
@@ -617,7 +623,7 @@ Func ReadParameters($line, $aCommand)
 
 	Local $parameters = ""
 	For $i = 2 To $keywords[0]
-    $parameter = StringRegExp($line, "(?:\s)(" & $keywords[$i] & "=[a-zA-Z0-9\.\-_:\\]+)", $STR_REGEXPARRAYMATCH)
+		$parameter = StringRegExp($line, "(?:\s)(" & $keywords[$i] & "=[a-zA-Z0-9:_\\\.\-]+)", $STR_REGEXPARRAYMATCH)
 		If $parameter <> "" Then
 			$parameters &= $parameter[0] & "|"
 		EndIf
@@ -632,7 +638,7 @@ EndFunc
 
 Func GetParameter($parameters, $keyword)
 	If StringInStr($parameters, "=") Then
-		Local $parameter = StringRegExp($parameters, "(?:" & $keyword & "=)([a-zA-Z0-9]+)", $STR_REGEXPARRAYMATCH)
+		Local $parameter = StringRegExp($parameters, "(?:" & $keyword & "=)([a-zA-Z0-9:_\\\.\-]+)", $STR_REGEXPARRAYMATCH)
 		If $parameter = "" Then
 			Return ""
 		Else
@@ -878,45 +884,6 @@ Func SendCommand($n, $command)
 		EndIf
 		$piHeartbeatTime = TimerDiff($hTimer) + $piHeartbeatInterval;
 	EndIf
-EndFunc
-
-Func Trigger($arg)
-	If Not $socketRaspberryPi < 0 Then Return False
-
-	Local $cmd = ""
-	Switch StringLower($arg)
-		Case "siren"
-			$cmd = " t1"
-
-		Case "lightbar"
-			$cmd = " t3"
-
-		Case "aux4"
-			$cmd = " t4"
-
-		Case "aux5"
-			$cmd = " t5"
-
-		Case "aux6"
-			$cmd = " t6"
-
-		Case "startstop"
-			$cmd = " t7"
-
-		Case "microphone"
-			$cmd = " m0"
-
-	EndSwitch
-	If $cmd = "" Then Return False
-
-	If TCPSend($socketRaspberryPi, $cmd) = 0 Then
-		LogWrite($automationLogPort, "Connection to Raspberry Pi lost.")
-		TCPCloseSocket($socketRaspberryPi)
-		$socketRaspberryPi = -1
-		Return False
-	EndIf
-
-	Return True
 EndFunc
 
 Func HotKeyPressed()
