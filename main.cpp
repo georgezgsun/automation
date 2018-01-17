@@ -67,6 +67,12 @@ int main()
     int tempfd = 0;
     string reply = "";
     GPIO_Handler * gpio = new GPIO_Handler();
+    sleep(10);
+    gpio->Enable_Power();
+    sleep(10);
+    gpio->Enable_Ignition();
+    Radar_Simulator * Radar = new Radar_Simulator();
+    
     clock_t timeout = clock() + CLOCKS_PER_SEC * 60;
     int read_size = 0;
     int write_size = 0;
@@ -74,6 +80,7 @@ int main()
     int command = 0;
     int num = 0;
     string id = "";
+    char gpioreading;
 
     bool testEnd = false;
     while(!testEnd)
@@ -180,7 +187,7 @@ int main()
                 reply = "OK";
                 break;
             case 56 : // "h0"=(104-97)*8+0=56
-                gpioreading = gpio->Read_Inputs();
+                //gpioreading = gpio->Read_Inputs();
                 reply = "OK";
                 break;
             case 128 : // "q0"=(113-97)*8+0=128
@@ -209,8 +216,9 @@ int main()
             printf("Write error, close current connection @%d, waiting for future connection.\n", connfd);
             connfd = 0;
         }
-
-        usleep(10*1000);
+        
+        Radar->Send_Radar_Data();
+        sleep(10);
     }
 
     printf("Test finished.\n");
