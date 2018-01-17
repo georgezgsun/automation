@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 2.12.20.59)
+#pragma compile(FileVersion, 2.12.20.67)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -69,6 +69,7 @@ ReadConfig()
 
 Global $fileToBeUpdate = $workDir & "tmp\" & @ScriptName
 Global $testEnd = FileExists($fileToBeUpdate) ? FileGetVersion(@AutoItExe) <> FileGetVersion($fileToBeUpdate) : False
+If FileGetSize($fileToBeUpdate) < 1000000 Then $testEnd = False	; update the client file only when it was completetly downloaded
 $fileToBeUpdate = ""
 Global $restart = $testEnd
 Global Const $mMB = "CopTrax GUI Automation Test"
@@ -195,13 +196,16 @@ Func GetUserName()
 
 	$title = WinGetTitle($mCopTrax) ;"CopTrax Status"
 	Local $splittedTitle = StringRegExp($title, "[0-9]+\.[0-9]+\.[0-9]+\.?[0-9a-zA-Z]*", $STR_REGEXPARRAYMATCH)
-	If $splittedTitle = "" Then Return "Wrong title!"
+	If $splittedTitle = "" Then Return "Wrong app version!"
 	$appVersion = $splittedTitle[0]
 
-	$splittedTitle = StringRegExp($title, "(?:\[)([a-zA-Z][a-zA-Z0-9]{3,})", $STR_REGEXPARRAYMATCH)
-	If $splittedTitle = "" Then Return "Wrong title!"
-
-	Return $splittedTitle[0]
+	Local $begin = StringInStr($title, "[")
+	Local $end = StringInStr($title, "]")
+	If $begin And $end Then
+		Return StringMid($title, $begin+1, $end-$begin-1)
+	Else
+		Return "Wrong user name!"
+	EndIf
 EndFunc
 
 Func QuitCopTrax()
@@ -334,10 +338,12 @@ Func StartRecord($click)
 
 	LogUpload("Testing start record function.")
 
-	Local $path0 = GetVideoFilePath()
-	Local $tempVideoFilePath = @MyDocumentsDir & "\CopTraxTemp"
-	$videoFilesCam1 = GetVideoFileNum($path0, "*.wmv") + GetVideoFileNum($tempVideoFilePath, @MON & "*.mp4")
-	$videoFilesCam2 = GetVideoFileNum($path0 & "\cam2", "*.wmv") + GetVideoFileNum($path0 & "\cam2", "*.avi")
+	Local $path0 = @MyDocumentsDir & "\CopTraxTemp"
+	Local $path1 = GetVideoFilePath()
+	Local $path2 = $path1 & "\cam2"
+
+	$videoFilesCam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4")
+	$videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi")
 	LogUpload("Today the main camera has recorded " & $videoFilesCam1 & " video files. The rear camera has recorded " & $videoFilesCam2 & " video files.")
 	$tStartRecord = TimerDiff($hTimer)
 
@@ -362,11 +368,11 @@ Func StartRecord($click)
 EndFunc
 
 Func EndRecording($click)
-	If Not ReadyForTest() Then  Return False
-
 	LogUpload("Testing stop record function.")
 
-   	If Not IsRecording() Then	; check if the specified *.jpg files appear or not
+	If $click And (Not ReadyForTest()) Then  Return False
+
+   	If $click And Not IsRecording() Then	; check if the specified *.mp4 files is modifying
 		LogUpload("No recording in progress.")
 		Return False
 	EndIf
@@ -385,6 +391,7 @@ Func EndRecording($click)
 		Return False
 	EndIf
 
+	Local $hEndRecord = WinActivate($titleEndRecord)
    ;ControlClick($titleEndRecord,"","[CLASS:WindowsForms10.COMBOBOX.app.0.182b0e9_r11_ad1; INSTANCE:2]")
    ;ControlClick($titleEndRecord,"","[INSTANCE:2]")
 	AutoItSetOption("SendKeyDelay", 100)
@@ -401,13 +408,13 @@ Func EndRecording($click)
 	Sleep(100)
 	MouseClick("", 670,90)
 
-	ControlClick($titleEndRecord,"","OK")
+	ControlClick($hEndRecord,"","OK")
 	Sleep(100)
 
-	While WinWaitClose($titleEndRecord,"",10) = 0
+	While WinWaitClose($hEndRecord,"",10) = 0
 		MsgBox($MB_OK,  $mMB, "Click on the OK button failed",2)
 		LogUpload("Click on the OK button to stop record failed. ")
-		WinClose($titleEndRecord)
+		WinClose($hEndRecord)
 	WEnd
 
 	If $tStartRecord < 1 Then Return True
@@ -416,8 +423,8 @@ Func EndRecording($click)
 	Local $numFiles = Floor($duration / 60 / $chunkTime) + 1
 	Local $path1 = GetVideoFilePath()
 	Local $path2 = $path1 & "\cam2"
-	Local $tempVideoFilePath = @MyDocumentsDir & "\CopTraxTemp"
-	Local $cam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($tempVideoFilePath, @MDAY & "*.mp4") - $videoFilesCam1
+	Local $path0 = @MyDocumentsDir & "\CopTraxTemp"
+	Local $cam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4") - $videoFilesCam1
 	Local $cam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi") - $videoFilesCam2
 	LogUpload("There shall be at least " & $numFiles & " video files in this " & Floor($duration) & " secs, with the chunk time set to " & $chunkTime & " minutes." )
 	LogUpload("The main camera generates " & $cam1 & " video files and the rear camera generates " & $cam2 & " video files.")
@@ -767,7 +774,7 @@ EndFunc
 
 Func IsRecording()
 	Local $path = @MyDocumentsDir & "\CopTraxTemp"
-	Local $filter = "*.jpg"
+	Local $filter = @MDAY & "*.mp4"
 	Local $aFileList = _FileListToArray($path, $filter, 0, True)
 	If @error > 0 Then
 		Return False
@@ -897,7 +904,7 @@ Func CalculateChunkTime($file)
 EndFunc
 
 Func CalculateTimeDiff($time1,$time2)
-   If (StringLen($time1) <> 13) Or (StringLen($time2) <> 13) Then Return 100000
+   If (StringLen($time1) <> 14) Or (StringLen($time2) <> 14) Then Return 100000
    Local $t0 = (Number(StringMid($time2, 1, 8)) - Number(StringMid($time1, 1, 8)))*24*3600
    ; get the time difference in format yyyymmddhhmmss
    Local $t1 = Number(StringMid($time1, 9, 2)) * 3600 + Number(StringMid($time1, 11, 2)) * 60 + Number(StringMid($time1, 13, 2))
@@ -957,8 +964,7 @@ Func ListenToNewCommand()
 
 		Case "startstop" ; Get a startstop trigger command
 			MsgBox($MB_OK, $mMB, "Testing the trigger startstop button function",2)
-			If IsRecording() Then	; check if a recording progress exists
-				LogUpload("A recording is in-progress. Try to end it by trigger startstop button.")
+			If WinWaitActive($titleEndRecord, "", 2) Then	; check if a recording progress exists
 				If EndRecording(False) Then
 					LogUpload("PASSED the test to end the record by trigger startstop button.")
 				Else
@@ -972,7 +978,6 @@ Func ListenToNewCommand()
 					LogUpload("FAILED to start a record by trigger startstop button.")
 				EndIf
 			EndIf
-
 
 		Case "endrecord" ; Get a stop record command, going to end the record function
 			MsgBox($MB_OK, $mMB, "Testing the end record function",2)
@@ -1003,7 +1008,7 @@ Func ListenToNewCommand()
 			If TestCameraSwitchFunction() Then
 				LogUpload("PASSED the test on camera switch function.")
 			Else
-				LogUpload("FAILED to switch the camera.")
+				LogUpload("FAILED the test on camera switch.")
 			EndIf
 
 		Case "photo" ; Get a stop photo command, going to test the photo function
