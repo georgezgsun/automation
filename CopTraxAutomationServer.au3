@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.11.29.106
+#AutoIt3Wrapper_Res_Fileversion=2.11.29.113
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -56,7 +56,7 @@ Global $universalTestCaseFile = $workDir & "test_case.txt"
 Global Const $maxCommands = 35
 Global $allCommands[$maxCommands]
 $allCommands[0] = "record duration repeat interval"
-$allCommands[1] = "settings pre chunk"
+$allCommands[1] = "settings pre chunk cam2 cam3"
 $allCommands[2] = "createprofile username password"
 $allCommands[3] = "upload file"
 $allCommands[4] = "update file"
@@ -236,15 +236,19 @@ While Not $testEnd
 			$estimate = EstimateCommands($commands[$i])
 			$commandsRemains = Int(GetParameter($estimate, "count"))
 			$timeRemains = Round(($commandTimers[$i] - $currentTime) / 1000) + Int(GetParameter($estimate, "time"))	; next (command time- current time) in seconds plus the remain test time
-			$testEndTime[$i] = $timeRemains
+			$testEndTime[$i] = $timeRemains + $currentTime/1000
 			LogWrite($i, "(Server) " & $commandsRemains & " test commands remains. Next command in " & Int(($commandTimers[$i] - $currentTime) / 1000) & " seconds. Test remains " & $timeRemains & " seconds.")
 
 			$progressPercentage = CorrectRange(100 * (1-$commandsRemains/$totalCommands[$i]), 0, 100)
 			GUICtrlSetData($pGUI[$i], $progressPercentage)
 		Else
-			$timeRemains = CorrectRange($testEndTime[$i] - $currentTime / 1000, 0, 3600*24*3)
+			;$timeRemains = CorrectRange($testEndTime[$i] - $currentTime / 1000, 0, 3600*24*3)
+			$timeRemains = $testEndTime[$i] - ($currentTime / 1000)
 		EndIf
-		GUICtrlSetData($nGUI[$i], $boxID[$i] & " " & toHMS($timeRemains))
+
+		If $timeRemains > 0	Then
+			GUICtrlSetData($nGUI[$i], $boxID[$i] & " " & toHMS($timeRemains))
+		EndIf
 
 		If ($currentTime > $heartBeatTimers[$i]) And ($currentTime < $commandTimers[$i] - 50*1000) Then ; check the heart-beat timer
 			If $transFiles[$i] = "" Then	; This indicates there is no file transfer in-progress
@@ -371,9 +375,11 @@ Func ParseCommand($n)
 			If $newCommand = "aux4" Then $piCommand = "t4"
 			If $newCommand = "aux5" Then $piCommand = "t5"
 			If $newCommand = "aux6" Then $piCommand = "t6"
+			If $newCommand = "mic1trigger" Then $piCommand = "m1"
+			If $newCommand = "mic2trigger" Then $piCommand = "m2"
 			If $newCommand = "lightswitch" Then
 				$piCommand = "t7"
-				$aCommand = "startstop"
+				$aCommand = "lightswitch"
 			Endif
 
 			SendCommand($n, $aCommand)    ; send new test command to client
@@ -517,7 +523,7 @@ Func ReadTestCase($fileName)
         $aLine = FileReadLine($testFile)
 		If @error < 0 Then ExitLoop
 
-        $aLine = StringRegExpReplace($aLine, "(;.*)", "")
+        $aLine = StringRegExpReplace($aLine, "([;].*)", "")
         If $aLine = "" Then ContinueLoop
 
         $aCommand = ReadCommand($aLine)
@@ -553,9 +559,9 @@ Func EstimateCommands($aCommand)
     Local $i
     Local $j
 
-    For $i = 1 To $commandList[0] - 1
+    For $i = 1 To $commandList[0] - 1	; there is a apce in the end
         For $j = 0 To $maxCommands - 1
-			If StringInStr($allCommands[$j], $commandList[$i]) Then
+			If StringInStr($allCommands[$j], $commandList[$i]) = 1 Then ; find match only at the beginning
                 $count += 1
                 ExitLoop
 			EndIf
@@ -572,7 +578,7 @@ Func EstimateCommands($aCommand)
             $count += $repeat - 1
             $testTime += $repeat * ($duration + $interval) * 60
         Else
-            If StringInStr($allCommands[$j], "duration") Then
+            If StringInStr($allCommands[$j], "duration") > 4 Then
                 $parameters = $commandList[$i+1]
                 $duration = CorrectRange(Int(GetParameter($parameters, "duration")), 1, 999)
                 $testTime += $duration * 60
@@ -774,13 +780,14 @@ Func ProcessReply($n, $reply)
 
 	If StringInStr(StringLower($reply), "quit") Then
 		If PopCommand($n) Then
-			LogWrite($automationLogPort, $boxID[$n] & " Tests will continue.")
-			GUICtrlSetData($nGUI[$n], $boxID[$n] & " continue")
+			LogWrite($automationLogPort, $boxID[$n] & " Tests will restart.")
+			GUICtrlSetData($nGUI[$n], $boxID[$n] & " restart")
 		Else
 			If $testFailures[$n] = 0 Then
 				LogWrite($n, "All tests passed.")
 				LogWrite($automationLogPort, "All tests passed.")
 				LogWrite($automationLogPort, "END AUTOMATION TEST for CopTrax DVR " & $boxID[$n])
+				GUICtrlSetColor($pGUI[$n], $COLOR_GREEN)
 				GUICtrlSetData($nGUI[$n], $boxID[$n] & " PASSED")
 			Else
 				LogWrite($n, "Tests failed with " & $testFailures[$n] & " failures.")

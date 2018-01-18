@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 2.12.20.69)
+#pragma compile(FileVersion, 2.12.20.77)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -87,8 +87,10 @@ Global $chunkTime = 30
 Global $sendBlock = False
 Global $mCopTrax = 0
 Global $pCopTrax = "IncaXPCApp.exe"
-Global $hEventLog = _EventLog__Open("", "System")
-_EventLog__Read($hEventLog, True, False)
+Global $hEventLogSystem = _EventLog__Open("", "System")
+Global $hEventLogApp = _EventLog__Open("", "Application")
+_EventLog__Read($hEventLogSystem, True, False)
+_EventLog__Read($hEventLogApp, True, False)
 
 OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when the script is closed.
 AutoItSetOption ("WinTitleMatchMode", 2)
@@ -175,7 +177,8 @@ WEnd
 LogUpload("quit")
 TCPShutdown() ; Close the TCP service.
 FileClose($fileToBeUpdate)
-_EventLog__Close($hEventLog)
+_EventLog__Close($hEventLogSystem)
+_EventLog__Close($hEventLogApp)
 
 If $restart Then
 	If IsRecording() Then
@@ -406,11 +409,13 @@ Func TestSettingsFunction($arg)
 
 	Local $pre = GetParameter($arg, "pre")
 	Local $chunk = GetParameter($arg, "chunk")
+	Local $cam2 = StringLower(GetParameter($arg, "cam2"))
+	Local $cam3 = StringLower(GetParameter($arg, "cam3"))
 
 	MouseClick("",960, 460)
 	LogUpload("Start settings function testing.")
 
-	If WinWaitActive($titleLogin, "", 5) <> 0 Then
+	If WinWaitActive($titleLogin, "", 2) <> 0 Then
 		Send("135799{ENTER}")	; type the administator password
 		MouseClick("", 500, 150)
 	EndIf
@@ -423,91 +428,120 @@ Func TestSettingsFunction($arg)
 		Return False
 	EndIf
 
-	ControlClick($hWnd, "", "Test")
-	Sleep(500)
-	MouseClick("",260,285)
-	Sleep(200)
-	Switch $pre
-		Case "0"
-			Send("0{ENTER}")
-		Case "15"
-			Send("0{DOWN}{ENTER}")
-		Case "30"
-			Send("3{ENTER}")
-		Case "45"
-			Send("4{ENTER}")
-		Case "60"
-			Send("6{ENTER}")
-		Case "90"
-			Send("9{ENTER}")
-		Case "120"
-			Send("9{DOWN}{ENTER}")
-		Case Else
-			Send("{ENTER}")
-	EndSwitch
-	Sleep(500)
-
-	Local $positionY = 120
-	MouseClick("", 60, $positionY) ;"Hardware Triggers")
-	Sleep(1000)
-	;TakeScreenCapture("Hardware Triggers", $hWnd)
-	ControlClick($hWnd, "", "Identify")
-	Sleep(2000)
-
-	Local $txt = StringTrimLeft(WinGetText("CopTrax", "OK"), 2)
-	LogUpload("Identify of current box is " & $txt)
-	$readTxt = StringRegExp($txt, "[0-9]+\.[0-9]+\.[0-9]+\.?[0-9a-zA-Z]*", $STR_REGEXPARRAYGLOBALMATCH)
-	If UBound($readTxt) < 2 Then
-		$boxID = ""
-		$firmwareVersion = ""
-		$libraryVersion = ""
-		LogUpload("Identify reading error.")
-		Return False
-	Else
-		$libraryVersion = $readTxt[0]
-		$firmwareVersion = $readTxt[1]
-	EndIf
-
-	$readTxt =  StringRegExp($txt, "([a-zA-Z]{2}[0-9]{6})", $STR_REGEXPARRAYMATCH)
-	If $readTxt = "" Then
-		$boxID = "WrongSN"
-		LogUpload("Serial number reading error.")
-		Return False
-	EndIf
-	Local $readID = $readTxt[0]
-
-	If StringCompare($readID, $boxID) <> 0 Then
-		LogUpload("Changed the box ID in config file.")
-		$boxID = $readID
-		RenewConfig()
-	EndIf
-
-	WinClose("CopTrax", "OK")	; click to close the Identify popup window
-	Sleep(200)
-
-	$positionY = 180
+	Local $positionY = 60
 	Do
-		MouseClick("", 60, $positionY) ;"Upload & Storage")
-		$txt = WinGetText($hWnd)
+		MouseClick("", 60, $positionY)
+		Sleep(500)
+		Local $txt = WinGetText($hWnd)
+		If StringInStr($txt, "Capture") Then	; Cameras
+			ControlClick($hWnd, "", "Test")
+			If $pre >= 0 Then
+				Switch $pre
+					Case "0"
+						Send("+{Tab}0{ENTER}")
+					Case "15"
+						Send("+{Tab}01{ENTER}")
+					Case "30"
+						Send("+{Tab}3{ENTER}")
+					Case "45"
+						Send("+{Tab}4{ENTER}")
+					Case "60"
+						Send("+{Tab}6{ENTER}")
+					Case "90"
+						Send("+{Tab}9{ENTER}")
+					Case "120"
+						Send("+{Tab}91{ENTER}")
+				EndSwitch
+			EndIf
+
+			If $cam2 <> "" Or $cam3 <> "" Then
+				Send("+{Tab 4}2")	; select Camera
+				sleep(2000)
+				If $cam2 = "enabled" Then
+					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:secondary; INSTANCE:4]", "Check")
+					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:Always; INSTANCE:5]", "Check")
+				EndIf
+				If $cam2 = "disabled" Then
+					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:secondary; INSTANCE:4]", "uncheck")
+					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:Always; INSTANCE:5]", "uncheck")
+				EndIf
+
+				ControlClick($hWnd, "", "Test")
+				Sleep(2000)
+			EndIf
+
+			If $cam3 <> "" Then
+				Send("+{Tab 3}3")	; select Camera
+				sleep(2000)
+				If $cam3 = "enabled" Then
+					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:third; INSTANCE:3]", "Check")
+				EndIf
+				If $cam3 = "disabled" Then
+					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:third; INSTANCE:3]", "uncheck")
+				EndIf
+
+				ControlClick($hWnd, "", "Test")
+				Sleep(2000)
+			EndIf
+		EndIf
+
+		If StringInStr($txt, "Identify") Then	; Hardware Triggers
+			ControlClick($hWnd, "", "Identify")
+			Sleep(2000)
+			Local $id = StringTrimLeft(WinGetText("CopTrax", "OK"), 2)
+			LogUpload("Identify of current box is " & $id)
+			$readTxt = StringRegExp($id, "[0-9]+\.[0-9]+\.[0-9]+\.?[0-9a-zA-Z]*", $STR_REGEXPARRAYGLOBALMATCH)
+			If UBound($readTxt) < 2 Then
+				$boxID = ""
+				$firmwareVersion = ""
+				$libraryVersion = ""
+				LogUpload("Identify reading error.")
+				Return False
+			Else
+				$libraryVersion = $readTxt[0]
+				$firmwareVersion = $readTxt[1]
+			EndIf
+
+			$readTxt =  StringRegExp($id, "([a-zA-Z]{2}[0-9]{6})", $STR_REGEXPARRAYMATCH)
+			If $readTxt = "" Then
+				$boxID = "WrongSN"
+				LogUpload("Serial number reading error.")
+				Return False
+			EndIf
+			Local $readID = $readTxt[0]
+
+			If StringCompare($readID, $boxID) <> 0 Then
+				LogUpload("Changed the box ID in config file.")
+				$boxID = $readID
+				RenewConfig()
+			EndIf
+
+			WinClose("CopTrax", "OK")	; click to close the Identify popup window
+		EndIf
+
+		If StringInStr($txt, "Visual") Then	; Speed Triggers
+			Sleep(1000)
+		EndIf
+
+		If StringInStr($txt, "Baud") Then	; GPS & Radar
+			ControlClick($hWnd, "", "Test")
+			Sleep(2000)
+		EndIf
+
+		If StringInStr($txt, "Max") Then	; Upload & Storage
+			$chunkTime = CorrectRange(Int($chunk), 0, 60)
+			Send("{Tab}{BS 4}20" & $chunkTime)
+			MouseClick("", 800,100) ; clear the soft keyboard
+			Sleep(1000)
+		EndIf
+
+		If StringInStr($txt, "Welcome") Then	; Misc
+			ControlCommand($hWnd, "", "[CLASS:Button; TEXT:keyboard; INSTANCE:13]", "uncheck")
+			ControlCommand($hWnd, "", "[CLASS:Button; TEXT:welcome; INSTANCE:12]", "Check")
+			Sleep(1000)
+		EndIf
 		$positionY += 60
-		Sleep(100)
-	Until StringInStr($txt, "Max") Or $positionY > 420
-
-	If $positionY > 420 Then
-		MsgBox($MB_OK, $mMB, "Cannot locate the Upload & Storage tool bar.", 2)
-		LogUpload("Cannot locate the Upload & Storage tool bar.")
-		WinClose($hWnd)
-		Return False
-	EndIf
-
-	MouseClick("", 600,155)	; click on Max Video Duration
-	Sleep(500)
-	$chunkTime = CorrectRange(Int($chunk), 0, 60)
-	Send("{BS 4}" & $chunkTime)
-
-	MouseClick("", 650,100) ; clear the soft keyboard
-	Sleep(500)
-	;TakeScreenCapture("Upload & Storage", $hWnd)
+	Until $positionY > 480
 
 	ControlClick($hWnd, "", "Apply")
 	If WinWaitClose($hWnd, "", 10) = 0 Then
@@ -568,13 +602,23 @@ Func CheckEventLog()
 	Local $bEvent
 	Local $rst = True
 	Do
-		$aEvent = _EventLog__Read($hEventLog, True, True)
+		$aEvent = _EventLog__Read($hEventLogSystem, True, True)
 
 		If $aEvent[7] = 1 Then
 			LogUpload("Event " &  $aEvent[4] & " " & $aEvent[5] & " ID=" & $aEvent[6] & " " & $aEvent[13])
 			$rst = $aEvent[6]
 		EndIf
 	Until Not $aEvent[0]
+
+	Do
+		$aEvent = _EventLog__Read($hEventLogApp, True, True)
+
+		If $aEvent[7] = 1 Then
+			LogUpload("Event " &  $aEvent[4] & " " & $aEvent[5] & " ID=" & $aEvent[6] & " " & $aEvent[13])
+			$rst = $aEvent[6]
+		EndIf
+	Until Not $aEvent[0]
+
 
 	Return ($rst = 10110)
 EndFunc
@@ -750,7 +794,7 @@ Func CheckRecordedFiles()
 	LogUpload("Begin to review the records to check the chunk time.")
 
 	Local $path0 = @MyDocumentsDir & "\CopTraxTemp"
-	Local $path1 = GetVideoFilePath
+	Local $path1 = GetVideoFilePath()
 	Local $path2 = $path1 & "\cam2"
 	Local $fileTypes = ["*.*","*.wmv", "*.jpg", "*.gps", "*.txt", "*.rdr", "*.vm", "*.trax", "*.rp"]
 	Local $latestFiles[9+9]
@@ -813,8 +857,8 @@ Func CheckRecordedFiles()
 	Local $chunk2 = CalculateChunkTime($latestFiles[10])
 	LogUpload("For " & $latestFiles[1] & ", the chunk time is " & $chunk1 & " seconds.")
 	LogUpload("For " & $latestFiles[10] & ", the chunk time is " & $chunk2 & " seconds.")
-   If $chunk1 > $chunkTime*60 + 30 Then $chk = False
-   If $chunk2 > $chunkTime*60 + 30 Then $chk = False
+	If $chunk1 > $chunkTime*60 + 30 Then $chk = False
+   ;If $chunk2 > $chunkTime*60 + 30 Then $chk = False
 
    Return $chk
 EndFunc
@@ -990,6 +1034,14 @@ Func ListenToNewCommand()
 				LogUpload("PASSED on the test of show radar function.")
 			Else
 				LogUpload("FAILED to trigger radar.")
+			EndIf
+
+		Case "trigger" ; Get a trigger command, going to test the trigger record function
+			MsgBox($MB_OK, $mMB, "Testing the trigger function",2)
+			If StartRecord(False) Then
+				LogUpload("PASSED the test on trigger a record function.")
+			Else
+				LogUpload("FAILED to trigger a record.")
 			EndIf
 
 		Case "upload"
