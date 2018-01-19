@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.11.29.121
+#AutoIt3Wrapper_Res_Fileversion=2.11.29.123
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -67,8 +67,8 @@ $allCommands[6] = "checkfirmware version"
 $allCommands[7] = "checklibrary version"
 $allCommands[8] = "batchtest mode"
 $allCommands[9] = "pause duration"
-$allCommands[10] = "checkrecord files"
-$allCommands[11] = "radar speed"
+$allCommands[10] = "checkrecord total newadd detailed"
+$allCommands[11] = "radar"
 $allCommands[12] = "lightbar duration"
 $allCommands[13] = "siren duration"
 $allCommands[14] = "aux4 duration"
@@ -281,7 +281,7 @@ While Not $testEnd
 	GUICtrlSetData($nGUI[0], toHMS($lastEndTime))
 WEnd
 
-SendCommand(0, "q0") ; let RaspberryPi to quit
+;SendCommand(0, "q0") ; let RaspberryPi to quit
 
 OnAutoItExit()
 
@@ -353,7 +353,7 @@ Func ParseCommand($n)
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client. Pause for " & $interval & " mins till next command.")
 
-		Case "settings", "createprofile", "upload"
+		Case "settings", "createprofile", "upload", "checkrecord"
 			$arg = PopCommand($n)
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
@@ -399,7 +399,7 @@ Func ParseCommand($n)
 			PushCommand($n, "hold")	; hold any new command from executing only after get a passed/continue response from the client
 			$batchMode = False	; enter batchtest stop mode, stop any other box from entering aligned mode
 
-		Case "review", "photo", "info", "status", "eof", "checkrecord", "radar", "stopapp", "runapp", "camera"
+		Case "review", "photo", "info", "status", "eof", "radar", "stopapp", "runapp", "camera"
 			SendCommand($n, $newCommand)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "")
