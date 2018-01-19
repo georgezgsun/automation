@@ -1,6 +1,10 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
+<<<<<<< HEAD
 #AutoIt3Wrapper_Res_Fileversion=2.11.29.123
+=======
+#AutoIt3Wrapper_Res_Fileversion=2.11.29.121
+>>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
