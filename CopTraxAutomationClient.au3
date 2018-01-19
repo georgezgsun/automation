@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 2.12.20.77)
+#pragma compile(FileVersion, 2.12.20.89)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -36,6 +36,7 @@ HotKeySet("{Esc}", "HotKeyPressed") ; Esc to stop testing
 HotKeySet("q", "HotKeyPressed") ; Esc to stop testing
 HotKeySet("+!t", "HotKeyPressed") ; Shift-Alt-t to stop CopTrax
 HotKeySet("+!s", "HotKeyPressed") ; Shift-Alt-s, to start CopTrax
+HotKeySet("+!r", "HotKeyPressed") ; Shift-Alt-r, to restart the automation test client
 HotKeySet("!{SPACE}", "HotKeyPressed") ; Space show the running CopTraxAutomation
 
 Global Const $titleCopTraxMain = "CopTrax II v"
@@ -46,7 +47,7 @@ Global Const $titleRadar = "Radar" ; "CopTrax | Radar"
 Global Const $titleReview = "Playback" ; "CopTrax | Video Playback"
 Global Const $titleSettings = "Setup" ; "CopTrax II Setup"
 Global Const $titleStatus = "CopTrax Status" ; "CopTrax Status"
-Global Const $titleEndRecord = "Report" ; "Report Taken"
+Global Const $titleEndRecord = "Report Taken" ; "Report Taken"
 Global Const $TIMEOUTINSECEND = 300
 
 TCPStartup()
@@ -373,24 +374,26 @@ Func EndRecording($click)
 			MouseClick("", 960, 80)	; click on the button to stop record
 		EndIf
 		$i += 1
-	Until WinWaitActive($titleEndRecord,"",5) <> 0 Or $i > 3
+	Until WinWaitActive($titleEndRecord, "OK", 5) Or $i > 3
 
-	If $i > 3 Then
-		LogUpload("Click to stop record failed. ")
+	Local $hEndRecord = WinActivate($titleEndRecord, "OK")
+	If $hEndRecord = 0 Then
+		If $click Then
+			LogUpload("Click to stop record failed. ")
+		Else
+			LogUpload("Trigger light switch button to stop record failed. ")
+		EndIf
 		MsgBox($MB_OK,  $mMB, "Cannot trigger the end record function",2)
 		Return False
 	EndIf
 
-	Local $hEndRecord = WinActivate($titleEndRecord)
-	AutoItSetOption("SendKeyDelay", 100)
+	Send("{Tab}")
 	Sleep(200)
-	Send("tt{Tab}")
-	Sleep(200)
-
-	Send("This is a test input by CopTrax testing team.")
-	Sleep(100)
+	Send("This is a test input by CopTrax automation test.")
 	MouseClick("", 670,90)
+	;ControlSend($hEndRecord, "", "[CLASS:Edit]", "CopTrax automation test.")
 
+	Sleep(1000)
 	ControlClick($hEndRecord,"","OK")
 	Sleep(100)
 
@@ -430,9 +433,8 @@ Func TestSettingsFunction($arg)
 
 	Local $positionY = 60
 	Do
-		MouseClick("", 60, $positionY)
-		Sleep(500)
 		Local $txt = WinGetText($hWnd)
+;		LogUpload($positionY & " " & $txt)
 		If StringInStr($txt, "Capture") Then	; Cameras
 			ControlClick($hWnd, "", "Test")
 			If $pre >= 0 Then
@@ -456,14 +458,18 @@ Func TestSettingsFunction($arg)
 
 			If $cam2 <> "" Or $cam3 <> "" Then
 				Send("+{Tab 4}2")	; select Camera
-				sleep(2000)
+				sleep(5000)
+				;Local $hControl = ControlGetHandle($hWnd, "", "[CLASS:WindowsForms10.BUTTON.app.0.182b0e9_r11_ad1; INSTANCE:3]")
+
 				If $cam2 = "enabled" Then
-					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:secondary; INSTANCE:4]", "Check")
-					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:Always; INSTANCE:5]", "Check")
+					ControlCommand($hWnd, "", "[CLASS:BUTTON]", "Check", "")
+					ControlCommand($hWnd, "", "[INSTANCE:5]", "Check", "")
+					Sleep(1000)
 				EndIf
 				If $cam2 = "disabled" Then
-					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:secondary; INSTANCE:4]", "uncheck")
-					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:Always; INSTANCE:5]", "uncheck")
+					ControlCommand($hWnd, "", "[CLASS:WindowsForms10.BUTTON.app.0.182b0e9_r11_ad1; INSTANCE:3]", "UnCheck", "")
+					ControlCommand($hWnd, "", "[CLASSNN:WindowsForms10.BUTTON.app.0.182b0e9_r11_ad14]", "UnCheck", "")
+					Sleep(1000)
 				EndIf
 
 				ControlClick($hWnd, "", "Test")
@@ -473,11 +479,15 @@ Func TestSettingsFunction($arg)
 			If $cam3 <> "" Then
 				Send("+{Tab 3}3")	; select Camera
 				sleep(2000)
+
 				If $cam3 = "enabled" Then
-					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:third; INSTANCE:3]", "Check")
+					ControlCommand($hWnd, "", "[CLASS:BUTTON]", "Check", "")
+					Sleep(1000)
 				EndIf
 				If $cam3 = "disabled" Then
-					ControlCommand($hWnd, "", "[CLASS:Button; TEXT:third; INSTANCE:3]", "uncheck")
+					;ControlCommand($hWnd, "", "[CLASS:Button; TEXT:third; INSTANCE:3]", "UnCheck")
+					ControlCommand($hWnd, "", "[CLASSNN:WindowsForms10.BUTTON.app.0.182b0e9_r11_ad13]", "UnCheck", "")
+					Sleep(1000)
 				EndIf
 
 				ControlClick($hWnd, "", "Test")
@@ -487,7 +497,11 @@ Func TestSettingsFunction($arg)
 
 		If StringInStr($txt, "Identify") Then	; Hardware Triggers
 			ControlClick($hWnd, "", "Identify")
-			Sleep(2000)
+			If WinWaitActive("CopTrax", "OK", 5)= 0 Then
+				LogUpload("Cannot trigger Identify button")
+				Return False
+			EndIf
+
 			Local $id = StringTrimLeft(WinGetText("CopTrax", "OK"), 2)
 			LogUpload("Identify of current box is " & $id)
 			$readTxt = StringRegExp($id, "[0-9]+\.[0-9]+\.[0-9]+\.?[0-9a-zA-Z]*", $STR_REGEXPARRAYGLOBALMATCH)
@@ -516,6 +530,7 @@ Func TestSettingsFunction($arg)
 				RenewConfig()
 			EndIf
 
+			Sleep(1000)
 			WinClose("CopTrax", "OK")	; click to close the Identify popup window
 		EndIf
 
@@ -528,20 +543,23 @@ Func TestSettingsFunction($arg)
 			Sleep(2000)
 		EndIf
 
-		If StringInStr($txt, "Max") Then	; Upload & Storage
+		If StringInStr($txt, "Max") And $chunk Then	; Upload & Storage
 			$chunkTime = CorrectRange(Int($chunk), 0, 60)
-			Send("{Tab}{BS 4}20" & $chunkTime)
-			MouseClick("", 800,100) ; clear the soft keyboard
-			Sleep(1000)
+			Send("{Tab}{BS 4}" & $chunkTime)
+			MouseClick("", 700,100) ; clear the soft keyboard
+			Sleep(2000)
 		EndIf
 
 		If StringInStr($txt, "Welcome") Then	; Misc
-			ControlCommand($hWnd, "", "[CLASS:Button; TEXT:keyboard; INSTANCE:13]", "uncheck")
-			ControlCommand($hWnd, "", "[CLASS:Button; TEXT:welcome; INSTANCE:12]", "Check")
-			Sleep(1000)
+			ControlCommand($hWnd, "", "[INSTANCE:13]", "UnCheck", "")
+			ControlCommand($hWnd, "", "[TEXT:welcome]", "Check", "")
+			Sleep(2000)
 		EndIf
+
 		$positionY += 60
-	Until $positionY > 480
+		MouseClick("", 60, $positionY)
+		Sleep(500)
+	Until $positionY > 420
 
 	ControlClick($hWnd, "", "Apply")
 	If WinWaitClose($hWnd, "", 10) = 0 Then
@@ -966,7 +984,12 @@ Func ListenToNewCommand()
 
 		Case "startstop", "lightswitch" ; Get a startstop trigger command
 			MsgBox($MB_OK, $mMB, "Testing the trigger Light switch button function",2)
-			If WinWaitActive($titleEndRecord, "", 2) Then	; check if a recording progress exists
+			LogUpload("Got the lightswitch command. Takes seconds to determine what to do next.")
+			For $i = 1 To 10
+				If WinExists($titleEndRecord, "") Then	ExitLoop; check if an endrecord window pops
+				sleep(1000)
+			Next
+			If WinExists($titleEndRecord, "") Then	; check if an endrecord window pops
 				If EndRecording(False) Then
 					LogUpload("PASSED the test to end the record by trigger Light switch button.")
 				Else
@@ -1209,23 +1232,28 @@ Func UpdateFile($filename, $filesize)
 EndFunc
 
 Func HotKeyPressed()
-   Switch @HotKeyPressed ; The last hotkey pressed.
-	  Case "{Esc}", "q" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
-	  $testEnd = True	;	Stop testing marker
+	Switch @HotKeyPressed ; The last hotkey pressed.
+		Case "{Esc}", "q" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
+			$testEnd = True	;	Stop testing marker
 
-	  Case "+!t" ; Keystroke is the Shift-Alt-t hotkey, to stop the CopTrax
-		 MsgBox($MB_OK, $mMB, "Terminating the CopTrax. Bye",2)
-		 QuitCopTrax()
+		Case "+!t" ; Keystroke is the Shift-Alt-t hotkey, to stop the CopTrax App
+			MsgBox($MB_OK, $mMB, "Terminating the CopTrax. Bye",2)
+			QuitCopTrax()
 
-	  Case "+!s" ; Keystroke is the Shift-Alt-s hotkey, to start the CopTrax
-		 MsgBox($MB_OK, $mMB, "Starting the CopTrax",2)
-		 Run("c:\Program Files (x86)\IncaX\CopTrax\IncaXPCApp.exe", "c:\Program Files (x86)\IncaX\CopTrax")
+		Case "+!r" ; Keystroke is the Shift-Alt-r hotkey, to restart the automation test
+			MsgBox($MB_OK, $mMB, "Restart the automation test. see you soon.",2)
+			$testEnd = True	;	Stop testing marker
+			$restart = True
 
-	  Case "!{SPACE}" ; Keystroke is the Alt-Space hotkey, to show the automation testing in-progress
-		 MsgBox($MB_OK, $mMB, "CopTrax Automation testing is in progress.",2)
+		Case "+!s" ; Keystroke is the Shift-Alt-s hotkey, to start the CopTrax
+			MsgBox($MB_OK, $mMB, "Starting the CopTrax",2)
+			Run("c:\Program Files (x86)\IncaX\CopTrax\IncaXPCApp.exe", "c:\Program Files (x86)\IncaX\CopTrax")
 
-    EndSwitch
- EndFunc   ;==>HotKeyPressed
+		Case "!{SPACE}" ; Keystroke is the Alt-Space hotkey, to show the automation testing in-progress
+			MsgBox($MB_OK, $mMB, "CopTrax Automation testing is in progress.",2)
+
+	EndSwitch
+EndFunc   ;==>HotKeyPressed
 
 Func ReportCPUMemory()
 	Local $aProcUsage = _ProcessUsageTracker_Create($pCopTrax)
