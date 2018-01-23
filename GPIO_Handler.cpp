@@ -11,7 +11,7 @@ GPIO_Handler::GPIO_Handler()
     Triggers_Bank->Set_Polarity(0x00);
 
     Power_Mic = new GPIO_Bank(0x1B);
-    Power_Mic->Set_Configuration(0xF0);
+    Power_Mic->Set_Configuration(0x03);
     Power_Mic->Set_Outputs(Power_Mic_Enables.Data);
     Power_Mic->Set_Polarity(0x00);
 
