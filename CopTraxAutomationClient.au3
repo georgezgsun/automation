@@ -1,10 +1,6 @@
 #RequireAdmin
 
-<<<<<<< HEAD
-#pragma compile(FileVersion, 2.12.21.06)
-=======
-#pragma compile(FileVersion, 2.12.20.89)
->>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
+#pragma compile(FileVersion, 2.12.21.16)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -166,7 +162,7 @@ While Not $testEnd
 			$timeout = $currentTime + 1000*$TIMEOUTINSECEND
 		Else
 	  		If  $currentTime > $timeout Then
-				MsgBox($MB_OK, $mMB, "Cannot connected to server. Please check the network connection or the server.", 10)
+				MsgBox($MB_OK, $mMB, "Cannot connected to server. Please check the network connection or the server.", 5)
 				$timeout = TimerDiff($hTimer) + 1000*10	; check the networks connection every 10s.
 				$Socket = -1
 			EndIf
@@ -302,7 +298,7 @@ Func CreatNewAccount($name, $password)
 		EndIf
 
 		Sleep(500)
-		Send("10.0.6.32")
+		Send("10.0.6.32{TAB}")
 		MouseClick("", 350,70)
 		ControlCommand("Server", "", "[INSTANCE:1]", "Check")
 		ControlClick("Server", "", "Test")
@@ -313,34 +309,46 @@ Func CreatNewAccount($name, $password)
 		Sleep(500)
 		Send("{TAB 2}")
 	EndIf
-	Send($name)
+	Send($name & "{Tab}")
 	Sleep(500)
 
-	Send("{Tab}" & $password)	; type the user password
+	Send($password & "{Tab}")	; type the user password
 	Sleep(500)
-	Send("{Tab}" & $password)	; re-type the user password
+	Send($password & "{Tab}")	; re-type the user password
 	Sleep(2000)
-	Send("{Tab}{ENTER}")
-	MouseClick("", 670, 230)	; clear the soft keyboard
-	;ControlClick($hWnd, "", "Register")
+	$txt = WinGetText($hWnd)
+	;Send("{ENTER}")
+	;MouseClick("", 670, 230)	; clear the soft keyboard
+	ControlClick($hWnd, "", "Register")
 
 	If WinWaitClose($hWnd,"",10) = 0 Then
 		MsgBox($MB_OK, $mMB, "Clickon the Register button to close the window failed.",2)
-		LogUpload("Click on the Register button to exit failed.")
+		LogUpload("Click on the Register button to exit failed. Messages in windows are " & $txt)
 		WinClose($hWnd)
 		Return False
 	EndIf
 
+	$txt = "CopTrax"
+	If WinExists($txt,"restart") Then
+		ControlClick($txt, "restart", "OK")
+		LogUpload("CopTrax will restart. Automation will wait.")
+		$mCopTrax = 0
+		Return True
+	EndIf
+
 	Sleep(1000)
-
-	If $mCopTrax = 0 Then Return True
-
 	$userName = GetUserName()
 	If $userName <> $name Then
 		LogUpload("Switch to new user failed. Current user is " & $userName)
 		Return False
 	EndIf
 
+	Local $path0 = @MyDocumentsDir & "\CopTraxTemp"
+	Local $path1 = GetVideoFilePath()
+	Local $path2 = $path1 & "\cam2"
+
+	$videoFilesCam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4")
+	$videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi")
 	Return True
 EndFunc
 
@@ -371,20 +379,21 @@ EndFunc
 Func EndRecording($click)
 	LogUpload("Testing stop record function.")
 
-	If $click And (Not ReadyForTest()) Then  Return False
+	If $click Then
+		If Not ReadyForTest() Then  Return False
 
-   	If $click And Not IsRecording() Then	; check if the specified *.mp4 files is modifying
-		LogUpload("No recording in progress.")
-		Return False
-	EndIf
-
-	Local $i=0
-	Do
-		If $click Then
-			MouseClick("", 960, 80)	; click on the button to stop record
+		If Not IsRecording() Then	; check if the specified *.mp4 files is modifying
+			LogUpload("No recording in progress.")
+			Return False
 		EndIf
-		$i += 1
-	Until WinWaitActive($titleEndRecord, "OK", 5) Or $i > 3
+
+		MsgBox($MB_OK, $mMB, "Testing stop record function.", 2)
+		Local $i=0
+		Do
+			MouseClick("", 960, 80)	; click on the button to stop record
+			$i += 1
+		Until WinWaitActive($titleEndRecord, "OK", 5) Or $i > 3
+	EndIf
 
 	Local $hEndRecord = WinActivate($titleEndRecord, "OK")
 	If $hEndRecord = 0 Then
@@ -397,20 +406,7 @@ Func EndRecording($click)
 		Return False
 	EndIf
 
-<<<<<<< HEAD
-	;Send("{Tab}")
-	;Sleep(200)
-	;Send("This is a test input by CopTrax automation test.")
-	;MouseClick("", 670,90)
 	ControlSend($hEndRecord, "", "[REGEXPCLASS:(?i)(.*EDIT.*); INSTANCE:1]", "CopTrax automation test.")
-=======
-	Send("{Tab}")
-	Sleep(200)
-	Send("This is a test input by CopTrax automation test.")
-	MouseClick("", 670,90)
-	;ControlSend($hEndRecord, "", "[CLASS:Edit]", "CopTrax automation test.")
->>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
-
 	Sleep(1000)
 	ControlClick($hEndRecord,"","OK")
 	Sleep(100)
@@ -432,24 +428,16 @@ Func TestSettingsFunction($arg)
 	Local $chunk = GetParameter($arg, "chunk")
 	Local $cam2 = StringLower(GetParameter($arg, "cam2"))
 	Local $cam3 = StringLower(GetParameter($arg, "cam3"))
-<<<<<<< HEAD
-	Local $button3
-	Local $button4
-	Local $button5
-	Local $button6
-=======
->>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
 
 	MouseClick("",960, 460)
 	LogUpload("Start settings function testing.")
 
 	If WinWaitActive($titleLogin, "", 2) <> 0 Then
-		Send("135799{ENTER}")	; type the administator password
+		Send("135799{TAB}{ENTER}")	; type the administator password
 		MouseClick("", 500, 150)
 	EndIf
 
-	; $mTitle = "CopTrax II Setup"
-	WinWaitActive($titleSettings, "", 10)
+	WinWaitActive($titleSettings, "", 10)	;"CopTrax II Setup"
 	Local $hWnd = WinActivate($titleSettings)
 	If $hWnd = 0 Then
 		MsgBox($MB_OK, $mMB, "Cannot trigger the settings function.", 2)
@@ -460,10 +448,7 @@ Func TestSettingsFunction($arg)
 	Local $positionY = 60
 	Do
 		Local $txt = WinGetText($hWnd)
-<<<<<<< HEAD
-=======
-;		LogUpload($positionY & " " & $txt)
->>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
+
 		If StringInStr($txt, "Capture") Then	; Cameras
 			ControlClick($hWnd, "", "Test")
 			If $pre >= 0 Then
@@ -485,10 +470,8 @@ Func TestSettingsFunction($arg)
 				EndSwitch
 			EndIf
 
-<<<<<<< HEAD
 			If $cam2 <> "" Then
-				;Send("+{Tab 4}2")	; select Camera
-				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "2")
+				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "2")	; select Camera 2
 				sleep(5000)
 
 				If $cam2 = "enabled" Then
@@ -513,131 +496,67 @@ Func TestSettingsFunction($arg)
 			EndIf
 
 			If $cam3 <> "" Then
-				;Send("+{Tab 4}3")	; select Camera
-				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "3")
+				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "3")	; select Camera 3
 				sleep(2000)
 
 				If ($cam3 = "enabled") And (PixelGetColor(846,206, $hWnd) > 0) Then
+					MouseClick("", 846, 206)
+				EndIf
+				If ($cam3 = "disabled") And (PixelGetColor(846,206, $hWnd) = 0) Then
 					MouseClick("", 846, 206)
 				EndIf
 
 				ControlClick($hWnd, "", "Test")
 				Sleep(2000)
 			EndIf
-
-
 		EndIf
 
 		If StringInStr($txt, "Identify") Then	; Hardware Triggers
 			ControlClick($hWnd, "", "Identify")
 			If WinWaitActive("CopTrax", "OK", 5)= 0 Then
 				LogUpload("Cannot trigger Identify button")
+				WinClose($hWnd)
 				Return False
 			EndIf
 
 			Local $id = StringTrimLeft(WinGetText("CopTrax", "OK"), 2)
 			LogUpload("Identify of current box is " & $id)
+			Sleep(1000)
+			WinClose("CopTrax", "OK")	; click to close the Identify popup window
+
 			$readTxt = StringRegExp($id, "[0-9]+\.[0-9]+\.[0-9]+\.?[0-9a-zA-Z]*", $STR_REGEXPARRAYGLOBALMATCH)
 			If UBound($readTxt) < 2 Then
 				$boxID = ""
 				$firmwareVersion = ""
 				$libraryVersion = ""
-				LogUpload("Identify reading error.")
+				LogUpload("Fatal error. Firmware not responding correctly.")
+				WinClose($hWnd)
 				Return False
 			Else
 				$libraryVersion = $readTxt[0]
 				$firmwareVersion = $readTxt[1]
 			EndIf
 
-=======
-			If $cam2 <> "" Or $cam3 <> "" Then
-				Send("+{Tab 4}2")	; select Camera
-				sleep(5000)
-				;Local $hControl = ControlGetHandle($hWnd, "", "[CLASS:WindowsForms10.BUTTON.app.0.182b0e9_r11_ad1; INSTANCE:3]")
-
-				If $cam2 = "enabled" Then
-					ControlCommand($hWnd, "", "[CLASS:BUTTON]", "Check", "")
-					ControlCommand($hWnd, "", "[INSTANCE:5]", "Check", "")
-					Sleep(1000)
-				EndIf
-				If $cam2 = "disabled" Then
-					ControlCommand($hWnd, "", "[CLASS:WindowsForms10.BUTTON.app.0.182b0e9_r11_ad1; INSTANCE:3]", "UnCheck", "")
-					ControlCommand($hWnd, "", "[CLASSNN:WindowsForms10.BUTTON.app.0.182b0e9_r11_ad14]", "UnCheck", "")
-					Sleep(1000)
-				EndIf
-
-				ControlClick($hWnd, "", "Test")
-				Sleep(2000)
-			EndIf
-
-			If $cam3 <> "" Then
-				Send("+{Tab 3}3")	; select Camera
-				sleep(2000)
-
-				If $cam3 = "enabled" Then
-					ControlCommand($hWnd, "", "[CLASS:BUTTON]", "Check", "")
-					Sleep(1000)
-				EndIf
-				If $cam3 = "disabled" Then
-					;ControlCommand($hWnd, "", "[CLASS:Button; TEXT:third; INSTANCE:3]", "UnCheck")
-					ControlCommand($hWnd, "", "[CLASSNN:WindowsForms10.BUTTON.app.0.182b0e9_r11_ad13]", "UnCheck", "")
-					Sleep(1000)
-				EndIf
-
-				ControlClick($hWnd, "", "Test")
-				Sleep(2000)
-			EndIf
-		EndIf
-
-		If StringInStr($txt, "Identify") Then	; Hardware Triggers
-			ControlClick($hWnd, "", "Identify")
-			If WinWaitActive("CopTrax", "OK", 5)= 0 Then
-				LogUpload("Cannot trigger Identify button")
-				Return False
-			EndIf
-
-			Local $id = StringTrimLeft(WinGetText("CopTrax", "OK"), 2)
-			LogUpload("Identify of current box is " & $id)
-			$readTxt = StringRegExp($id, "[0-9]+\.[0-9]+\.[0-9]+\.?[0-9a-zA-Z]*", $STR_REGEXPARRAYGLOBALMATCH)
-			If UBound($readTxt) < 2 Then
-				$boxID = ""
-				$firmwareVersion = ""
-				$libraryVersion = ""
-				LogUpload("Identify reading error.")
-				Return False
-			Else
-				$libraryVersion = $readTxt[0]
-				$firmwareVersion = $readTxt[1]
-			EndIf
-
->>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
 			$readTxt =  StringRegExp($id, "([a-zA-Z]{2}[0-9]{6})", $STR_REGEXPARRAYMATCH)
 			If $readTxt = "" Then
 				$boxID = "WrongSN"
-				LogUpload("Serial number reading error.")
+				LogUpload("Fatal error. Firmware not responding correctly.")
+				WinClose($hWnd)
 				Return False
 			EndIf
-			Local $readID = $readTxt[0]
 
+			Local $readID = $readTxt[0]
 			If StringCompare($readID, $boxID) <> 0 Then
 				LogUpload("Changed the box ID in config file.")
 				$boxID = $readID
 				RenewConfig()
 			EndIf
-<<<<<<< HEAD
-			Sleep(1000)
-			WinClose("CopTrax", "OK")	; click to close the Identify popup window
 
 			For $y = 150 To 430 Step 35
 				If PixelGetColor(310,$y, $hWnd) > 0 Then
 					MouseClick("", 310, $y)
 				EndIf
 			Next
-=======
-
-			Sleep(1000)
-			WinClose("CopTrax", "OK")	; click to close the Identify popup window
->>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
 		EndIf
 
 		If StringInStr($txt, "Visual") Then	; Speed Triggers
@@ -651,8 +570,9 @@ Func TestSettingsFunction($arg)
 
 		If StringInStr($txt, "Max") And $chunk Then	; Upload & Storage
 			$chunkTime = CorrectRange(Int($chunk), 0, 60)
-<<<<<<< HEAD
 			Send("{TAB}{BS 4}" & $chunkTime & "{TAB}")
+			;MouseClick("", 700,100) ; clear the soft keyboard
+			;ControlSend($hWnd, "", "[REGEXPCLASS:(.*BUTTON.*); INSTANCE:3]", "{Del 4}" & $chunkTime)
 			Sleep(1000)
 		EndIf
 
@@ -664,17 +584,6 @@ Func TestSettingsFunction($arg)
 			If PixelGetColor(274,310, $hWnd) > 0 Then
 				MouseClick("", 274, 310)
 			EndIf
-=======
-			Send("{Tab}{BS 4}" & $chunkTime)
-			MouseClick("", 700,100) ; clear the soft keyboard
-			Sleep(2000)
-		EndIf
-
-		If StringInStr($txt, "Welcome") Then	; Misc
-			ControlCommand($hWnd, "", "[INSTANCE:13]", "UnCheck", "")
-			ControlCommand($hWnd, "", "[TEXT:welcome]", "Check", "")
->>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
-			Sleep(2000)
 		EndIf
 
 		$positionY += 60
@@ -690,13 +599,21 @@ Func TestSettingsFunction($arg)
 		Return False
 	EndIf
 
-	WinClose($hWnd)
 	Return True
 EndFunc
 
 Func ReadyForTest()
 	If WinExists($titleStatus) Then
 		LogUpload("The accessories are not ready.")
+		Return False
+	EndIf
+
+	If WinExists($titleCopTraxMain, "Details") Then
+		ControlClick($titleCopTraxMain, "Details", "Details")
+		Local $txt = WinGetText($titleCopTraxMain, "Details")
+		LogUpload("Unhandled exception has occured in CopTrax II.")
+		LogUpload(" The error messages are : " & $txt)
+		ControlClick($titleCopTraxMain, "Details", "Quit")
 		Return False
 	EndIf
 
@@ -744,28 +661,26 @@ EndFunc
 
 Func CheckEventLog()
 	Local $aEvent
-	Local $bEvent
 	Local $rst = True
 	Do
-		$aEvent = _EventLog__Read($hEventLogSystem, True, True)
+		$aEvent = _EventLog__Read($hEventLogSystem, True, True)	;read the event log forwards from last read
 
 		If $aEvent[7] = 1 Then
-			LogUpload("Event " &  $aEvent[4] & " " & $aEvent[5] & " ID=" & $aEvent[6] & " " & $aEvent[13])
-			$rst = $aEvent[6]
+			LogUpload("System error event at " &  $aEvent[4] & " " & $aEvent[5] & ", ID=" & $aEvent[6] & ", " & $aEvent[13])
+			If $aEvent[6] = 10110 Then $rst = False
 		EndIf
 	Until Not $aEvent[0]
 
 	Do
-		$aEvent = _EventLog__Read($hEventLogApp, True, True)
+		$aEvent = _EventLog__Read($hEventLogApp, True, True)	;read the event log forwards from last read
 
 		If $aEvent[7] = 1 Then
-			LogUpload("Event " &  $aEvent[4] & " " & $aEvent[5] & " ID=" & $aEvent[6] & " " & $aEvent[13])
-			$rst = $aEvent[6]
+			LogUpload("Application error event at " &  $aEvent[4] & " " & $aEvent[5] & ", ID=" & $aEvent[6] & ", " & $aEvent[13])
 		EndIf
 	Until Not $aEvent[0]
 
 
-	Return ($rst = 10110)
+	Return $rst
 EndFunc
 
 Func TestCameraSwitchFunction()
@@ -862,7 +777,7 @@ EndFunc
 Func TestRadarFunction()
 	If Not ReadyForTest() Then Return False
 
-	LogUpload("Begin RADAR function testing.")
+	LogUpload("Begin testing RADAR function.")
 
 	Local $testResult = False
 	Local $hRadar
@@ -937,7 +852,6 @@ Func IsRecording()
 	EndIf
 EndFunc
 
-<<<<<<< HEAD
 Func CheckRecordedFiles($arg)
 	LogUpload("Begin to review the records to check the chunk time.")
 
@@ -962,19 +876,6 @@ Func CheckRecordedFiles($arg)
 
 	LogUpload("Today the main camera has recorded total " & $cam1 & " video files. The rear camera has recorded total " & $cam2 & " video files.")
 	LogUpload("In last period, the main camera has recorded " & $newAdd1 & " new video files. The rear camera has recorded " & $newAdd2 & " new video files.")
-=======
-Func CheckRecordedFiles()
-	LogUpload("Begin to review the records to check the chunk time.")
-
-	Local $path0 = @MyDocumentsDir & "\CopTraxTemp"
-	Local $path1 = GetVideoFilePath()
-	Local $path2 = $path1 & "\cam2"
-	Local $fileTypes = ["*.*","*.wmv", "*.jpg", "*.gps", "*.txt", "*.rdr", "*.vm", "*.trax", "*.rp"]
-	Local $latestFiles[9+9]
-	Local $videoFilesCam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4")
-	Local $videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi")
-	LogUpload("Today the main camera has recorded " & $videoFilesCam1 & " video files. The rear camera has recorded " & $videoFilesCam2 & " video files. The setup chunk time is " & $chunkTime & " minutes.")
->>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
 
 	If $total > 0 Then
 		If ($total <> $cam1) Or ($total <> $cam2) Then
@@ -1035,7 +936,7 @@ Func CheckRecordedFiles()
 		EndIf
 
 		If ($i = 1 Or $i = 2 Or $i = 3 Or $i = 10 Or $i = 11 Or $i=12) And (CalculateTimeDiff($createTime, $time0) > 3) Then
-			LogUpload("Find critical file " & $fileTypes[$n] & " missed in records.")
+			LogUpload("Find key file " & $fileTypes[$n] & " missed in records.")
 			$chk = False	; return False when .gps or .wmv or .jpg files were missing,
 			If Abs(CalculateTimeDiff($time1, $time0)) < 3 Then
 				LogUpload("Find " & $file0 & " in backup folder.")
@@ -1119,7 +1020,8 @@ Func ListenToNewCommand()
 
 	If $fileToBeUpdate <> "" Then
 		FileWrite($fileToBeUpdate, $raw)
-		$len = StringLen($raw)
+		;$len = StringLen($raw)	;
+		$len = BinaryLen($raw)
 		LogUpload("Received " & $len & " bytes, write them to file.")
 		$bytesCounter -= $len
 		If $bytesCounter <= 10 Then
@@ -1155,11 +1057,7 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "startstop", "lightswitch" ; Get a startstop trigger command
-<<<<<<< HEAD
 			;MsgBox($MB_OK, $mMB, "Testing the trigger Light switch button function",2)
-=======
-			MsgBox($MB_OK, $mMB, "Testing the trigger Light switch button function",2)
->>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
 			LogUpload("Got the lightswitch command. Takes seconds to determine what to do next.")
 			For $i = 1 To 10
 				If WinExists($titleEndRecord, "") Then	ExitLoop; check if an endrecord window pops
@@ -1172,10 +1070,7 @@ Func ListenToNewCommand()
 					LogUpload("FAILED to end the record by trigger Light switch button.")
 				EndIf
 			Else
-<<<<<<< HEAD
 				MsgBox($MB_OK, $mMB, "Testing the Light switch button trigger a record function",2)
-=======
->>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
 				If StartRecord(False) Then
 					LogUpload("PASSED the test to start a record by trigger Light switch button.")
 				Else
@@ -1344,7 +1239,12 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "cleanup"
-			LogUpload("PASSED The box is being cleaned up.")
+			If ($mCopTrax <> 0) And Not QuitCopTrax() Then
+				LogUpload("Failed Cannot stop the CopTrax App. It is required to be stopped before cleanup can take effect.")
+			Else
+				LogUpload("PASSED The box is being cleaned up.")
+			EndIf
+
 			Run("C:\Coptrax Support\Tools\Cleanup.bat")
 			LogUpload("Going to shutdown the box.")
 			OnAutoItExit()
@@ -1399,7 +1299,8 @@ Func UploadFile()
 
 	$fileContent = FileRead($file)
 	FileClose($file)
-	Local $fileLen = StringLen($fileContent)
+	;Local $fileLen = StringLen($fileContent)	;
+	Local $fileLen = BinaryLen($fileContent)
 ;	If StringIsASCII($fileContent) Then $fileLen = Round($fileLen/2)
 	Sleep(1000)
 	LogUpload("file " & $filename[1] & " " & $fileLen & " " & $filesToBeSent)
@@ -1415,7 +1316,6 @@ Func HotKeyPressed()
 	Switch @HotKeyPressed ; The last hotkey pressed.
 		Case "{Esc}", "q" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
 			$testEnd = True	;	Stop testing marker
-<<<<<<< HEAD
 
 		Case "+!t" ; Keystroke is the Shift-Alt-t hotkey, to stop the CopTrax App
 			MsgBox($MB_OK, $mMB, "Terminating the CopTrax. Bye",2)
@@ -1426,18 +1326,6 @@ Func HotKeyPressed()
 			$testEnd = True	;	Stop testing marker
 			$restart = True
 
-=======
-
-		Case "+!t" ; Keystroke is the Shift-Alt-t hotkey, to stop the CopTrax App
-			MsgBox($MB_OK, $mMB, "Terminating the CopTrax. Bye",2)
-			QuitCopTrax()
-
-		Case "+!r" ; Keystroke is the Shift-Alt-r hotkey, to restart the automation test
-			MsgBox($MB_OK, $mMB, "Restart the automation test. see you soon.",2)
-			$testEnd = True	;	Stop testing marker
-			$restart = True
-
->>>>>>> 7be94579a720f28711778a0eb4f5c276dcf5864e
 		Case "+!s" ; Keystroke is the Shift-Alt-s hotkey, to start the CopTrax
 			MsgBox($MB_OK, $mMB, "Starting the CopTrax",2)
 			Run("c:\Program Files (x86)\IncaX\CopTrax\IncaXPCApp.exe", "c:\Program Files (x86)\IncaX\CopTrax")
