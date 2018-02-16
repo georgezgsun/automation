@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+	<name>ACI-CopTrax1</name>
+	<SSIDConfig>
+		<SSID>
+			<hex>4143492D436F705472617831</hex>
+			<name>ACI-CopTrax1</name>
+		</SSID>
+	</SSIDConfig>
+	<connectionType>ESS</connectionType>
+	<connectionMode>auto</connectionMode>
+	<MSM>
+		<security>
+			<authEncryption>
+				<authentication>WPA2PSK</authentication>
+				<encryption>AES</encryption>
+				<useOneX>false</useOneX>
+			</authEncryption>
+			<sharedKey>
+				<keyType>passPhrase</keyType>
+				<protected>true</protected>
+				<keyMaterial>01000000D08C9DDF0115D1118C7A00C04FC297EB010000003D07944BE9AE814BAAA86B107BA7663500000000020000000000106600000001000020000000BE0A524FB6ECDD62B570B882B421A929CE2D4EEA871C98CBF0CC595CC0D3F284000000000E8000000002000020000000AC77202CD9ECB211ECB1DAEC6D7A40CE61CEF606110C3287F0EBBF0A308882BF10000000823C3C87134DA72799ED59CF595DD91E400000000B3B935094F155C3515963122A79B336113F67F97345B793923AAEE144EC8857167ED90950445C9F125CF5D7EF27D63279BDF428B176950AED2E14F3078136F9</keyMaterial>
+			</sharedKey>
+		</security>
+	</MSM>
+</WLANProfile>
