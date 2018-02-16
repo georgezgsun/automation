@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.16.2)
+#pragma compile(FileVersion, 3.2.16.4)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -356,6 +356,9 @@ Func CreatNewAccount($name, $password)
 	If  $hWnd = 0 Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the CopTrax-Login/Create Account window. " & @CRLF, 5)
 		LogUpload("Unable to trigger the CopTrax-Login/Create Account window.")
+		If WinExists("CopTrax","OK") Then
+			WinClose("CopTrax","OK")
+		EndIf
 		Return False
 	EndIf
 
@@ -375,17 +378,17 @@ Func CreatNewAccount($name, $password)
 		MouseClick("", 350,70)
 		ControlCommand("Server", "", "[INSTANCE:1]", "Check")
 		ControlClick("Server", "", "Test")
-		Local $txt
+
 		Local $i=0
 		Do
 			$txt = WinGetText("Server", "Test")
 			$i += 1
 			Sleep(1000)
-		Until StringInStr($txt, "Connect OK") Or $i > 5
+		Until StringInStr($txt, "Connection OK") Or $i > 5
 
 		If $i > 5 Then
 			WinClose("Server")
-			LogUpload("Unable to connect to the required server.")
+			LogUpload("Unable to connect to the required server. The text read are " & $txt)
 			WinClose($hWnd)
 			Return False
 		EndIf
@@ -762,6 +765,7 @@ Func ReadyForTest()
 
 	If WinExists("CopTrax","OK") Then
 		Local $txt = WinGetText("CopTrax", "OK")
+		LogUpload("Encounter an error Window. The messages displayed on the window is " & $txt)
 		WinClose("CopTrax","OK")
 		Sleep(100)
 		If StringInStr($txt, "Full") Then
