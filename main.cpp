@@ -177,7 +177,7 @@ int main()
                 gpio->Disable_Mic_Trigger_1();
                 reply = "OK";
                 break;                    
-            case 98 : // "m1"=(109-98)*8+1=98
+            case 98 : // "m2"=(109-98)*8+1=98
                 gpio->Enable_Mic_Trigger_2();
                 usleep(1000*1000);
                 gpio->Disable_Mic_Trigger_2();
@@ -188,6 +188,7 @@ int main()
                 break;
             case 56 : // "h0"=(104-97)*8+0=56
                 //gpioreading = gpio->Read_Inputs();
+                //gpio->Disable_Mic_Trigger_2();
                 reply = "OK";
                 break;
             case 128 : // "q0"=(113-97)*8+0=128
