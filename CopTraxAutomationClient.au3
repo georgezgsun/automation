@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.16.4)
+#pragma compile(FileVersion, 3.2.19.1)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -100,11 +100,6 @@ AutoItSetOption ("WinTitleMatchMode", 2)
 AutoItSetOption("SendKeyDelay", 100)
 
 If WinExists("", "Open CopTrax") Then
-	;ControlClick("", "Open CopTrax", "[NAME:panelValidation]")
-	;MouseClick("", 1002, 315)
-	;Send("{Enter}")
-	;MouseClick("", 820, 450)
-
 	Local $filename = "C:\CopTrax Support\Tools\Automation.bat"
 	Local $file = FileOpen($filename, $FO_OVERWRITE );
 	FileWriteLine($file, "Echo Welcome to use CopTrax II")
@@ -238,11 +233,9 @@ Func RunValidationTool()
 		$userName = $splittedTitle[0]
 	EndIf
 
-	ControlClick($hWnd, "", "[NAME:radioButton_HBOff]")
+	LogUpload("Reading from validation tool, the serial number of the box is " & $userName & ", the firmware version is " & $firmwareVersion & ", the library version is " & $libraryVersion)
 
-	ControlSend($hwnd, "", "[CLASS:Edit; INSTANCE:2]", "{BS 4}1200{DEl 4}")
-	Sleep(200)
-	ControlClick($hWnd, "", "[NAME:buttonRadarBaud]")
+	ControlClick($hWnd, "", "[NAME:radioButton_HBOff]")	; set the heartbeat to off, preventing unnecessary reboot
 
 	WinWaitClose($hwnd)
 	Return
@@ -353,12 +346,14 @@ EndFunc
 
 Func CreatNewAccount($name, $password)
 	Local $hWnd = WinWaitActive($titleAccount, "", 10)
+	Local $txt = ""
 	If  $hWnd = 0 Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the CopTrax-Login/Create Account window. " & @CRLF, 5)
-		LogUpload("Unable to trigger the CopTrax-Login/Create Account window.")
 		If WinExists("CopTrax","OK") Then
+			$txt = WinGetText("CopTrax","OK")
 			WinClose("CopTrax","OK")
 		EndIf
+		LogUpload("Unable to trigger the CopTrax-Login/Create Account window. Screen reading are " & $txt)
 		Return False
 	EndIf
 
@@ -368,7 +363,7 @@ Func CreatNewAccount($name, $password)
 		Send("{TAB 3}{END}")
 		If WinWaitActive("Server", "", 5) = 0 Then
 			MsgBox($MB_OK, $mMB, "Unable to open Server Configuration window. " & @CRLF, 5)
-			LogUpload("CUnable to open Server Configuration window. ")
+			LogUpload("Unable to open Server Configuration window. ")
 			WinClose($hWnd)
 			Return False
 		EndIf

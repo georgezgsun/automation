@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.14.4
+#AutoIt3Wrapper_Res_Fileversion=2.2.14.10
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -24,6 +24,7 @@
 #include <Timers.au3>
 #include <File.au3>
 #include <Date.au3>
+#include <GUIConstants.au3>
 #include <GUIConstantsEx.au3>
 #include <WindowsConstants.au3>
 #include <ProgressConstants.au3>
@@ -104,6 +105,7 @@ MsgBox($MB_OK, "CopTrax Remote Test Server", "The universal test cases shall be 
 ; This section defines the required parameters for automation test for each UUT
 Global $sockets[$maxConnections + 1]	; the socket for each UUT
 Global $logFiles[$maxConnections + 3]	; the handler of log file for each UUT
+Global $logContent[$maxConnections + 1]	; the handler of log file for each UUT
 Global $commands[$maxConnections + 1]	; the testcase for each UUT
 Global $commandTimers[$maxConnections + 1]	; the command timer for each UUT; when reaches, next test command shall be started
 Global $connectionTimers[$maxConnections + 1]	; the TCP connection timer for each UUT;  when reaches, TCP connection to that UUT may have lost
@@ -113,7 +115,6 @@ Global $fileToBeSent[$maxConnections + 1]	; file handler of files that need to d
 Global $heartBeatTimers[$maxConnections + 1]	; timer of heartbeat for each UUT; when reaches, the server need to send a heartbeat command to that UUT
 Global $pGUI[$maxConnections + 1]	; the control ID of the progressbar for that UUT
 Global $nGUI[$maxConnections + 1]	; the control ID of the timer for that UUT
-Global $pStart[$maxConnections + 1]	; the start position of the latest automation test log, server will display only the log content after this position
 Global $bGUI[$maxConnections + 1]	; the control ID of the button for that UUT, the name(serial number) is displayed on the button
 Global $totalCommands[$maxConnections + 1]	; the counter of the total test commands in the test case for each UUT
 Global $testEndTime[$maxConnections + 1]	; stores the end time estimation for each UUT
@@ -131,6 +132,7 @@ Global $connectionPattern = ""	; stores the pattern of UUT connections. "o" mean
 Global $hMainWindow = GUICreate("Automation Server Version " & FileGetVersion ( @ScriptFullPath ) & " @ " & $ipServer & ":" & $port, 480*3, 360*2)	; the main display window
 Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 5, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
 Global $cLog = GUICtrlCreateEdit("UUT automation Progress", 240, 350, 960, 360, $WS_VSCROLL)	; the child window that displays the log of each UUT
+GUICtrlSendMsg($cLog, $EM_LIMITTEXT, -1, 0)
 Local $i
 For $i = 0 To $maxConnections	; initialize the variables
    $sockets[$i] = -1	; Stores the sockets for each client
@@ -141,13 +143,12 @@ For $i = 0 To $maxConnections	; initialize the variables
    $transFiles[$i] = ""
    $fileToBeSent[$i] = ""
    $batchWait[$i] = True	; default value is true, not to hold other box entering batch align mode
-   $pStart[$i] = 0
 Next
 GUICtrlSetFont($aLog, 9, 400, 0, "Courier New")
 GUISetState(@SW_SHOW)
 WinMove($hMainWindow, "", 240, 180)
 
-For $i = 1 To $MaxConnections
+For $i = 1 To $maxConnections
 	Local $x0 = ($i - Floor($i / 2) * 2) * 960
 	Local $y0 = 10 + Floor($i / 2 - 0.5) * 30
 	$pGUI[$i] = GUICtrlCreateProgress($x0 + 125, $y0, 350, 20)
@@ -199,12 +200,12 @@ Local $batchCheck = False
 Local $tempTime
 Local $tempPattern
 While Not $testEnd	; main loop that get input, display the resilts
-	AcceptConnection()	; accept new client's connection requist
-
 	Local $Recv
 	Local $currentTime = TimerDiff($hTimer)	; get current timer elaspe
-	If $batchMode Then
-		If $socketRaspberryPi1 <= 0 Then
+	AcceptConnection()	; accept new client's connection requist
+
+	If ($socketRaspberryPi1 <= 0) Or ($socketRaspberryPi2 <= 0) Then
+		If $batchMode And ($socketRaspberryPi1 <= 0) Then
 			$socketRaspberryPi1 = TCPConnect($ipRaspberryPi1, $portRaspberryPi)	; When RSP1 not connected, try to connect it
 			If $socketRaspberryPi1 > 0 Then
 				LogWrite($automationLogPort, "(Server) Raspberry Pi simulator 1 connected.")
@@ -213,15 +214,9 @@ While Not $testEnd	; main loop that get input, display the resilts
 				$piTimeout1 = $currentTime + 2 * 60 * 1000
 				$piHeartbeatTime = $currentTime + $piHeartbeatInterval
 			EndIf
-		Else
-			$Recv = TCPRecv($socketRaspberryPi1,10000)	; when connected, try to receive message
-			If $Recv <> "" Then
-				LogWrite($piLogPort, "(Raspberry Pi1) Replied " & $Recv )
-				$piTimeout1 = $currentTime + 2 * 60 * 1000
-			EndIf
 		EndIf
 
-		If $socketRaspberryPi2 <= 0 Then
+		If $batchMode And ($socketRaspberryPi2 <= 0) Then
 			$socketRaspberryPi2 = TCPConnect($ipRaspberryPi2, $portRaspberryPi)	; When RSP2 not connected, try to connect it
 			If $socketRaspberryPi2 > 0 Then
 				LogWrite($automationLogPort, "(Server) Raspberry Pi simulator 2 connected.")
@@ -230,12 +225,18 @@ While Not $testEnd	; main loop that get input, display the resilts
 				$piTimeout2 = $currentTime + 2 * 60 * 1000
 				$piHeartbeatTime = $currentTime + $piHeartbeatInterval
 			EndIf
-		Else
-			$Recv = TCPRecv($socketRaspberryPi2,10000)	; when connected, try to receive message
-			If $Recv <> "" Then
-				LogWrite($piLogPort, "(Raspberry Pi2) Replied " & $Recv )
-				$piTimeout2 = $currentTime + 2 * 60 * 1000
-			EndIf
+		EndIf
+	Else
+		$Recv = TCPRecv($socketRaspberryPi1,10000)	; when connected, try to receive message
+		If $Recv <> "" Then
+			LogWrite($piLogPort, "(Raspberry Pi1) Replied " & $Recv )
+			$piTimeout1 = $currentTime + 2 * 60 * 1000
+		EndIf
+
+		$Recv = TCPRecv($socketRaspberryPi2,10000)	; when connected, try to receive message
+		If $Recv <> "" Then
+			LogWrite($piLogPort, "(Raspberry Pi2) Replied " & $Recv )
+			$piTimeout2 = $currentTime + 2 * 60 * 1000
 		EndIf
 
 		If $currentTime > $piHeartbeatTime Then
@@ -339,7 +340,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 	If $msg = $GUI_EVENT_CLOSE Then
 		LogWrite($automationLogPort, "Automation test end by operator.")
 		LogWrite($automationLogPort, "")
-		LogWrite($piLogPort, "A new batch of automation test starts.")
+		LogWrite($piLogPort, "Automation test end by operator.")
 		LogWrite($piLogPort, "")
 		$testEnd = true
 	EndIf
@@ -348,13 +349,11 @@ While Not $testEnd	; main loop that get input, display the resilts
 		If $msg = $bGUI[$i] Then
 			$portDisplay = $i
 			GUICtrlSetData($tLog, " " & $boxID[$i])
-			If $logFiles[$i] > 0 Then
-				FileSetPos($logFiles[$i], $pStart[$i], 0)
-				GUICtrlSetData($cLog, FileRead($logFiles[$i]))
-				FileSetPos($logFiles[$i], 0, 2)
-			EndIf
+			GUICtrlSetData($cLog, $logContent[$i])
         EndIf
 	Next
+
+	;ConsoleWrite("One loop takes " & TimerDiff($hTimer) - $currentTime & " ms." & @CRLF)
 WEnd
 
 ; SendCommand(0, "q0") ; let RaspberryPi to quit
@@ -385,11 +384,7 @@ Func CloseConnection($n)
 	$s &= $s & $s
 	LogWrite($n, $s)
 	LogWrite($n, " ")
-	; FileClose($logFiles[$n])	; Close the log file
-	;GUIDelete($hGUI[$n])
 	TCPCloseSocket($sockets[$n])	; Close the TCP connection to the client
-	$boxIP[$n] = ""
-	;$hGUI[$n] = 0
 	$sockets[$n] = -1	; clear the soket index
 	If $totalConnection > 0 Then
 		$totalConnection -= 1 ; reduce the total number of connection
@@ -523,14 +518,14 @@ Func ParseCommand($n)
 		Case "update", "upgrade"
 			Local $fileName = PopCommand($n)
 			Local $file
-            Local $netFileName
-            Local $sourceFileName
-            If StringInStr($filename, "\") Then
-			    $netFileName = StringSplit($fileName, "\")
-                $sourceFileName = $workDir & "latest\" & $netFileName[$netFileName[0]]    ; all file need to be update shall sit in \latest folder
-            Else
-                $sourceFileName = $workDir & "latest\" & $fileName
-            Endif
+			Local $netFileName
+			Local $sourceFileName
+			If StringInStr($filename, "\") Then
+				$netFileName = StringSplit($fileName, "\")
+				$sourceFileName = $workDir & "latest\" & $netFileName[$netFileName[0]]    ; all file need to be update shall sit in \latest folder
+			Else
+				$sourceFileName = $workDir & "latest\" & $fileName
+			Endif
 
 			$file = FileOpen($sourceFileName,16)	; open file for read only in binary mode
 			$fileToBeSent[$n] = FileRead($file)
@@ -607,12 +602,21 @@ Func ParseCommand($n)
 EndFunc
 
 Func LogWrite($n,$s)
-	If $n <= $maxConnections + 1 Then _FileWriteLog($logFiles[$n],$s)
+	If $n > $maxConnections + 1 Then Return
+
+	_FileWriteLog($logFiles[$n],$s)
+
 	If $n = $maxConnections + 1 Then
 		GUICtrlSetData($aLog, $s & @crlf, 1)
 	EndIf
+
+	$s = @HOUR & ":" & @MIN & ":" & @SEC & " " & $s & @CRLF
+	If ($n > 0) And ($n <= $maxConnections) And Not ( StringInStr($s, "heartbeat command") Or StringInStr($s, "; CPU #", 1))  Then
+		$logContent[$n] &= $s
+	EndIf
+
 	If $n = $portDisplay Then
-		GUICtrlSetData($cLog, @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & " : " & $s & @crlf, 1)
+		GUICtrlSetData($cLog, $s, 1)
 	EndIf
 EndFunc
 
@@ -657,7 +661,7 @@ Func ReadTestCase($fileName)
 	Next
 
     Do
-        $aLine = FileReadLine($testFile)
+		$aLine = FileReadLine($testFile)
 		If @error < 0 Then ExitLoop
 
         $aLine = StringRegExpReplace($aLine, "([;].*)", "")
@@ -698,26 +702,26 @@ Func EstimateCommands($aCommand)
     Local $j
 
     For $i = 1 To $commandList[0] - 1	; there is a apce in the end
-        For $j = 0 To $maxCommands - 1
+		For $j = 0 To $maxCommands - 1
 			If StringInStr($allCommands[$j], $commandList[$i]) = 1 Then ; find match only at the beginning
-                $count += 1
-                ExitLoop
+				$count += 1
+				ExitLoop
 			EndIf
 		Next
 
-        If $j >= $maxCommands Then ContinueLoop
+		If $j >= $maxCommands Then ContinueLoop
 
-        If $j = 0 Then  ; record
-            $parameters = $commandList[$i+1]
-            $duration = CorrectRange(Int(GetParameter($parameters, "duration")), 1, 999)
-            $repeat = CorrectRange(Int(GetParameter($parameters, "repeat")), 1, 99)
-            $interval = Int(GetParameter($parameters, "interval"))
-            If $interval < 1 Or $interval > 10 Then $interval = 10
-            $count += 2*$repeat - 1
-            $testTime += $repeat * ($duration + $interval) * 60
-        Else
-            If StringInStr($allCommands[$j], "duration") > 4 Then
-                $parameters = $commandList[$i+1]
+		If $j = 0 Then  ; record
+			$parameters = $commandList[$i+1]
+			$duration = CorrectRange(Int(GetParameter($parameters, "duration")), 1, 999)
+			$repeat = CorrectRange(Int(GetParameter($parameters, "repeat")), 1, 99)
+			$interval = Int(GetParameter($parameters, "interval"))
+			If $interval < 1 Or $interval > 10 Then $interval = 10
+			$count += 2*$repeat - 1
+			$testTime += $repeat * ($duration + $interval) * 60
+		Else
+				If StringInStr($allCommands[$j], "duration") > 4 Then
+				$parameters = $commandList[$i+1]
                 $duration = CorrectRange(Int(GetParameter($parameters, "duration")), 1, 999)
 				If StringInStr($allCommands[$j], "pause") Then	; pause in seconds instead of minutes now
 					$testTime += $duration
@@ -801,6 +805,7 @@ Func GetParameter($parameters, $keyword)
 EndFunc
 
 Func ProcessReply($n, $reply)
+	Local $newCommand
 	Local $msg = StringSplit($reply, " ")
 
 	If $transFiles[$n] <> "" Then	; This indicates the coming message shall be saved in file
@@ -823,37 +828,32 @@ Func ProcessReply($n, $reply)
 		LogWrite($n, "(Client) " & $reply)	; write the returned results into the log file
 	EndIf
 
-	Switch StringLower($msg[1])
-		Case "file"
-			If $msg[0] <3 Then
-                LogWrite($n, "(Server) Unknown reply from server")
-                Return
-            Endif
+	If ($msg[0] >=3) And ($msg[1] = "file") Then	; start to upload file from client
+		Local $filename = $msg[2]
+		Local $len =  Int($msg[3])
+		Local $netFileName = StringSplit($filename, "\")
+		Local $destFileName = $workDir & "ClientFiles\" & $netFileName[$netFileName[0]]
+		LogWrite($n, "(Server) " & $filename & " from client is going to be saved as " & $destFileName & " in server.")
+		LogWrite($n, "(Server) Total " & $len & " bytes need to be stransfered.")
+		$transFiles[$n] = FileOpen($destFileName,16+8+2)	; open file for over-write and create the directory structure if it doesn't exist
+		$byteCounter[$n] = $len
+		PushCommand($n,"hold")
+		SendCommand($n, "send")	; send "send" command to client to trigger the file transfer
+		LogWrite($n, "(Server) sent send command to client.")
+		Return
+	EndIf
 
-			Local $fileName = $msg[2]
-			Local $len =  Int($msg[3])
-			Local $netFileName = StringSplit($fileName, "\")
-			Local $destFileName = $workDir & "ClientFiles\" & $netFileName[$netFileName[0]]
-			LogWrite($n, "(Server) " & $fileName & " from client is going to be saved as " & $destFileName & " in server.")
-			LogWrite($n, "(Server) Total " & $len & " bytes need to be stransfered.")
-			$transFiles[$n] = FileOpen($destFileName,16+8+2)	; open file for over-write and create the directory structure if it doesn't exist
-			$byteCounter[$n] = $len
-			PushCommand($n,"hold")
-			SendCommand($n, "send")	; send "send" command to client to trigger the file transfer
-			LogWrite($n, "(Server) sent send command to client.")
+	If ($msg[0] >= 4) And ($msg[1] = "name") Then	; Start a new test when got name reply
+		StartNewTest($n, $msg[2], $msg[3], $msg[4])
+		Return
+	EndIf
 
-		Case "name"
-			If $msg[0] < 4 Then
-				LogWrite($n, "(Server) Unknown reply from server")
-			Else
-				StartNewTest($n, $msg[2], $msg[3], $msg[4])
-			Endif
-			Return
-
-	EndSwitch
-
-	If StringInStr($reply, "FAILED") Then
-		PopCommand($n)	; unhold the test command by pop the hold command
+	If StringInStr($reply, "FAILED", 1) Then	; Got a FAILED reply,
+		$newCommand = PopCommand($n)	; unhold the test command by pop the hold command
+		If $newCommand <> "hold" Then
+			PushCommand($n, $newCommand)
+			LogWrite($n, "(Server) Wrong pop of new test command " & $newCommand)
+		EndIf
 		$testFailures[$n] += 1
 		GUICtrlSetColor($pGUI[$n], $COLOR_RED)
 		LogWrite($automationLogPort, $boxID[$n] & " " & $reply)
@@ -870,7 +870,7 @@ Func ProcessReply($n, $reply)
 		Return
 	EndIf
 
-	If StringInStr(StringLower($reply), "quit") Then
+	If StringInStr($reply, "quit") Then
 		If StringLen($commands[$n]) > 5 Then
 			LogWrite($automationLogPort, $boxID[$n] & " Tests will restart.")
 			GUICtrlSetData($nGUI[$n], "restart")
@@ -895,25 +895,37 @@ Func ProcessReply($n, $reply)
 		Return
 	EndIf
 
-	If StringInStr(StringLower($reply), "passed") Or StringInStr(StringLower($reply), "continue") Then
-		PopCommand($n)	; unhold the test command by pop the hold command
+	If StringInStr($reply, "PASSED", 1) Or StringInStr($reply, "Continue", 1) Then
+		;PopCommand($n)	; unhold the test command by pop the hold command
+		$newCommand = PopCommand($n)	; unhold the test command by pop the hold command
+		If $newCommand <> "hold" Then
+			PushCommand($n, $newCommand)
+			LogWrite($n, "(Server) Wrong pop of new test command " & $newCommand)
+		EndIf
+
 	EndIf
 EndFunc
 
 Func StartNewTest($n, $ID, $boxUser, $clientVersion)
 	$boxID[$n] = $ID	; get the boxID from client
+	$transFiles[$n] = ""	; clear the upload files
+	$fileToBeSent[$n] = ""	; lear file need to be sent to client
+	$testFailures[$n] = 0	; initialize the result true until any failure
+	$batchWait[$n] = True	; Default is true, not to hold other boxes until was set by BatchTest mode=start
+	If $logFiles[$n] <> 0 Then FileClose($logFiles[$n])
+
 	Local $filename = $workDir & "log\" & $boxID[$n] & ".log"
 	$logFiles[$n] = FileOpen($filename, 1+8) ; open log file for append write in text mode
-	$pStart[$n] = FileGetPos($logFiles[$n])	; update the postion of log display for a new test
-	$portDisplay = $n
-	GUICtrlSetData($bGUI[$n], $boxID[$n])	; update the text on the button
-	GUICtrlSetData($tLog, " " & $boxID[$n])	; update the serial number on top the main log display
-	GUICtrlSetData($cLog, "")	; clear the main log display window
-
 	LogWrite($automationLogPort, $boxID[$n] & " connected on " & $boxIP[$n] & ".")
 
+	$portDisplay = $n
+	$logContent[$n] = ""	;clear the main log display window
+	GUICtrlSetData($bGUI[$n], $boxID[$n])	; update the text on the button
+	GUICtrlSetData($tLog, " " & $boxID[$n])	; update the serial number on top the main log display
+	GUICtrlSetData($cLog, $logContent[$n])	; display and update the log content
+
 	$filename = $workdir & $boxID[$n] & ".txt"	; try to find if any individual test case exits
-	If Not FileExists($filename) Then
+	If Not FileExists($filename) Then	; If there is no individual test case, try to read general test case.
 		$filename = $universalTestCaseFile
 	Endif
 	$commands[$n] = ReadTestCase($filename)	; Read test case from file
@@ -968,14 +980,12 @@ EndFunc
 Func OnAutoItExit()
    TCPShutdown() ; Close the TCP service.
    Local $i
-   For $i = 0 To $maxConnections
+   For $i = 0 To $maxConnections+1
 	  If $logFiles[$i] <> 0 Then
 		 FileClose($logFiles[$i])
 		 $logFiles[$i] = 0
 	  EndIf
    Next
-   FileClose($logFiles[$automationLogPort])
-   FileClose($logFiles[$piLogPort])
 EndFunc   ;==>OnAutoItExit
 
 Func AcceptConnection ()
@@ -1003,32 +1013,29 @@ Func AcceptConnection ()
 	Next
 
 	$sockets[$port] = $Accept	;assigns that socket the incomming connection.
-	$logFiles[$port] = ""	; Clear the client name for future updating from the client
 	$commands[$port] = "hold"	; Stores hold command to temperally hold the the commands until gets a name reply
 	$heartBeatTimers[$port] = $currentTime + 1000*60
 	$commandTimers[$port] = $currentTime + 1000	; Set command timer to be 1s later
 	$connectionTimers[$port] = $currentTime + 2000*60	; Set connection lost timer to be 2mins later
-	$totalConnection += 1   ;adds one to the Socket list.
-	$testFailures[$port] = 0	; initialize the result true until any failure
-	$transFiles[$port] = ""
-	$fileToBeSent[$port] = ""
 	$boxIP[$port] = $IP
-	$batchWait[$port] = True	; Default is true, not to hold other boxes until was set by BatchTest mode=start
 EndFunc
 
 Func PopCommand($n)
-   Local $newCommand = StringSplit(StringLower($commands[$n]), " ")
-   If $newCommand[0] > 1 Then
-	  Local $lengthCommand = StringLen($newCommand[1] & " ")
-	  $commands[$n] = StringTrimLeft($commands[$n],$lengthCommand)
-	  return $newCommand[1]
-   Else
-	  return ""
-   EndIf
+	If StringLen($commands[$n]) < 5 Then
+		Return ""
+	EndIf
+
+	Local $newCommand = StringSplit(StringLower($commands[$n]), " ")
+	If $newCommand[0] > 1 Then
+		Local $lengthCommand = StringLen($newCommand[1] & " ")
+		$commands[$n] = StringTrimLeft($commands[$n],$lengthCommand)
+	EndIf
+
+	Return $newCommand[1]
 EndFunc
 
 Func PushCommand($n, $newCommand)
-   $commands[$n] = $newCommand & " " & $commands[$n]
+	$commands[$n] = $newCommand & " " & $commands[$n]
 EndFunc
 
 Func SendCommand($n, $command)
@@ -1041,12 +1048,12 @@ Func SendCommand($n, $command)
 			$sentPattern &= $len & " "
 		WEnd
 		$heartBeatTimers[$n] = TimerDiff($hTimer) + 60 * 1000
-	Else
+	Else	; send the command to raspberry pi simulators
 		If $socketRaspberryPi1 < 0 Then
-			LogWrite($automationLogPort, "(Server) Raspberry Pi 1 is not connected yet. " & $command & " was not sent to it.")
+			LogWrite($automationLogPort, "(Server) Raspberry Pi 1 not connected yet. " & $command & " was not sent to it.")
 		EndIf
 		If $socketRaspberryPi2 < 0 Then
-			LogWrite($automationLogPort, "(Server) Raspberry Pi 2 is not connected yet. " & $command & " was not sent to it.")
+			LogWrite($automationLogPort, "(Server) Raspberry Pi 2 not connected yet. " & $command & " was not sent to it.")
 		EndIf
 
 		If ($command = "h0") Or ($command = "q0") Then
