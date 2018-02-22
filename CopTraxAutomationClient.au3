@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.19.1)
+#pragma compile(FileVersion, 3.2.19.6)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -514,8 +514,9 @@ Func TestSettingsFunction($arg)
 
 	Local $pre = GetParameter($arg, "pre")
 	Local $chunk = GetParameter($arg, "chunk")
-	Local $cam2 = StringLower(GetParameter($arg, "cam2"))
-	Local $cam3 = StringLower(GetParameter($arg, "cam3"))
+	Local $cam2 = GetParameter($arg, "cam2")
+	Local $cam3 = GetParameter($arg, "cam3")
+	Local $keyboard = GetParameter($arg, "keyboard")
 
 	MouseClick("",960, 460)
 	LogUpload("Start settings function testing.")
@@ -534,21 +535,16 @@ Func TestSettingsFunction($arg)
 	EndIf
 
 	Local $positionY = 60
-	Local $button
-	Local $aPos
-	Local $pColor
-	Local $x0
-	Local $y0
 	AutoItSetOption ( "PixelCoordMode", 0 )
 	Do
 		If $testEnd Then
-			LogUpload("Automation test end by operator")
+			LogUpload("Automation test end by operator.")
 			Return False
 		EndIf
 
 		Local $txt = WinGetText($hWnd)
 
-		If StringInStr($txt, "Capture") Then	; Cameras
+		If StringInStr($txt, "Capture", 1) Then	; Cameras
 			ControlClick($hWnd, "", "Test")
 			Switch $pre
 				Case "0"
@@ -568,55 +564,44 @@ Func TestSettingsFunction($arg)
 			EndSwitch
 			Sleep(1000)
 
-			If $cam2 <> "" Then
+			If StringInStr($cam2, "able") Then
 				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "2")	; select Camera 2
 				sleep(5000)
 
-				$button = "Enable secondary camera"
-				$aPos = ControlGetPos($hWnd, "", $button)
-				$x0 = $aPos[0] + 8
-				$y0 = $aPos[1] + $aPos[3]/2 + 27
-				$pColor = PixelGetColor( $x0, $y0, $hWnd)
-				If ($cam2 = "enabled" And $pColor > 0) Or ($cam2 = "disabled" And $pColor = 0) Then ; black or not at (846,206)
-					ControlClick($hWnd, "", $button)
-					LogUpload("Pixel color at (" & $x0 & "," & $y0 & " ) is " & $pColor & ", so click on button " & $button)
+				If StringInStr($cam2, "enable") Then	; compatible with both enable and enabled
+					ClickCheckButton($hWnd, "Enable secondary camera")
+					ClickCheckButton($hWnd, "Always record both cameras")
+				EndIf
+				If StringInStr($cam2, "disable") Then	; compatible with both disable and disabled
+					ClickCheckButton($hWnd, "Enable secondary camera", False)
+					ClickCheckButton($hWnd, "Always record both cameras", False)
 				EndIf
 
-				$button = "Always record both cameras"
-				$aPos = ControlGetPos($hWnd, "", $button)
-				$x0 = $aPos[0] + 8
-				$y0 = $aPos[1] + $aPos[3]/2 + 27
-				$pColor = PixelGetColor( $x0, $y0, $hWnd)
-				If ($cam2 = "enabled" And $pColor > 0) Or ($cam2 = "disabled" And $pColor = 0) Then ; black or not at (846,352)
-					ControlClick($hWnd, "", $button)
-					LogUpload("Pixel color at (" & $x0 & "," & $y0 & " ) is " & $pColor & ", so click on button " & $button)
-				EndIf
-
-				Sleep(1000)
+				Sleep(500)
 				ControlClick($hWnd, "", "Test")
-				Sleep(2000)
+				Sleep(2500)
 			EndIf
 
-			If $cam3 <> "" Then
+			If StringInStr($cam3, "able") Then
 				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "3")	; select Camera 3
-				sleep(2000)
+				sleep(5000)
 
-				$button = "Enable third camera"
-				$aPos = ControlGetPos($hWnd, "", $button)
-				$x0 = $aPos[0] + 8
-				$y0 = $aPos[1] + $aPos[3]/2 + 27
-				$pColor = PixelGetColor( $x0, $y0, $hWnd)
-				If ($cam2 = "enabled" And $pColor > 0) Or ($cam2 = "disabled" And $pColor = 0) Then ; black or not at (846,206)
-					ControlClick($hWnd, "", $button)
-					LogUpload("Pixel color at (" & $x0 & "," & $y0 & " ) is " & $pColor & ", so click on button " & $button)
+				If StringInStr($cam3, "enable") Then	; compatible with both enable and enabled
+					ClickCheckButton($hWnd, "Enable third camera")
+					ClickCheckButton($hWnd, "Always record both cameras")
+				EndIf
+				If StringInStr($cam3, "disable") Then	; compatible with both disable and disabled
+					ClickCheckButton($hWnd, "Enable third camera", False)
+					ClickCheckButton($hWnd, "Always record both cameras", False)
 				EndIf
 
+				Sleep(500)
 				ControlClick($hWnd, "", "Test")
-				Sleep(2000)
+				Sleep(2500)
 			EndIf
 		EndIf
 
-		If StringInStr($txt, "Identify") Then	; Hardware Triggers
+		If StringInStr($txt, "Identify", 1) Then	; Hardware Triggers
 			ControlClick($hWnd, "", "Identify")
 			If WinWaitActive("CopTrax", "OK", 5)= 0 Then
 				LogUpload("Unable to trigger Identify button.")
@@ -667,40 +652,33 @@ Func TestSettingsFunction($arg)
 			Next
 		EndIf
 
-		If StringInStr($txt, "Visual") Then	; Speed Triggers
+		If StringInStr($txt, "Visual", 1) Then	; Speed Triggers
 			Sleep(1000)
 		EndIf
 
-		If StringInStr($txt, "Baud") Then	; GPS & Radar
+		If StringInStr($txt, "Baud", 1) Then	; GPS & Radar
 			ControlClick($hWnd, "", "Test")
 			Sleep(2000)
 		EndIf
 
-		If StringInStr($txt, "Max") And $chunk Then	; Upload & Storage
-			$chunkTime = CorrectRange(Int($chunk), 0, 60)
-			Send("{TAB}{BS 4}" & $chunkTime & "{TAB}")
+		If StringInStr($txt, "Max", 1) Then	; Upload & Storage
+			If $chunk Then
+				$chunkTime = CorrectRange(Int($chunk), 0, 60)
+				Send("{TAB}{BS 4}" & $chunkTime & "{TAB}")
+			EndIf
+
+			ClickCheckButton($hwnd,"Enable auto upload", False)
 			Sleep(1000)
 		EndIf
 
-		If StringInStr($txt, "Welcome") Then	; Misc
-			$button = "Enable on-screen keyboard"
-			$aPos = ControlGetPos($hWnd, "", $button)
-			$x0 = $aPos[0] + 8
-			$y0 = $aPos[1] + $aPos[3]/2 + 27
-			$pColor = PixelGetColor( $x0, $y0, $hWnd)
-			If $pColor = 0 Then	;  balck or not at (274, 216)
-				ControlClick($hWnd, "", $button)
-				LogUpload("Pixel color at (" & $x0 & "," & $y0 & " ) is " & $pColor & ", so click on button " & $button)
-			EndIf
+		If StringInStr($txt, "Welcome", 1) Then	; Misc
+			ClickCheckButton($hwnd,"Enable Welcome App")
 
-			$button = "Enable Welcome App"
-			$aPos = ControlGetPos($hWnd, "", $button)
-			$x0 = $aPos[0] + 8
-			$y0 = $aPos[1] + $aPos[3]/2 + 27
-			$pColor = PixelGetColor( $x0, $y0, $hWnd)
-			If $pColor > 0 Then	;  balck or not at (274, 310)
-				ControlClick($hWnd, "", $button)
-				LogUpload("Pixel color at (" & $x0 & "," & $y0 & " ) is " & $pColor & ", so click on button " & $button)
+			If StringInStr($keyboard, "enable") Then	; compatible with both enable and enabled
+				ClickCheckButton($hwnd,"Enable on-screen keyboard")
+			EndIf
+			If StringInStr($keyboard, "disable") Then	; compatible with both disable and disabled
+				ClickCheckButton($hwnd,"Enable on-screen keyboard", False)
 			EndIf
 		EndIf
 
@@ -719,6 +697,23 @@ Func TestSettingsFunction($arg)
 	EndIf
 
 	Return True
+EndFunc
+
+Func ClickCheckButton($hWnd, $button, $check = True)
+	Local $aPos = ControlGetPos($hWnd, "", $button)
+	If @error Then
+		LogUpload("Unable to find the button named " & $button)
+		Return
+	EndIf
+
+	Local $x0 = $aPos[0] + 8
+	Local $y0 = $aPos[1] + $aPos[3]/2 + 27
+	Local $pColor = PixelGetColor( $x0, $y0, $hWnd)
+
+	If ($pColor = 0 ) <> $check Then
+		ControlClick($hWnd, "", $button)
+		LogUpload("Pixel color at (" & $x0 & "," & $y0 & " ) is " & $pColor & ", so click on button " & $button)
+	EndIf
 EndFunc
 
 Func ReadyForTest()
