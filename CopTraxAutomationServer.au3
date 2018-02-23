@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.14.13
+#AutoIt3Wrapper_Res_Fileversion=2.2.14.14
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -1002,10 +1002,10 @@ EndFunc   ;==>OnAutoItExit
 
 Func AcceptConnection ()
 	If $totalConnection = $maxConnections Then Return	;Makes sure no more Connections can be made.
-	Local $Accept = TCPAccept($TCPListen)     ;Accepts incomming connections.
-	If $Accept < 0 Then Return
+	Local $newSocket = TCPAccept($TCPListen)     ;Accepts incomming connections.
+	If $newSocket < 0 Then Return
 
-	Local $IP = SocketToIP($Accept)
+	Local $IP = SocketToIP($newSocket)
 	Local $currentTime = TimerDiff($hTimer)
 	Local $i = 0
 	Local $port = 0
@@ -1024,7 +1024,7 @@ Func AcceptConnection ()
 		EndIf
 	Next
 
-	$sockets[$port] = $Accept	;assigns that socket the incomming connection.
+	$sockets[$port] = $newSocket	;assigns that socket the incomming connection.
 	$commands[$port] = "hold"	; Stores hold command to temperally hold the the commands until gets a name reply
 	$heartBeatTimers[$port] = $currentTime + 1000*60
 	$commandTimers[$port] = $currentTime + 1000	; Set command timer to be 1s later
@@ -1033,17 +1033,10 @@ Func AcceptConnection ()
 EndFunc
 
 Func PopCommand($n)
-	If StringLen($commands[$n]) < 5 Then
-		Return ""
-	EndIf
-
-	Local $newCommand = StringSplit(StringLower($commands[$n]), " ")
-	If $newCommand[0] > 1 Then
-		Local $lengthCommand = StringLen($newCommand[1] & " ")
-		$commands[$n] = StringTrimLeft($commands[$n],$lengthCommand)
-	EndIf
-
-	Return $newCommand[1]
+	Local $length = StringInStr($commands[$n], " ", 2)
+	Local $nextCommand = StringLeft($commands[$n], $length-1)
+	$commands[$n] = StringTrimLeft($commands[$n], $length)
+	Return $nextCommand
 EndFunc
 
 Func PushCommand($n, $newCommand)

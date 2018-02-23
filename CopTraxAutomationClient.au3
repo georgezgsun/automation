@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.19.6)
+#pragma compile(FileVersion, 3.2.19.8)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -212,7 +212,7 @@ EndIf
 Exit
 
 Func RunValidationTool()
-	If WinWaitActive("Trigger", "", 5) = 0 Then
+	If Not GetHandleWindowWait("Trigger") Then
 		LogUpload("Unable to trigger Validation Tool. Reboot now.")
 		Shutdown(2+4)	; force the window to reboot
 		Exit
@@ -231,6 +231,8 @@ Func RunValidationTool()
 	$splittedTitle = StringRegExp(WinGetText($hwnd), "(?:Product: )([A-Za-z]{2}[0-9]{6})")
 	If IsArray($splittedTitle) Then
 		$userName = $splittedTitle[0]
+		LogUpload("Changed the box ID in config file.")
+		RenewConfig()
 	EndIf
 
 	LogUpload("Reading from validation tool, the serial number of the box is " & $userName & ", the firmware version is " & $firmwareVersion & ", the library version is " & $libraryVersion)
@@ -284,7 +286,7 @@ Func QuitCopTrax()
 	MouseClick("",960,560)	; click on the info button
 	Sleep(400)
 
-	If WinWaitActive($titleInfo, "", 10) = 0 Then
+	If Not GetHandleWindowWait($titleInfo, "", 10) Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the Info window. " & @CRLF, 5)
 		LogUpload("Unable to open the info window by click on the info button.")
 		WinClose($titleInfo)
@@ -296,7 +298,7 @@ Func QuitCopTrax()
 	; ControlClick($titleInfo,"","Apply")
 
 	Sleep(500)
-	If WinWaitActive($titleLogin, "", 10) = 0 Then
+	If Not GetHandleWindowWait($titleLogin, "", 10) Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the Login window.",2)
 		LogUpload("Unable to close the Login window by click on Apply button.")
 		WinClose($titleLogin)
@@ -330,7 +332,7 @@ Func TestUserSwitchFunction($arg)
 	Sleep(400)
 
 	Local $mTitle = $titleInfo
-	If WinWaitActive($mTitle,"",10) = 0 Then
+	If Not GetHandleWindowWait($mTitle, "", 10) Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the info window. " & @CRLF, 5)
 		LogUpload("Unable to open the info window by click on the info button.")
 		WinClose($mTitle)
@@ -345,7 +347,7 @@ Func TestUserSwitchFunction($arg)
 EndFunc
 
 Func CreatNewAccount($name, $password)
-	Local $hWnd = WinWaitActive($titleAccount, "", 10)
+	Local $hWnd = GetHandleWindowWait($titleAccount, "", 10)
 	Local $txt = ""
 	If  $hWnd = 0 Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the CopTrax-Login/Create Account window. " & @CRLF, 5)
@@ -361,7 +363,7 @@ Func CreatNewAccount($name, $password)
 	If StringInStr($txt, "Key") Then
 		;MouseClick("", 640, 55)
 		Send("{TAB 3}{END}")
-		If WinWaitActive("Server", "", 5) = 0 Then
+		If Not GetHandleWindowWait("Server") Then
 			MsgBox($MB_OK, $mMB, "Unable to open Server Configuration window. " & @CRLF, 5)
 			LogUpload("Unable to open Server Configuration window. ")
 			WinClose($hWnd)
@@ -421,6 +423,10 @@ Func CreatNewAccount($name, $password)
 	EndIf
 
 	Sleep(1000)
+	If Not $mCopTrax Then
+		$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
+	EndIf
+
 	$userName = GetUserName()
 	If $userName <> $name Then
 		LogUpload("Unable to switch user. Current user is " & $userName)
@@ -476,10 +482,10 @@ Func EndRecording($click)
 		Do
 			MouseClick("", 960, 80)	; click on the button to stop record
 			$i += 1
-		Until WinWaitActive($titleEndRecord, "OK", 5) Or $i > 3
+		Until GetHandleWindowWait($titleEndRecord, "OK") Or ($i > 3)
 	EndIf
 
-	Local $hEndRecord = WinActivate($titleEndRecord, "OK")
+	Local $hEndRecord = GetHandleWindowWait($titleEndRecord, "OK")
 	If $hEndRecord = 0 Then
 		If $click Then
 			LogUpload("Unable to stop the record by a click on the button. ")
@@ -521,13 +527,13 @@ Func TestSettingsFunction($arg)
 	MouseClick("",960, 460)
 	LogUpload("Start settings function testing.")
 
-	If WinWaitActive($titleLogin, "", 2) <> 0 Then
+	If GetHandleWindowWait($titleLogin) Then
 		Send("135799{TAB}{ENTER}")	; type the administator password
 		MouseClick("", 500, 150)
 	EndIf
 
-	WinWaitActive($titleSettings, "", 10)	;"CopTrax II Setup"
-	Local $hWnd = WinActivate($titleSettings)
+	;WinWaitActive($titleSettings, "", 10)	;"CopTrax II Setup"
+	Local $hWnd = GetHandleWindowWait($titleSettings, "", 10)	;"CopTrax II Setup"
 	If $hWnd = 0 Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the settings function.", 2)
 		LogUpload("Unable to start the settings window.")
@@ -603,7 +609,7 @@ Func TestSettingsFunction($arg)
 
 		If StringInStr($txt, "Identify", 1) Then	; Hardware Triggers
 			ControlClick($hWnd, "", "Identify")
-			If WinWaitActive("CopTrax", "OK", 5)= 0 Then
+			If Not GetHandleWindowWait("CopTrax", "OK") Then
 				LogUpload("Unable to trigger Identify button.")
 				WinClose($hWnd)
 				Return False
@@ -766,25 +772,25 @@ Func ReadyForTest()
 		EndIf
 	EndIf
 
-	$mCopTrax = WinActivate($titleCopTraxMain, "ActiveMovie")
-	Sleep(100)
-	If WinWaitActive($mCopTrax, "", 5) = 0 Then
-		LogUpload("Unable to find CopTrax App. Doing intensive investigation on CopTrax with keyword " & $titleCopTraxMain)
-		Local $aList = WinList()
-		For $i = 1 To $aList[0][0]
-			If $aList[$i][0] <> "" And BitAND(WinGetState($aList[$i][1]), 2) Then
-				LogUpload("Title: " & $aList[$i][0] & ", Handle: " & $aList[$i][1])
-				If StringInStr($aList[$i][0], $titleCopTraxMain) Then
-					$mCopTrax = $aList[$i][0]
-					Return True
-				EndIf
-			EndIf
-		Next
-		LogUpload("The CopTrax is not ready. Got handle of main CopTrax as " & $mCopTrax)
-		Return False
+	$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
+	If $mCopTrax Then
+		Return True
 	EndIf
 
-	Return True
+	LogUpload("Unable to find CopTrax App. Doing intensive investigation on CopTrax with keyword " & $titleCopTraxMain)
+	Local $aList = WinList()
+	For $i = 1 To $aList[0][0]
+		If $aList[$i][0] <> "" And BitAND(WinGetState($aList[$i][1]), 2) Then
+			LogUpload("Title: " & $aList[$i][0] & ", Handle: " & $aList[$i][1])
+			If StringInStr($aList[$i][0], $titleCopTraxMain) Then
+				$mCopTrax = $aList[$i][0]
+				WinActivate($mCopTrax)
+				Return True
+			EndIf
+		EndIf
+	Next
+	LogUpload("The CopTrax is not ready. Got handle of main CopTrax as " & $mCopTrax)
+	Return False
 EndFunc
 
 Func CheckEventLog()
@@ -881,7 +887,7 @@ Func TestPhotoFunction()
 	LogUpload("Begin Photo function testing.")
 	MouseClick("", 960, 350);
 
-	Local $hWnd = WinWaitActive("Information", "", 10)
+	Local $hWnd = GetHandleWindowWait("Information", "", 10)
 	If $hWnd = 0 Then
 		MsgBox($MB_OK, $mMB, "Click to trigger the Photo function failed.",2)
 		LogUpload("Unable to test the Photo function by click on the photo button.")
@@ -910,7 +916,7 @@ Func TestRadarFunction()
 	Local $testResult = False
 	Local $hRadar
 	If WinExists($titleRadar) Then
-		$hRadar = WinActivate($titleRadar)
+		$hRadar = GetHandleWindowWait($titleRadar)
 		TakeScreenCapture("RADAR On", $hRadar)
 		$testResult = True
 	EndIf
@@ -919,7 +925,7 @@ Func TestRadarFunction()
 	Sleep(5000)
 
 	If WinExists($titleRadar) Then
-		$hRadar = WinActivate($titleRadar)
+		$hRadar = GetHandleWindowWait($titleRadar)
 		TakeScreenCapture("RADAR On", $hRadar)
 		$testResult = True
 	EndIf
@@ -936,7 +942,7 @@ Func TestReviewFunction()
 
 	LogUpload("Begin Review function testing.")
 	MouseClick("", 960, 260);
-	Local $hWnd = WinWaitActive($titleReview, "", 10)
+	Local $hWnd = GetHandleWindowWait($titleReview, "", 10)
 	If $hWnd = 0 Then
 		MsgBox($MB_OK, $mMB, "Click to trigger the Review function failed.",2)
 		LogUpload("Unable to test the review function by click on the review button.")
@@ -1531,6 +1537,19 @@ Func RenewConfig()
    FileWriteLine($file, "")
    FileWriteLine($file, "name " & $boxID & " ")
    FileClose($file)
+EndFunc
+
+Func GetHandleWindowWait($title, $text = "", $seconds = 5)
+	Local $hWnd = 0
+	Local $i = 0
+	If $seconds < 1 Then $seconds = 1
+	If $seconds > 10 Then $seconds = 10
+	While ($hWnd = 0) And ($i < $seconds)
+		WinActivate($title)
+		$hWnd = WinWaitActive($title, $text, 1)
+		$i += 1
+	WEnd
+	Return $hWnd
 EndFunc
 
 Func GetParameter($parameters, $keyword)
