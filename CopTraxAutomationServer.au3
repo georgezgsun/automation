@@ -278,9 +278,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 			$tempPattern &= "x"
 		EndIf
 
-		$Recv = TCPRecv($sockets[$i],1000000)
-		If $Recv <> "" Then
-			ProcessReply($i, $Recv)
+		If ProcessReply($i) Then
 			$connectionTimers[$i] = $currentTime + 2000*60 ; renew the connection check timer
 		EndIf
 
@@ -352,14 +350,11 @@ While Not $testEnd	; main loop that get input, display the resilts
 		If $msg = $bGUI[$i] Then
 			$portDisplay = $i
 			GUICtrlSetData($tLog, " " & $boxID[$i])
-			GUICtrlDelete($cLog)
-			$cLog = GUICtrlCreateEdit("UUT automation Progress", 240, 350, 960, 360, $WS_VSCROLL)	; the child window that displays the log of each UUT
-			GUICtrlSendMsg($cLog, $EM_LIMITTEXT, -1, 0)
 			GUICtrlSetData($cLog, $logContent[$i])
 		EndIf
 	Next
 
-	;ConsoleWrite("One loop takes " & TimerDiff($hTimer) - $currentTime & " ms." & @CRLF)
+	ConsoleWrite("One loop takes " & TimerDiff($hTimer) - $currentTime & " ms." & @CRLF)
 WEnd
 
 ; SendCommand(0, "q0") ; let RaspberryPi to quit
@@ -813,29 +808,51 @@ Func GetParameter($parameters, $keyword)
 	EndIf
 EndFunc
 
-Func ProcessReply($n, $reply)
-	Local $newCommand
-	Local $msg = StringSplit($reply, " ")
+Func ProcessReply($n)
+	Local $reply
+	Local $len
+	Local $err
+	If $filesReceived[$n] Then	; This indicates the coming message shall be saved in file
+		$reply = TCPRecv($sockets[$n], 1000000, 1)	; receives in binary mode using longer length
+		$err = @error
+		If $err <> 0 Then
+			LogWrite($n, "(Server) " & $boxID[$n] & " encounter TCP connection error " & $err)
+			FileClose($filesReceived[$n])	; get and save the file
+			$filesReceived[$n] = 0	;clear the flag when file transfer ends
+			CloseConnection($n)
+			Return False
+		EndIf
 
-	If $filesReceived[$n] <> 0 Then	; This indicates the coming message shall be saved in file
+		$len = BinaryLen($reply)
+		If $len = 0 Then Return False	; receives nothing
+
 		FileWrite($filesReceived[$n], $reply)
 		$byteCounter[$n] -= BinaryLen($reply)
 		LogWrite($n, "(Server) Received " & BinaryLen($reply) & " bytes, " & $byteCounter[$n] & " bytes remains.")
 
-		If $byteCounter[$n] <= 5 Then
+		If $byteCounter[$n] < 5 Then
 			FileClose($filesReceived[$n])	; get and save the file
 			$filesReceived[$n] = 0	;clear the flag when file transfer ends
 			SendCommand($n, "eof")	; send "eof" command to client
 			LogWrite($n,"(Server) Send eof to client.")
 		EndIf
-		Return
+
+		Return True
 	EndIf
 
-	If StringLen($reply) < 10 Then
-		LogWrite($n, "(Client) Sent " & $reply & " message to server. ")	; write the returned results into the log file
-	Else
-		LogWrite($n, "(Client) " & $reply)	; write the returned results into the log file
+	$reply = TCPRecv($sockets[$n], 1000)    ; receive in text mode using short length
+	$err = @error
+	If $err <> 0 Then
+		LogWrite($n, "(Server) " & $boxID[$n] & " encounter TCP connection error " & $err)
+		CloseConnection($n)
+		Return False
 	EndIf
+	$len = BinaryLen($reply)
+	If $len = 0 Then Return False   ; receive nothing, return false
+
+	Local $newCommand
+	Local $msg = StringSplit($reply, " ")
+	LogWrite($n, "(Client) " & $reply)	; write the returned results into the log file
 
 	If ($msg[0] >=3) And ($msg[1] = "file") Then	; start to upload file from client
 		Local $filename = $msg[2]
@@ -849,12 +866,12 @@ Func ProcessReply($n, $reply)
 		PushCommand($n,"hold")
 		SendCommand($n, "send")	; send "send" command to client to trigger the file transfer
 		LogWrite($n, "(Server) sent send command to client.")
-		Return
+		Return True
 	EndIf
 
 	If ($msg[0] >= 4) And ($msg[1] = "name") Then	; Start a new test when got name reply
 		StartNewTest($n, $msg[2], $msg[3], $msg[4])
-		Return
+		Return True
 	EndIf
 
 	If StringInStr($reply, "FAILED", 1) Then	; Got a FAILED reply,
@@ -866,7 +883,7 @@ Func ProcessReply($n, $reply)
 		$testFailures[$n] += 1
 		GUICtrlSetColor($pGUI[$n], $COLOR_RED)
 		LogWrite($automationLogPort, $boxID[$n] & " " & $reply)
-		Return
+		Return True
 	EndIf
 
 	If StringInStr($reply, "Fatal error.") Then
@@ -876,7 +893,7 @@ Func ProcessReply($n, $reply)
 		PushCommand($n, "hold reboot")	; seems there exists mis-matching problems in the client box, reboot to fix it
 		LogWrite($automationLogPort, $boxID[$n] & " firmware reading error. Cannot read valid data from firmware.")
 		LogWrite($n, "Firmware reading error. Cannot read valid data from firmware.")
-		Return
+		Return True
 	EndIf
 
 	If StringInStr($reply, "quit") Then
@@ -901,7 +918,7 @@ Func ProcessReply($n, $reply)
 			$testEndTime[$n] = 0
 		EndIf
 		CloseConnection($n)
-		Return
+		Return True
 	EndIf
 
 	If StringInStr($reply, "PASSED", 1) Or StringInStr($reply, "Continue") Then
@@ -911,8 +928,8 @@ Func ProcessReply($n, $reply)
 			PushCommand($n, $newCommand)
 			LogWrite($n, "(Server) Wrong pop of new test command " & $newCommand)
 		EndIf
-
 	EndIf
+	Return True
 EndFunc
 
 Func StartNewTest($n, $ID, $boxUser, $clientVersion)
@@ -928,12 +945,9 @@ Func StartNewTest($n, $ID, $boxUser, $clientVersion)
 	LogWrite($automationLogPort, $boxID[$n] & " connected on " & $boxIP[$n] & ".")
 
 	$portDisplay = $n
-	$logContent[$n] = ""	;clear the main log display window
+	$logContent[$n] = ""	; clear the main log display window
 	GUICtrlSetData($bGUI[$n], $boxID[$n])	; update the text on the button
 	GUICtrlSetData($tLog, " " & $boxID[$n])	; update the serial number on top the main log display
-	GUICtrlDelete($cLog)
-	$cLog = GUICtrlCreateEdit("UUT automation Progress", 240, 350, 960, 360, $WS_VSCROLL)	; the child window that displays the log of each UUT
-	GUICtrlSendMsg($cLog, $EM_LIMITTEXT, -1, 0)
 	GUICtrlSetData($cLog, $logContent[$n])	; display and update the log content
 
 	$filename = $workdir & $boxID[$n] & ".txt"	; try to find if any individual test case exits
