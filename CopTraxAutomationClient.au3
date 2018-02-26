@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.6)
+#pragma compile(FileVersion, 3.2.20.9)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -92,8 +92,10 @@ Global $mCopTrax = 0
 Global $pCopTrax = "IncaXPCApp.exe"
 Global $hEventLogSystem = _EventLog__Open("", "System")
 Global $hEventLogApp = _EventLog__Open("", "Application")
+Global $hEventLogCopTrax = _EventLog__Open("", "ACI_CopTrax_Log")
 _EventLog__Read($hEventLogSystem, True, False)
 _EventLog__Read($hEventLogApp, True, False)
+_EventLog__Read($hEventLogCopTrax, True, False)
 
 OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when the script is closed.
 AutoItSetOption ("WinTitleMatchMode", 2)
@@ -215,6 +217,7 @@ EndIf
 
 _EventLog__Close($hEventLogSystem)
 _EventLog__Close($hEventLogApp)
+_EventLog__Close($hEventLogCopTrax)
 
 Exit
 
@@ -600,11 +603,9 @@ Func TestSettingsFunction($arg)
 
 				If StringInStr($cam3, "enable") Then	; compatible with both enable and enabled
 					ClickCheckButton($hWnd, "Enable third camera")
-					ClickCheckButton($hWnd, "Always record both cameras")
 				EndIf
 				If StringInStr($cam3, "disable") Then	; compatible with both disable and disabled
 					ClickCheckButton($hWnd, "Enable third camera", False)
-					ClickCheckButton($hWnd, "Always record both cameras", False)
 				EndIf
 
 				Sleep(500)
@@ -819,6 +820,13 @@ Func CheckEventLog()
 		EndIf
 	Until Not $aEvent[0]
 
+	Do
+		$aEvent = _EventLog__Read($hEventLogCopTrax, True, True)	;read the event log forwards from last read
+
+		If $aEvent[7] = 1 Then
+			LogUpload("Application error event at " &  $aEvent[4] & " " & $aEvent[5] & ", ID=" & $aEvent[6] & ", " & $aEvent[13])
+		EndIf
+	Until Not $aEvent[0]
 
 	Return $rst
 EndFunc
@@ -1515,13 +1523,15 @@ Func ReportCPUMemory()
 	For $i = 1 To $aUsage[0]
 		$logLine &= 'CPU #' & $i & ' - ' & $aUsage[$i] & '%; '
 	Next
+
+	Sleep(2000)
 	Local $fUsage = _ProcessUsageTracker_GetUsage($aProcUsage)
 	$logLine &= $pCopTrax & " CPU usage: " & $fUsage & "%."
 
 	If CheckEventLog() Then
 		$logLine = "Continue " & $logLine
 	Else
-		$logLine = "Failed " & $logLine
+		$logLine = "FAILED " & $logLine
 	EndIf
 	LogUpload($logLine)	; Log with CPU and Memory Status
 

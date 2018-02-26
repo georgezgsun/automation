@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.2
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.7
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -68,25 +68,25 @@ Global $allCommands[$maxCommands]	; this section defines the supported test comm
 $allCommands[0] = "record duration repeat interval"
 $allCommands[1] = "settings pre chunk cam2 cam3 keyboard"
 $allCommands[2] = "createprofile username password"
-$allCommands[3] = "upload file"
-$allCommands[4] = "update file"
-$allCommands[5] = "checkapp version"
-$allCommands[6] = "checkfirmware version"
-$allCommands[7] = "checklibrary version"
-$allCommands[8] = "batchtest mode"
-$allCommands[9] = "pause duration"
-$allCommands[10] = "checkrecord total newadd detailed"
-$allCommands[11] = "radar speed"
-$allCommands[12] = "lightbar duration"
-$allCommands[13] = "siren duration"
-$allCommands[14] = "aux4 duration"
-$allCommands[15] = "aux5 duration"
-$allCommands[16] = "aux6 duration"
-$allCommands[17] = "lightswitch duration"
-$allCommands[18] = "mic1trigger duration"
-$allCommands[19] = "mic2trigger duration"
-$allCommands[20] = "endrecord duration"
-$allCommands[21] = "startrecord duration"
+$allCommands[3] = "checkrecord total newadd detailed"
+$allCommands[4] = "upload file"
+$allCommands[5] = "update file"
+$allCommands[6] = "checkapp version"
+$allCommands[7] = "checkfirmware version"
+$allCommands[8] = "checklibrary version"
+$allCommands[9] = "batchtest mode"
+$allCommands[10] = "pause duration"
+$allCommands[11] = "lightbar duration"
+$allCommands[12] = "siren duration"
+$allCommands[13] = "aux4 duration"
+$allCommands[14] = "aux5 duration"
+$allCommands[15] = "aux6 duration"
+$allCommands[16] = "lightswitch duration"
+$allCommands[17] = "mic1trigger duration"
+$allCommands[18] = "mic2trigger duration"
+$allCommands[19] = "endrecord duration"
+$allCommands[20] = "startrecord duration"
+$allCommands[21] = "radar"
 $allCommands[22] = "status"
 $allCommands[23] = "photo"
 $allCommands[24] = "info"
@@ -397,17 +397,16 @@ EndFunc
 
 Func ParseCommand($n)
 	Local $newCommand = PopCommand($n)
+	Local $currentTime = TimerDiff($hTimer)
+	$commandTimers[$n] =  $currentTime + 5*1000 ; time for next command to be executed
 
 	If $newCommand = "" Then 	; no command left to be precessed
 		SendCommand($n, "quit")
-		$testEndTime[$n] += 10
+		$testEndTime[$n] += 5
 		Return False
 	EndIf
 
 	Local $nextCommandFlag = True	; flag to indicate getting next command in test case, not hold, batchhold
-	Local $currentTime = TimerDiff($hTimer)
-	$commandTimers[$n] =  $currentTime + 10*1000 ; time for next command to be executed
-
 	Local $arg
 	Local $duration
 	Local $repeat
@@ -430,7 +429,7 @@ Func ParseCommand($n)
 			$arg = PopCommand($n)
 			$duration = Int($arg)
 			PushCommand($n, "hold")
-			$commandTimers[$n] += ($duration * 60 - 5) * 1000	; set the next command timer xx minutes later
+			$commandTimers[$n] += ($duration * 60) * 1000	; set the next command timer xx minutes later
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client. The stop record command will be sent in " & $duration & " mins.")
 
@@ -439,7 +438,7 @@ Func ParseCommand($n)
 			$arg = PopCommand($n)
 			$interval = Int($arg)
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
-			$commandTimers[$n] +=  ($interval * 60 - 15)* 1000	; set the next command timer 10 mins later
+			$commandTimers[$n] +=  ($interval * 60 - 10)* 1000	; set the next command timer interval mins later, adjust 10 s
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client. Pause for " & $interval & " mins till next command.")
 
@@ -449,7 +448,7 @@ Func ParseCommand($n)
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $newCommand & " " & $arg & " command to client.")
-			$commandTimers[$n] += 20*1000	; add 10 more seconds
+			$commandTimers[$n] += 20*1000	; add 20 more seconds
 
 		Case "checkfirmware", "checkapp", "checklibrary", "checkrecord"
 			$arg = PopCommand($n)
@@ -460,7 +459,7 @@ Func ParseCommand($n)
 
 		Case "pause"
 			$arg = PopCommand($n)
-			$commandTimers[$n] +=  CorrectRange(Int($arg) - 10, 0, 3600)* 1000	; set the next command timer $arg secs later
+			$commandTimers[$n] = $currentTime + CorrectRange(Int($arg), 0, 3600)* 1000	; set the next command timer $arg secs later
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Pause for " & $arg & " seconds.")
 
@@ -485,7 +484,7 @@ Func ParseCommand($n)
 			SendCommand($n, $aCommand)    ; send new test command to client
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $aCommand & " command to client. Sent " & $piCommand & " command to Raspberry Pi.")
-			$commandTimers[$n] +=  ($duration * 60 - 10)* 1000    ; add $duration mins
+			$commandTimers[$n] +=  ($duration * 60)* 1000    ; add $duration mins
 			PushCommand($n, "hold")	; hold any new command from executing only after get a passed/continue response from the client
 			$batchWait[$n] = False	; enter batchtest stop mode, stops any other box from entering aligned mode
 
@@ -550,7 +549,6 @@ Func ParseCommand($n)
 
 		Case "hold"
 			PushCommand($n, "hold")	; the hold command can only be cleared by receive a contiue or passed reply from the client
-			$commandTimers[$n] += -5*1000
 			$testEndTime[$n] += 5
 			$nextCommandFlag = False
 
@@ -601,7 +599,6 @@ Func ParseCommand($n)
 
 		Case Else
 			LogWrite($n, "(Server) Unknown command " & $newCommand & ". Commands in stack are " & $commands[$n])
-			$commandTimers[$n] += -5*1000
 			$nextCommandFlag = False
 
 	EndSwitch
@@ -939,7 +936,7 @@ EndFunc
 Func StartNewTest($n, $ID, $boxUser, $clientVersion)
 	$boxID[$n] = $ID	; get the boxID from client
 	$filesReceived[$n] = 0	; clear the upload files
-	$fileToBeSent[$n] = ""	; lear file need to be sent to client
+	$fileToBeSent[$n] = ""	; clear file need to be sent to client
 	$testFailures[$n] = 0	; initialize the result true until any failure
 	$batchWait[$n] = True	; Default is true, not to hold other boxes until was set by BatchTest mode=start
 	If $logFiles[$n] <> 0 Then FileClose($logFiles[$n])
@@ -1045,7 +1042,7 @@ Func AcceptConnection ()
 	$sockets[$port] = $newSocket	;assigns that socket the incomming connection.
 	$commands[$port] = "hold"	; Stores hold command to temperally hold the the commands until gets a name reply
 	$heartBeatTimers[$port] = $currentTime + 1000*60
-	$commandTimers[$port] = $currentTime + 1000	; Set command timer to be 1s later
+	$commandTimers[$port] = $currentTime + 5*1000	; Set command timer to be 5s later
 	$connectionTimers[$port] = $currentTime + 2000*60	; Set connection lost timer to be 2mins later
 	$boxIP[$port] = $IP
 EndFunc
