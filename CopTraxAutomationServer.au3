@@ -856,7 +856,7 @@ Func ProcessReply($n)
 
 	If ($msg[0] >=3) And ($msg[1] = "file") Then	; start to upload file from client
 		Local $filename = $msg[2]
-		Local $len =  Int($msg[3])
+		$len =  Int($msg[3])
 		Local $netFileName = StringSplit($filename, "\")
 		Local $destFileName = $workDir & "ClientFiles\" & $netFileName[$netFileName[0]]
 		LogWrite($n, "(Server) " & $filename & " from client is going to be saved as " & $destFileName & " in server.")
@@ -874,6 +874,7 @@ Func ProcessReply($n)
 		Return True
 	EndIf
 
+    Local $newCommand
 	If StringInStr($reply, "FAILED", 1) Then	; Got a FAILED reply,
 		$newCommand = PopCommand($n)	; unhold the test command by pop the hold command
 		If $newCommand <> "hold" Then
@@ -922,14 +923,13 @@ Func ProcessReply($n)
 	EndIf
 
 	If StringInStr($reply, "PASSED", 1) Or StringInStr($reply, "Continue") Then
-		;PopCommand($n)	; unhold the test command by pop the hold command
 		$newCommand = PopCommand($n)	; unhold the test command by pop the hold command
 		If $newCommand <> "hold" Then
 			PushCommand($n, $newCommand)
 			LogWrite($n, "(Server) Wrong pop of new test command " & $newCommand)
 		EndIf
 	EndIf
-	Return True
+    Return True
 EndFunc
 
 Func StartNewTest($n, $ID, $boxUser, $clientVersion)
