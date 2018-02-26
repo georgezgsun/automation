@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20)
+#pragma compile(FileVersion, 3.2.20.6)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -48,7 +48,7 @@ Global Const $titleReview = "Playback" ; "CopTrax | Video Playback"
 Global Const $titleSettings = "Setup" ; "CopTrax II Setup"
 Global Const $titleStatus = "CopTrax Status" ; "CopTrax Status"
 Global Const $titleEndRecord = "Report Taken" ; "Report Taken"
-Global Const $TIMEOUTINSECEND = 300
+Global Const $TIMEOUTINSECEND = 150
 Global Const $maxSendLength = 100000	; set maximum legth of bytes that a TCPsend command may send
 
 TCPStartup()
@@ -73,7 +73,7 @@ ReadConfig()
 Global $fileToBeUpdate = $workDir & "tmp\" & @ScriptName
 Global $testEnd = FileExists($fileToBeUpdate) ? FileGetVersion(@AutoItExe) <> FileGetVersion($fileToBeUpdate) : False
 If FileGetSize($fileToBeUpdate) < 1000000 Then $testEnd = False	; update the client file only when it was completetly downloaded
-$fileToBeUpdate = ""
+$fileToBeUpdate = 0
 Global $restart = $testEnd
 Global Const $mMB = "CopTrax GUI Automation Test"
 
@@ -183,7 +183,10 @@ While Not $testEnd
 			EndIf
 		EndIf
    Else
-	  ListenToNewCommand()
+	  If ListenToNewCommand() Then
+		$timeout = TimerDiff($hTimer) + 1000 * $TIMEOUTINSECEND
+	  EndIf
+
 	  If  $currentTime > $timeout Then
 		  $testEnd = True
 		  $restart = True
@@ -192,22 +195,26 @@ While Not $testEnd
    Sleep(100)
 WEnd
 
-LogUpload("quit")
-TCPShutdown() ; Close the TCP service.
-FileClose($fileToBeUpdate)
-_EventLog__Close($hEventLogSystem)
-_EventLog__Close($hEventLogApp)
-
 If IsRecording() Then
 	EndRecording(True)	; stops any recording in progress before automation test ends
 EndIf
 
 If $restart Then
+	LogUpload("quit The automation test will restart.")
 	MsgBox($MB_OK, $mMB, "Reatarting the automation test.",2)
 	RestartAutomation()
 Else
+	LogUpload("quit End of automation test.")
 	MsgBox($MB_OK, $mMB, "Testing ends. Bye.",5)
 EndIf
+
+TCPShutdown() ; Close the TCP service.
+If $fileToBeUpdate Then
+	FileClose($fileToBeUpdate)
+EndIf
+
+_EventLog__Close($hEventLogSystem)
+_EventLog__Close($hEventLogApp)
 
 Exit
 
@@ -717,7 +724,7 @@ Func ClickCheckButton($hWnd, $button, $check = True)
 
 	If ($pColor = 0 ) <> $check Then
 		ControlClick($hWnd, "", $button)
-		LogUpload("Pixel color at (" & $x0 & "," & $y0 & " ) is " & $pColor & ", so click on button " & $button)
+		LogUpload("Pixel color at (" & $x0 & "," & $y0 & ") is " & $pColor & ", so click on button " & $button)
 	EndIf
 EndFunc
 
@@ -968,7 +975,7 @@ Func LogUpload($s)
    EndIf
 
    TCPSend($Socket, $s & " ")
-   If StringInStr($s, "FAILED") = 1 Then
+   If StringInStr($s, "FAILED", 1) = 1 Then
 		TakeScreenCapture("failure", $mCopTrax)
 	Else
 		Sleep(1000)
@@ -1143,40 +1150,44 @@ EndFunc
 Func ListenToNewCommand()
 	Local $raw
 	Local $len
+	Local $err
 
-	If $fileToBeUpdate <> "" Then
+	If $fileToBeUpdate Then
 		$raw = TCPRecv($Socket, 1000000, 1)	; In case there is file to be updated, receives in binary mode with long length
-		If @error <> 0 Then	; In case there is error, the connection has lost, restart the automation test
+		$err = @error
+		If $err <> 0 Then	; In case there is error, the connection has lost, restart the automation test
 			FileClose($fileToBeUpdate)
 			$fileToBeUpdate = 0
+
+			LogUpload("Connection lost with error " & $err)
 			$testEnd = True
 			$restart = True
-			Return
+			Return False
 		EndIf
 
 		$len = BinaryLen($raw)
-		If $len = 0 Then Return
+		If $len = 0 Then Return False
 
-		$timeout = TimerDiff($hTimer) + 1000 * $TIMEOUTINSECEND
 		FileWrite($fileToBeUpdate, $raw)
-		LogUpload("Received " & $len & " bytes, write them to file.")
 		$bytesCounter -= $len
-		If $bytesCounter <= 10 Then
+		LogUpload("Received " & $len & " bytes, write them to files, " & $bytesCounter & " bytes remains.")
+		If $bytesCounter < 5 Then
 			FileClose($fileToBeUpdate)
-			$fileToBeUpdate = ""
-			Sleep(1000)
-			LogUpload("Continue")
+			$fileToBeUpdate = 0
+			LogUpload("Continue End of file update in client.")
 		EndIf
-		Return
+		Return True
 	EndIf
 
 	$raw = TCPRecv($Socket, 1000)	; In listen to command mode, receives in text mode with shorter length
-	If @error <> 0 Then	; In case there is error, the connection has lost, restart the automation test
+	$err = @error
+	If $err <> 0 Then	; In case there is error, the connection has lost, restart the automation test
+		LogUpload("Connection lost with error " & $err)
 		$testEnd = True
 		$restart = True
-		Return
+		Return False
 	EndIf
-	If $raw = "" Then Return
+	If $raw = "" Then Return False
 
 	Local $Recv = StringSplit($raw, " ")
 	Switch StringLower($Recv[1])
@@ -1412,6 +1423,8 @@ Func ListenToNewCommand()
 			Exit
 
 	EndSwitch
+
+	Return True
  EndFunc
 
 Func EncodeToSystemTime($datetime)
@@ -1453,11 +1466,9 @@ Func UploadFile()
 
 	$fileContent = FileRead($file)
 	FileClose($file)
-	;Local $fileLen = StringLen($fileContent)	;
 	Local $fileLen = BinaryLen($fileContent)
-;	If StringIsASCII($fileContent) Then $fileLen = Round($fileLen/2)
 	Sleep(1000)
-	LogUpload("file " & $filename[1] & " " & $fileLen & " " & $filesToBeSent)
+	LogUpload("file " & $filename[1] & " " & $fileLen)
 EndFunc
 
 Func UpdateFile($filename, $filesize)
@@ -1473,7 +1484,11 @@ Func HotKeyPressed()
 
 		Case "+!t" ; Keystroke is the Shift-Alt-t hotkey, to stop the CopTrax App
 			MsgBox($MB_OK, $mMB, "Terminating the CopTrax. Bye",2)
-			QuitCopTrax()
+			If QuitCopTrax() Then
+				LogUpload("CopTrax II has been stopped successfully.")
+			Else
+				LogUpload("Unable to stop CopTrax II.")
+			EndIf
 
 		Case "+!r" ; Keystroke is the Shift-Alt-r hotkey, to restart the automation test
 			MsgBox($MB_OK, $mMB, "Restart the automation test. see you soon.",2)

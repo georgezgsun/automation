@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.1
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.2
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -389,6 +389,10 @@ Func CloseConnection($n)
 	LogWrite($n, " ")
 	TCPCloseSocket($sockets[$n])	; Close the TCP connection to the client
 	$sockets[$n] = -1	; clear the soket index
+	If $filesReceived[$n] Then
+		FileClose($filesReceived[$n])
+		$filesReceived[$n] = 0
+	EndIf
 EndFunc
 
 Func ParseCommand($n)
