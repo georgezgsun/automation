@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.19.8)
+#pragma compile(FileVersion, 3.2.20)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.11)
@@ -277,6 +277,7 @@ EndFunc
 
 Func QuitCopTrax()
 	If Not ReadyForTest() Then  Return False
+	LogUpload("Try to stop CopTrax App.")
 	If IsRecording() And Not EndRecording(True) Then
 		LogUpload("A recording is in progress. Unable to end it.")
 		Return False
@@ -295,9 +296,6 @@ Func QuitCopTrax()
 
 	Sleep(500)
 	Send("{TAB}{END}{TAB}{ENTER}")	; choose the Administrator
-	; ControlClick($titleInfo,"","Apply")
-
-	Sleep(500)
 	If Not GetHandleWindowWait($titleLogin, "", 10) Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the Login window.",2)
 		LogUpload("Unable to close the Login window by click on Apply button.")
@@ -307,8 +305,9 @@ Func QuitCopTrax()
 
 	Send("135799{TAB}{ENTER}")	; type the administator password
 	MouseClick("", 500, 150)
+	Local $rst = WinWaitClose($mCopTrax, "", 10)
 	$mCopTrax = 0
-	Return True
+	Return $rst
 EndFunc
 
 Func TestUserSwitchFunction($arg)
@@ -1142,14 +1141,24 @@ Func CalculateTimeDiff($time1,$time2)
 EndFunc
 
 Func ListenToNewCommand()
-	Local $raw = TCPRecv($Socket, 1000000)
-	If $raw = "" Then Return
-	$timeout = TimerDiff($hTimer) + 1000 * $TIMEOUTINSECEND
+	Local $raw
+	Local $len
 
 	If $fileToBeUpdate <> "" Then
+		$raw = TCPRecv($Socket, 1000000, 1)	; In case there is file to be updated, receives in binary mode with long length
+		If @error <> 0 Then	; In case there is error, the connection has lost, restart the automation test
+			FileClose($fileToBeUpdate)
+			$fileToBeUpdate = 0
+			$testEnd = True
+			$restart = True
+			Return
+		EndIf
+
+		$len = BinaryLen($raw)
+		If $len = 0 Then Return
+
+		$timeout = TimerDiff($hTimer) + 1000 * $TIMEOUTINSECEND
 		FileWrite($fileToBeUpdate, $raw)
-		;$len = StringLen($raw)	;
-		Local $len = BinaryLen($raw)
 		LogUpload("Received " & $len & " bytes, write them to file.")
 		$bytesCounter -= $len
 		If $bytesCounter <= 10 Then
@@ -1161,6 +1170,14 @@ Func ListenToNewCommand()
 		Return
 	EndIf
 
+	$raw = TCPRecv($Socket, 1000)	; In listen to command mode, receives in text mode with shorter length
+	If @error <> 0 Then	; In case there is error, the connection has lost, restart the automation test
+		$testEnd = True
+		$restart = True
+		Return
+	EndIf
+	If $raw = "" Then Return
+
 	Local $Recv = StringSplit($raw, " ")
 	Switch StringLower($Recv[1])
 		Case "runapp" ; get a stop command, going to stop testing and quit
@@ -1169,7 +1186,7 @@ Func ListenToNewCommand()
 			LogUpload("PASSED Start the CopTrax")
 
 		Case "stopapp" ; get a stop command, going to stop testing and quit
-			MsgBox($MB_OK, $mMB, "Stop CopTrax App",2)
+			MsgBox($MB_OK, $mMB, "Try to stop CopTrax App.",2)
 			If QuitCopTrax() Then
 				LogUpload("PASSED")
 			Else
@@ -1177,7 +1194,6 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "startrecord", "record" ; Get a record command. going to test the record function
-			MsgBox($MB_OK, $mMB, "Testing the start record function",2)
 			If StartRecord(True) Then
 				LogUpload("PASSED the test on start record function.")
 			Else
@@ -1185,7 +1201,6 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "startstop", "lightswitch" ; Get a startstop trigger command
-			;MsgBox($MB_OK, $mMB, "Testing the trigger Light switch button function",2)
 			LogUpload("Got the lightswitch command. Takes seconds to determine what to do next.")
 			For $i = 1 To 10
 				If WinExists($titleEndRecord, "") Then	ExitLoop; check if an endrecord window pops

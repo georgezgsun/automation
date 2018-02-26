@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.14.14
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.1
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -35,6 +35,7 @@ _Singleton('Automation test server')
 HotKeySet("!{Esc}", "HotKeyPressed") ; Alt-Esc to stop testing
 
 TCPStartup() ; Start the TCP service.
+AutoItSetOption ( "TCPTimeout", 1 )
 
 Global Const $maxConnections = 20	; define the max client numbers
 Global Const $maxListen = 100	; define the max client numbers
@@ -286,16 +287,17 @@ While Not $testEnd	; main loop that get input, display the resilts
 			$estimate = EstimateCommands($commands[$i])
 			$commandsRemains = Int(GetParameter($estimate, "count"))
 			$timeRemains = Round(($commandTimers[$i] - $currentTime) / 1000) + Int(GetParameter($estimate, "time"))	; next (command time- current time) in seconds plus the remain test time
-			$testEndTime[$i] = $timeRemains + $currentTime/1000
+			$testEndTime[$i] = $timeRemains + Round($currentTime/1000)
 			LogWrite($i, "(Server) " & $commandsRemains & " test commands remains. Next command in " & Int(($commandTimers[$i] - $currentTime) / 1000) & " seconds. Test remains " & $timeRemains & " seconds.")
 			$progressPercentage = CorrectRange(100 * (1-$commandsRemains/$totalCommands[$i]), 0, 100)
 			GUICtrlSetData($pGUI[$i], $progressPercentage)
 		Else
-			$timeRemains = $testEndTime[$i] - ($currentTime / 1000)
+			$timeRemains = $testEndTime[$i] - Round($currentTime / 1000)
 		EndIf
 
+		$timeRemains = CorrectRange($timeRemains, 0, 3*24*3600)
 		If $timeRemains <> $remainTestTime[$i]	Then
-			$remainTestTime[$i] = CorrectRange($timeRemains, 0, 3*24*3600)
+			$remainTestTime[$i] = $timeRemains
 			GUICtrlSetData($nGUI[$i], toHMS($remainTestTime[$i]))
 		EndIf
 
@@ -354,7 +356,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 		EndIf
 	Next
 
-	ConsoleWrite("One loop takes " & TimerDiff($hTimer) - $currentTime & " ms." & @CRLF)
+	;ConsoleWrite("One loop takes " & TimerDiff($hTimer) - $currentTime & " ms." & @CRLF)	; display the main loop time in ms.
 WEnd
 
 ; SendCommand(0, "q0") ; let RaspberryPi to quit
@@ -387,10 +389,6 @@ Func CloseConnection($n)
 	LogWrite($n, " ")
 	TCPCloseSocket($sockets[$n])	; Close the TCP connection to the client
 	$sockets[$n] = -1	; clear the soket index
-	If $totalConnection > 0 Then
-		$totalConnection -= 1 ; reduce the total number of connection
-	EndIf
-	$connectionTimers[$n] += 60*10000
 EndFunc
 
 Func ParseCommand($n)
@@ -615,13 +613,13 @@ Func LogWrite($n,$s)
 		GUICtrlSetData($aLog, $s & @crlf, 1)
 	EndIf
 
-	$s = @HOUR & ":" & @MIN & ":" & @SEC & " " & $s & @CRLF
+	$s = @HOUR & ":" & @MIN & ":" & @SEC & " " & $s & @CRLF	; show the log with time stamps
 	If ($n > 0) And ($n <= $maxConnections) And Not ( StringInStr($s, "heartbeat command") Or StringInStr($s, "; CPU #", 1))  Then
 		$logContent[$n] &= $s
 	EndIf
 
 	If $n = $portDisplay Then
-		GUICtrlSetData($cLog, $s, 1)
+		GUICtrlSetData($cLog, $s, 1)	; update the log display in append mode
 	EndIf
 EndFunc
 
@@ -816,7 +814,8 @@ Func ProcessReply($n)
 		$reply = TCPRecv($sockets[$n], 1000000, 1)	; receives in binary mode using longer length
 		$err = @error
 		If $err <> 0 Then
-			LogWrite($n, "(Server) " & $boxID[$n] & " encounter TCP connection error " & $err)
+			LogWrite($n, "(Server) Connection lost with error : " & $err)
+			LogWrite($automationLogPort, "(Server) " & $boxID[$n] & " connection lost with error : " & $err)
 			FileClose($filesReceived[$n])	; get and save the file
 			$filesReceived[$n] = 0	;clear the flag when file transfer ends
 			CloseConnection($n)
@@ -843,7 +842,8 @@ Func ProcessReply($n)
 	$reply = TCPRecv($sockets[$n], 1000)    ; receive in text mode using short length
 	$err = @error
 	If $err <> 0 Then
-		LogWrite($n, "(Server) " & $boxID[$n] & " encounter TCP connection error " & $err)
+		LogWrite($n, "(Server) Connection lost with error : " & $err)
+		LogWrite($automationLogPort, "(Server) " & $boxID[$n] & " connection lost with error : " & $err)
 		CloseConnection($n)
 		Return False
 	EndIf
@@ -856,7 +856,7 @@ Func ProcessReply($n)
 
 	If ($msg[0] >=3) And ($msg[1] = "file") Then	; start to upload file from client
 		Local $filename = $msg[2]
-		$len =  Int($msg[3])
+		Local $len =  Int($msg[3])
 		Local $netFileName = StringSplit($filename, "\")
 		Local $destFileName = $workDir & "ClientFiles\" & $netFileName[$netFileName[0]]
 		LogWrite($n, "(Server) " & $filename & " from client is going to be saved as " & $destFileName & " in server.")
@@ -874,7 +874,6 @@ Func ProcessReply($n)
 		Return True
 	EndIf
 
-    Local $newCommand
 	If StringInStr($reply, "FAILED", 1) Then	; Got a FAILED reply,
 		$newCommand = PopCommand($n)	; unhold the test command by pop the hold command
 		If $newCommand <> "hold" Then
@@ -923,13 +922,14 @@ Func ProcessReply($n)
 	EndIf
 
 	If StringInStr($reply, "PASSED", 1) Or StringInStr($reply, "Continue") Then
+		;PopCommand($n)	; unhold the test command by pop the hold command
 		$newCommand = PopCommand($n)	; unhold the test command by pop the hold command
 		If $newCommand <> "hold" Then
 			PushCommand($n, $newCommand)
 			LogWrite($n, "(Server) Wrong pop of new test command " & $newCommand)
 		EndIf
 	EndIf
-    Return True
+	Return True
 EndFunc
 
 Func StartNewTest($n, $ID, $boxUser, $clientVersion)
