@@ -1,13 +1,13 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.9)
+#pragma compile(FileVersion, 3.2.20.14)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
-#pragma compile(ProductVersion, 2.11)
+#pragma compile(ProductVersion, 2.4)
 #pragma compile(CompanyName, 'Stalker')
 #pragma compile(Icon, automation.ico)
 ;
-; Test client for CopTrax Version: 1.0
+; Test client for CopTrax Version: 3.2
 ; Language:       AutoIt
 ; Platform:       Win8
 ; Script Function:
@@ -33,7 +33,7 @@
 _Singleton('Automation test client')
 
 HotKeySet("{Esc}", "HotKeyPressed") ; Esc to stop testing
-HotKeySet("q", "HotKeyPressed") ; Esc to stop testing
+HotKeySet("^q", "HotKeyPressed") ; Esc to stop testing
 HotKeySet("+!t", "HotKeyPressed") ; Shift-Alt-t to stop CopTrax
 HotKeySet("+!s", "HotKeyPressed") ; Shift-Alt-s, to start CopTrax
 HotKeySet("+!r", "HotKeyPressed") ; Shift-Alt-r, to restart the automation test client
@@ -86,7 +86,6 @@ Else
 EndIf
 
 Global $chunkTime = 30
-
 Global $sendBlock = False
 Global $mCopTrax = 0
 Global $pCopTrax = "IncaXPCApp.exe"
@@ -101,18 +100,31 @@ OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when t
 AutoItSetOption ("WinTitleMatchMode", 2)
 AutoItSetOption("SendKeyDelay", 100)
 
+Global $logFile = FileOpen( $workDir & "local.log", 1+8)
+
 If WinExists("", "Open CopTrax") Then
 	Local $filename = "C:\CopTrax Support\Tools\Automation.bat"
 	Local $file = FileOpen($filename, $FO_OVERWRITE );
 	FileWriteLine($file, "Echo Welcome to use CopTrax II")
 	FileClose($file)
 
-	If WinExists($titleAccount ) Then
-		ControlClick("", "Open CopTrax", "[NAME:panelValidation]")
-		RunValidationTool()
+	If ProcessExists($pCopTrax) Then
+		ProcessClose($pCopTrax)
 	EndIf
 
-	ControlClick("", "Open CopTrax", "[NAME:panelCopTrax]")
+	WinWaitClose("", "Open CopTrax")
+	Local $CopTraxDir = "c:\Program Files (x86)\IncaX\CopTrax\"	; path to CopTraxApp
+	Run( $CopTraxDir & $pCopTrax, $CopTraxDir)	; start CopTrax App again
+
+;	If WinExists($titleAccount ) Then
+;		ProcessClose($pCopTrax)	; first close CopTrax App
+;		ControlClick("", "Open CopTrax", "[NAME:panelValidation]")	; Then click the panel validation tool
+;		RunValidationTool()	; Then run validation tool
+;		Local $CopTraxDir = "c:\Program Files (x86)\IncaX\CopTrax\"	; path to CopTraxApp
+;		Run( $CopTraxDir & $pCopTrax, $CopTraxDir)	; start CopTrax App again
+;	EndIf
+
+;	ControlClick("", "Open CopTrax", "[NAME:panelCopTrax]")
 	Sleep(5000)
 EndIf
 
@@ -173,6 +185,7 @@ While Not $testEnd
 			If IsRecording() Then
 				EndRecording(True)	; stops any recording in progress before automation test ends
 			EndIf
+			FileClose($logFile)	; close local log
 
 			LogUpload("name " & $boxID & " " & $userName & " " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)
 			MsgBox($MB_OK, $mMB, "Connected to server.",2)
@@ -368,9 +381,8 @@ Func CreatNewAccount($name, $password)
 		Return False
 	EndIf
 
-	Local $txt = WinGetText($hWnd)
+	$txt = WinGetText($hWnd)
 	If StringInStr($txt, "Key") Then
-		;MouseClick("", 640, 55)
 		Send("{TAB 3}{END}")
 		If Not GetHandleWindowWait("Server") Then
 			MsgBox($MB_OK, $mMB, "Unable to open Server Configuration window. " & @CRLF, 5)
@@ -404,18 +416,19 @@ Func CreatNewAccount($name, $password)
 		Sleep(500)
 		Send("{TAB 2}")
 	EndIf
+
+	If $testEnd Then Return False
+
 	Send($name & "{Tab}")
 	Sleep(500)
 
 	Send($password & "{Tab}")	; type the user password
 	Sleep(500)
 	Send($password & "{Tab}")	; re-type the user password
+
 	Sleep(2000)
 	$txt = WinGetText($hWnd)
-	;Send("{ENTER}")
-	;MouseClick("", 670, 230)	; clear the soft keyboard
 	ControlClick($hWnd, "", "Register")
-
 	If WinWaitClose($hWnd,"",10) = 0 Then
 		MsgBox($MB_OK, $mMB, "Clickon the Register button to close the window failed.",2)
 		LogUpload("Unable to exit by click on the Register button. Messages in windows are " & $txt)
@@ -428,10 +441,13 @@ Func CreatNewAccount($name, $password)
 		ControlClick($txt, "restart", "OK")
 		LogUpload("CopTrax will restart. Automation will wait.")
 		$mCopTrax = 0
+		Sleep(5000)	; wait a little bit for the CopTrax to restart
 		Return True
 	EndIf
 
 	Sleep(1000)
+	If $testEnd Then Return False
+
 	If Not $mCopTrax Then
 		$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
 	EndIf
@@ -586,15 +602,14 @@ Func TestSettingsFunction($arg)
 				If StringInStr($cam2, "enable") Then	; compatible with both enable and enabled
 					ClickCheckButton($hWnd, "Enable secondary camera")
 					ClickCheckButton($hWnd, "Always record both cameras")
+					Sleep(500)
+					ControlClick($hWnd, "", "Test")
+					Sleep(2500)
 				EndIf
 				If StringInStr($cam2, "disable") Then	; compatible with both disable and disabled
 					ClickCheckButton($hWnd, "Enable secondary camera", False)
 					ClickCheckButton($hWnd, "Always record both cameras", False)
 				EndIf
-
-				Sleep(500)
-				ControlClick($hWnd, "", "Test")
-				Sleep(2500)
 			EndIf
 
 			If StringInStr($cam3, "able") Then
@@ -603,14 +618,13 @@ Func TestSettingsFunction($arg)
 
 				If StringInStr($cam3, "enable") Then	; compatible with both enable and enabled
 					ClickCheckButton($hWnd, "Enable third camera")
+					Sleep(500)
+					ControlClick($hWnd, "", "Test")
+					Sleep(2500)
 				EndIf
 				If StringInStr($cam3, "disable") Then	; compatible with both disable and disabled
 					ClickCheckButton($hWnd, "Enable third camera", False)
 				EndIf
-
-				Sleep(500)
-				ControlClick($hWnd, "", "Test")
-				Sleep(2500)
 			EndIf
 		EndIf
 
@@ -837,27 +851,35 @@ Func TestCameraSwitchFunction()
 	Local $file1
 	Local $file2
 	Local $file3
+	Local $blue1
+	Local $blue2
+	Local $blue3
+	Local $rst
+	Local $picSize = 100000
+	Local $blue = 0x090071
+
 	LogUpload("Begin Camera switch function testing.")
 	$file1 = TakeScreenCapture("Main Cam1", $mCopTrax)
+	$blue1 = PixelGetColor(550, 320, $mCopTrax)
+	$rst = ($file1 < $picSize) And ($blue1 <> $blue)
 
 	MouseClick("",960,170)	; click to rear camera2
 	Sleep(2000)
 	$file2 = TakeScreenCapture("Rear Cam2", $mCopTrax)
+	$blue2 = PixelGetColor(550, 320, $mCopTrax)
+	$rst = $rst And ($file2 < $picSize) And ($blue2 <> $blue)
 
 	MouseClick("", 200,170)	; click to switch rear camera
 	Sleep(2000)
 	$file3 = TakeScreenCapture("Rear Cam3", $mCopTrax)
+	$blue3 = PixelGetColor(550, 320, $mCopTrax)
+	$rst = $rst And ($file3 < $picSize) And ($blue3 <> $blue)
 
 	MouseClick("", 960,170)	; click back to main camera
 	Sleep(1000)
 
-	If ($file1 < 100000) Or ($file2 < 100000) Or ($file3 < 100000) Then
+	If $rst Then
 		LogUpload("Blank screen encountered.")
-		Return False
-	EndIf
-
-	If ($file1 < $file2) Or ($file1 < $file3) Then
-		LogUpload("Main Camera mistake.")
 		Return False
 	EndIf
 
@@ -884,7 +906,7 @@ Func TakeScreenCapture($comment, $hWnd)
 	EndIf
 	$Char3 = Chr($Char3)
 
-    Local $screenFile = $workDir & "tmp\" & $boxID & $Char1 & $Char2 & $Char3 & ".jpg"
+	Local $screenFile = $workDir & "tmp\" & $boxID & $Char1 & $Char2 & $Char3 & ".jpg"
 	If _ScreenCapture_CaptureWnd($screenFile, $hWnd) Then
 		LogUpload("Captured " & $comment & " screen file " & $boxID & $Char1 & $Char2 & $Char3 & ".jpg. It is now on the way sending to server.")
 		$filesToBeSent =  $screenFile & "|" & $filesToBeSent
@@ -919,7 +941,14 @@ Func TestPhotoFunction()
 		Return False
 	EndIf
 
-   Return True
+	Local $photoFile = GetLatestFile(@LocalAppDataDir & "\coptrax\" & $userName & "\photo", "*.jpg")
+	If $photoFile <> "" Then
+		$filesToBeSent =  $photoFile & "|" & $filesToBeSent
+		LogUpload("Got last photo in " & $photoFile & ". It is on the way sending to server.")
+		Return True
+	Else
+		Return False
+	EndIf
 EndFunc
 
 Func TestRadarFunction()
@@ -979,6 +1008,7 @@ EndFunc
 Func LogUpload($s)
    If $sendBlock Or $Socket < 0 Then
 	   MsgBox($MB_OK, $mMB, $s, 5)
+	   _FileWriteLog($logFile, $s)
 	   Return
    EndIf
 
@@ -1112,10 +1142,10 @@ Func GetVideoFilePath()
 EndFunc
 
 Func GetLatestFile($path,$type)
-    ; List the files only in the directory using the default parameters.
-    Local $aFileList = _FileListToArray($path, $type, 1, True)
+	; List the files only in the directory using the default parameters.
+	Local $aFileList = _FileListToArray($path, $type, 1, True)
 
-    If @error > 0 Then Return ""
+	If @error > 0 Then Return ""
 
 	Local $i
 	Local $latestFile
@@ -1480,14 +1510,14 @@ Func UploadFile()
 EndFunc
 
 Func UpdateFile($filename, $filesize)
-   $fileToBeUpdate = FileOpen($filename, 16+8+2)	; binary overwrite and force create directory
-   $bytesCounter = $filesize
-   Return True
+	$fileToBeUpdate = FileOpen($filename, 16+8+2)	; binary overwrite and force create directory
+	$bytesCounter = $filesize
+	Return True
 EndFunc
 
 Func HotKeyPressed()
 	Switch @HotKeyPressed ; The last hotkey pressed.
-		Case "{Esc}", "q" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
+		Case "{Esc}", "^q" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
 			$testEnd = True	;	Stop testing marker
 
 		Case "+!t" ; Keystroke is the Shift-Alt-t hotkey, to stop the CopTrax App
@@ -1540,7 +1570,7 @@ EndFunc
 
 Func OnAutoItExit()
 	LogUpload("quit")
-    TCPShutdown() ; Close the TCP service.
+	TCPShutdown() ; Close the TCP service.
  EndFunc   ;==>OnAutoItExit
 
 Func ReadConfig()
@@ -1566,17 +1596,17 @@ Func ReadConfig()
 				EndIf
 			Case "name"
 				$boxID = StringLeft(StringStripWS($aLine[2], 3), 8)
-		 EndSwitch
-   Until $eof
+		EndSwitch
+	Until $eof
 
-   FileClose($file)
+	FileClose($file)
 EndFunc
 
 Func RenewConfig()
-   Local $file = FileOpen($configFile,1)	; Open config file in over-write mode
-   FileWriteLine($file, "")
-   FileWriteLine($file, "name " & $boxID & " ")
-   FileClose($file)
+	Local $file = FileOpen($configFile,1)	; Open config file in over-write mode
+	FileWriteLine($file, "")
+	FileWriteLine($file, "name " & $boxID & " ")
+	FileClose($file)
 EndFunc
 
 Func GetHandleWindowWait($title, $text = "", $seconds = 5)
@@ -1623,85 +1653,85 @@ EndFunc
 ;# Author:   Bitboy  (AutoIt.de)
 ;#####################################################################
 Func GetCPUUsage()
-    Local Const $SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION = 8
-    Local Const $SYSTEM_TIME_INFO = 3
-    Local Const $tagS_SPPI = "int64 IdleTime;int64 KernelTime;int64 UserTime;int64 DpcTime;int64 InterruptTime;long InterruptCount"
+	Local Const $SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION = 8
+	Local Const $SYSTEM_TIME_INFO = 3
+	Local Const $tagS_SPPI = "int64 IdleTime;int64 KernelTime;int64 UserTime;int64 DpcTime;int64 InterruptTime;long InterruptCount"
 
-    Local $CpuNum, $IdleOldArr[1],$IdleNewArr[1], $tmpStruct
-    Local $timediff = 0, $starttime = 0
-    Local $S_SYSTEM_TIME_INFORMATION, $S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION
-    Local $RetArr[1]
+	Local $CpuNum, $IdleOldArr[1],$IdleNewArr[1], $tmpStruct
+	Local $timediff = 0, $starttime = 0
+	Local $S_SYSTEM_TIME_INFORMATION, $S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION
+	Local $RetArr[1]
 
-    Local $S_SYSTEM_INFO = DllStructCreate("ushort dwOemId;short wProcessorArchitecture;dword dwPageSize;ptr lpMinimumApplicationAddress;" & _
-    "ptr lpMaximumApplicationAddress;long_ptr dwActiveProcessorMask;dword dwNumberOfProcessors;dword dwProcessorType;dword dwAllocationGranularity;" & _
-    "short wProcessorLevel;short wProcessorRevision")
+	Local $S_SYSTEM_INFO = DllStructCreate("ushort dwOemId;short wProcessorArchitecture;dword dwPageSize;ptr lpMinimumApplicationAddress;" & _
+	"ptr lpMaximumApplicationAddress;long_ptr dwActiveProcessorMask;dword dwNumberOfProcessors;dword dwProcessorType;dword dwAllocationGranularity;" & _
+	"short wProcessorLevel;short wProcessorRevision")
 
-    $err = DllCall("Kernel32.dll", "none", "GetSystemInfo", "ptr",DllStructGetPtr($S_SYSTEM_INFO))
+	$err = DllCall("Kernel32.dll", "none", "GetSystemInfo", "ptr",DllStructGetPtr($S_SYSTEM_INFO))
 
-    If @error Or Not IsArray($err) Then
-        Return $RetArr[0] = -1
-    Else
-        $CpuNum = DllStructGetData($S_SYSTEM_INFO, "dwNumberOfProcessors")
-        ReDim $RetArr[$CpuNum+1]
-        $RetArr[0] = $CpuNum
-    EndIf
-    $S_SYSTEM_INFO = 0
+	If @error Or Not IsArray($err) Then
+		Return $RetArr[0] = -1
+	Else
+		$CpuNum = DllStructGetData($S_SYSTEM_INFO, "dwNumberOfProcessors")
+		ReDim $RetArr[$CpuNum+1]
+		$RetArr[0] = $CpuNum
+	EndIf
+	$S_SYSTEM_INFO = 0
 
-    While 1
-        $S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION = DllStructCreate($tagS_SPPI)
-        $StructSize = DllStructGetSize($S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION)
-        $S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION = DllStructCreate("byte puffer[" & $StructSize * $CpuNum & "]")
-        $pointer = DllStructGetPtr($S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION)
+	While 1
+		$S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION = DllStructCreate($tagS_SPPI)
+		$StructSize = DllStructGetSize($S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION)
+		$S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION = DllStructCreate("byte puffer[" & $StructSize * $CpuNum & "]")
+		$pointer = DllStructGetPtr($S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION)
 
-        $err = DllCall("ntdll.dll", "int", "NtQuerySystemInformation", _
-            "int", $SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION, _
-            "ptr", DllStructGetPtr($S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION), _
-            "int", DllStructGetSize($S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION), _
-            "int", 0)
+		$err = DllCall("ntdll.dll", "int", "NtQuerySystemInformation", _
+			"int", $SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION, _
+			"ptr", DllStructGetPtr($S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION), _
+			"int", DllStructGetSize($S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION), _
+			"int", 0)
 
-        If $err[0] Then
-            Return $RetArr[0] = -2
-        EndIf
+		If $err[0] Then
+			Return $RetArr[0] = -2
+		EndIf
 
-        Local $S_SYSTEM_TIME_INFORMATION = DllStructCreate("int64;int64;int64;uint;int")
-        $err = DllCall("ntdll.dll", "int", "NtQuerySystemInformation", _
-            "int", $SYSTEM_TIME_INFO, _
-            "ptr", DllStructGetPtr($S_SYSTEM_TIME_INFORMATION), _
-            "int", DllStructGetSize($S_SYSTEM_TIME_INFORMATION), _
-            "int", 0)
+		Local $S_SYSTEM_TIME_INFORMATION = DllStructCreate("int64;int64;int64;uint;int")
+		$err = DllCall("ntdll.dll", "int", "NtQuerySystemInformation", _
+			"int", $SYSTEM_TIME_INFO, _
+			"ptr", DllStructGetPtr($S_SYSTEM_TIME_INFORMATION), _
+			"int", DllStructGetSize($S_SYSTEM_TIME_INFORMATION), _
+			"int", 0)
 
-        If $err[0] Then
-            Return $RetArr[0] = -3
-        EndIf
+		If $err[0] Then
+			Return $RetArr[0] = -3
+		EndIf
 
-        If $starttime = 0 Then
-            ReDim $IdleOldArr[$CpuNum]
-            For $i = 0 to $CpuNum -1
-                $tmpStruct = DllStructCreate($tagS_SPPI, $Pointer + $i*$StructSize)
-                $IdleOldArr[$i] = DllStructGetData($tmpStruct,"IdleTime")
-            Next
-            $starttime = DllStructGetData($S_SYSTEM_TIME_INFORMATION, 2)
-            Sleep(100)
-        Else
-            ReDim $IdleNewArr[$CpuNum]
-            For $i = 0 to $CpuNum -1
-                $tmpStruct = DllStructCreate($tagS_SPPI, $Pointer + $i*$StructSize)
-                $IdleNewArr[$i] = DllStructGetData($tmpStruct,"IdleTime")
-            Next
+		If $starttime = 0 Then
+			ReDim $IdleOldArr[$CpuNum]
+			For $i = 0 to $CpuNum -1
+				$tmpStruct = DllStructCreate($tagS_SPPI, $Pointer + $i*$StructSize)
+				$IdleOldArr[$i] = DllStructGetData($tmpStruct,"IdleTime")
+			Next
+			$starttime = DllStructGetData($S_SYSTEM_TIME_INFORMATION, 2)
+			Sleep(100)
+		Else
+			ReDim $IdleNewArr[$CpuNum]
+			For $i = 0 to $CpuNum -1
+				$tmpStruct = DllStructCreate($tagS_SPPI, $Pointer + $i*$StructSize)
+				$IdleNewArr[$i] = DllStructGetData($tmpStruct,"IdleTime")
+			Next
 
-            $timediff = DllStructGetData($S_SYSTEM_TIME_INFORMATION, 2) - $starttime
+			$timediff = DllStructGetData($S_SYSTEM_TIME_INFORMATION, 2) - $starttime
 
-            For $i=0 to $CpuNum -1
-                $RetArr[$i+1] = Round(100-(($IdleNewArr[$i] - $IdleOldArr[$i]) * 100 / $timediff))
-            Next
+			For $i=0 to $CpuNum -1
+				$RetArr[$i+1] = Round(100-(($IdleNewArr[$i] - $IdleOldArr[$i]) * 100 / $timediff))
+			Next
 
-            Return $RetArr
-        EndIf
+			Return $RetArr
+		EndIf
 
-        $S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION = 0
-        $S_SYSTEM_TIME_INFORMATION = 0
-        $tmpStruct = 0
-    WEnd
+		$S_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION = 0
+		$S_SYSTEM_TIME_INFORMATION = 0
+		$tmpStruct = 0
+	WEnd
 EndFunc
 ; ========================================================================================================
 ; <Process_CPUUsage.au3>

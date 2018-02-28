@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.7
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.10
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -131,7 +131,7 @@ Global $portDisplay = 0	; stores the index of UUT which log is displayed in the 
 XPStyleToggle(1)	; force not in XP mode, necessary for color change in progress bar
 Global $connectionPattern = ""	; stores the pattern of UUT connections. "o" means not connected; "x" means connected but not ready for trigger; "+" means connected and ready for trigger
 Global $hMainWindow = GUICreate("Automation Server Version " & FileGetVersion ( @ScriptFullPath ) & " @ " & $ipServer & ":" & $port, 480*3, 360*2)	; the main display window
-Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 5, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
+Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 35, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
 Global $cLog = GUICtrlCreateEdit("UUT automation Progress", 240, 350, 960, 360, $WS_VSCROLL)	; the child window that displays the log of each UUT
 GUICtrlSendMsg($cLog, $EM_LIMITTEXT, -1, 0)
 Local $i
@@ -163,21 +163,24 @@ $cID = GUICtrlCreateLabel("PASSED", 60, 320, 150, 20)	; label of passed list
 GUICtrlSetFont($cID, 12, 400, 0, "Courier New")
 $cID = GUICtrlCreateLabel("FAILED", 1200+60, 320, 150, 20)	; label of failed list
 GUICtrlSetFont($cID, 12, 400, 0, "Courier New")
-$cID = GUICtrlCreateLabel("Time remains", 720 - 130, 320, 150, 20)	; label of main timer's name
+$cID = GUICtrlCreateLabel("Time remains", 700, 10, 120, 20)	; label of main timer's name
 GUICtrlSetFont($cID, 12, 400, 0, "Courier New")
-$cID = GUICtrlCreateLabel($connectionPattern, 1200-200, 330, 160, 20)	; label of connection pattern
+$cID = GUICtrlCreateLabel($connectionPattern, 1200 + 40, 700, 160, 20)	; label of connection pattern
 GUICtrlSetFont($cID, 10, 400, 0, "Courier New")
-Global $tLog = GUICtrlCreateLabel(" GF000000", 250, 330, 80, 15)	; label of UUT's serial number which log is displayed
-GUICtrlSetFont($tLog, 10, 700, 0, "Courier New")
+Global $tLog = GUICtrlCreateLabel(" GF000000", 250, 330, 95, 18)	; label of UUT's serial number which log is displayed
+GUICtrlSetFont($tLog, 12, 700, 0, "Courier New")
 GUICtrlSetBkColor($tLog, $COLOR_SKYBLUE)	; set the color of the lable the same as the buttons
 
-$nGUI[0] = GUICtrlCreateLabel("00:00:00", 720, 320, 81, 18)	; label of the main timer
+$nGUI[0] = GUICtrlCreateLabel("00:00:00", 700 + 130, 10, 81, 18)	; label of the main timer
 GUICtrlSetColor($nGUI[0], $COLOR_GREEN)	; set the main timer in color green
 GUICtrlSetFont($nGUI[0], 12, 400, 0, "Courier New")
 $hListPassed = GUICtrlCreateLabel( $listPassed, 5, 350, 230, 350 )	; the label of the passed list
 GUICtrlSetColor($hListPassed, $COLOR_GREEN)
 $hListFailed = GUICtrlCreateLabel( $listFailed, 1200 + 5, 350, 230, 350 )	; the label of the failed list
 GUICtrlSetColor($hListFailed, $COLOR_RED)
+Local $idComboBox = GUICtrlCreateCombo("Wisconsin", 700-200, 5, 180, 20)
+GUICtrlSetFont($idComboBox, 10, 700, 0, "Courier New")
+GUICtrlSetData($idComboBox, "Universal|West Veginia", "Universal")
 GUISetState(@SW_SHOW)
 
 ; the window $automationLogPort will display the main test result
@@ -208,8 +211,8 @@ While Not $testEnd	; main loop that get input, display the resilts
 	$currentTime = TimerDiff($hTimer)	; get current timer elaspe
 	AcceptConnection()	; accept new client's connection requist
 
-	If ($socketRaspberryPi1 <= 0) Or ($socketRaspberryPi2 <= 0) Then
-		If $batchMode And ($socketRaspberryPi1 <= 0) Then
+	If $batchMode Then
+		If $socketRaspberryPi1 <= 0 Then
 			$socketRaspberryPi1 = TCPConnect($ipRaspberryPi1, $portRaspberryPi)	; When RSP1 not connected, try to connect it
 			If $socketRaspberryPi1 > 0 Then
 				LogWrite($automationLogPort, "(Server) Raspberry Pi simulator 1 connected.")
@@ -220,7 +223,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 			EndIf
 		EndIf
 
-		If $batchMode And ($socketRaspberryPi2 <= 0) Then
+		If $socketRaspberryPi2 <= 0 Then
 			$socketRaspberryPi2 = TCPConnect($ipRaspberryPi2, $portRaspberryPi)	; When RSP2 not connected, try to connect it
 			If $socketRaspberryPi2 > 0 Then
 				LogWrite($automationLogPort, "(Server) Raspberry Pi simulator 2 connected.")
@@ -230,31 +233,36 @@ While Not $testEnd	; main loop that get input, display the resilts
 				$piHeartbeatTime = $currentTime + $piHeartbeatInterval
 			EndIf
 		EndIf
-	Else
-		$Recv = TCPRecv($socketRaspberryPi1,10000)	; when connected, try to receive message
-		If $Recv <> "" Then
-			LogWrite($piLogPort, "(Raspberry Pi1) Replied " & $Recv )
-			$piTimeout1 = $currentTime + 2 * 60 * 1000
+
+		If $socketRaspberryPi1 > 0 Then
+			$Recv = TCPRecv($socketRaspberryPi1, 100)	; when connected, try to receive message
+			If $Recv <> "" Then
+				LogWrite($piLogPort, "(Raspberry Pi1) Replied " & $Recv )
+				$piTimeout1 = $currentTime + 2 * 60 * 1000
+			EndIf
+		EndIf
+		If $socketRaspberryPi2 > 0 Then
+			$Recv = TCPRecv($socketRaspberryPi2,100)	; when connected, try to receive message
+			If $Recv <> "" Then
+				LogWrite($piLogPort, "(Raspberry Pi2) Replied " & $Recv )
+				$piTimeout2 = $currentTime + 2 * 60 * 1000
+			EndIf
 		EndIf
 
-		$Recv = TCPRecv($socketRaspberryPi2,10000)	; when connected, try to receive message
-		If $Recv <> "" Then
-			LogWrite($piLogPort, "(Raspberry Pi2) Replied " & $Recv )
-			$piTimeout2 = $currentTime + 2 * 60 * 1000
-		EndIf
-
-		If $currentTime > $piHeartbeatTime Then
+		If (($socketRaspberryPi1 > 0 ) Or ($socketRaspberryPi2 > 0)) And ($currentTime > $piHeartbeatTime) Then
 			SendCommand(0, "h0")
+			$piHeartbeatTime = $currentTime + $piHeartbeatInterval;
 			LogWrite($piLogPort, "(Server) Sent Raspberry Pi simulators heartbeat command.")
 		EndIf
 
-		If $currentTime > $piTimeout1 Then
+		If ($socketRaspberryPi1 > 0 ) And ($currentTime > $piTimeout1) Then
 			LogWrite($piLogPort, "(Server) Raspberry Pi simulator1 connection lost.")
 			LogWrite($automationLogPort, "(Server) Raspberry Pi simulator1 connection lost.")
 			MsgBox($MB_OK, "CopTrax Remote Test Server", "Raspberry Pi simulator1 connection lost.",2)
 			$socketRaspberryPi1 = -1
 		EndIf
-		If $currentTime > $piTimeout2 Then
+
+		If ($socketRaspberryPi2 > 0 ) And ($currentTime > $piTimeout2) Then
 			LogWrite($piLogPort, "(Server) Raspberry Pi simulator2 connection lost.")
 			LogWrite($automationLogPort, "(Server) Raspberry Pi simulator2 connection lost.")
 			MsgBox($MB_OK, "CopTrax Remote Test Server", "Raspberry Pi simulator2 connection lost.",2)
@@ -609,12 +617,13 @@ Func LogWrite($n,$s)
 	If $n > $maxConnections + 1 Then Return
 
 	_FileWriteLog($logFiles[$n],$s)
+	$s = @HOUR & ":" & @MIN & ":" & @SEC & " " & $s & @CRLF	; show the log with time stamps
 
 	If $n = $maxConnections + 1 Then
-		GUICtrlSetData($aLog, $s & @crlf, 1)
+		GUICtrlSetData($aLog, $s, 1)
+		Return
 	EndIf
 
-	$s = @HOUR & ":" & @MIN & ":" & @SEC & " " & $s & @CRLF	; show the log with time stamps
 	If ($n > 0) And ($n <= $maxConnections) And Not ( StringInStr($s, "heartbeat command") Or StringInStr($s, "; CPU #", 1))  Then
 		$logContent[$n] &= $s
 	EndIf
@@ -660,7 +669,7 @@ Func ReadTestCase($fileName)
 	Local $eof = false
 	Local $endofTestCase = ""
 	Local $i
-	For $i = $maxCommands-5 To $maxCommands - 1
+	For $i = $maxCommands - 4 To $maxCommands - 1	; last 4 commands
 		$endofTestCase &= $allCommands[$i]
 	Next
 
@@ -900,7 +909,7 @@ Func ProcessReply($n)
 	If StringInStr($reply, "quit") Then
 		If StringLen($commands[$n]) > 5 Then
 			LogWrite($automationLogPort, $boxID[$n] & " Tests will restart.")
-			GUICtrlSetData($nGUI[$n], "restart")
+			GUICtrlSetData($nGUI[$n], "interrupt")
 		Else
 			If $testFailures[$n] = 0 Then
 				LogWrite($n, "All tests passed.")
@@ -1024,6 +1033,7 @@ Func AcceptConnection ()
 	Local $currentTime = TimerDiff($hTimer)
 	Local $i = 0
 	Local $port = 0
+	Local $port0 = 0
 	For $i = $maxConnections To 1 Step -1
 		If $boxIP[$i] = $IP Then
 			If $sockets[$i] > 0 Then
@@ -1032,12 +1042,20 @@ Func AcceptConnection ()
 			EndIf
 
 			$port = $i
+			$port0 = $i
 			ExitLoop
 		EndIf
 		If $sockets[$i] < 0 Then	;Find the first open socket.
 			$port = $i
+			If $boxIP[$i] <> "" Then
+				$port0 = $i
+			EndIf
 		EndIf
 	Next
+
+	If $port0 > $port Then
+		$port = $port0
+	EndIf
 
 	$sockets[$port] = $newSocket	;assigns that socket the incomming connection.
 	$commands[$port] = "hold"	; Stores hold command to temperally hold the the commands until gets a name reply
@@ -1069,12 +1087,12 @@ Func SendCommand($n, $command)
 		WEnd
 		$heartBeatTimers[$n] = TimerDiff($hTimer) + 60 * 1000
 	Else	; send the command to raspberry pi simulators
-		If $socketRaspberryPi1 < 0 Then
-			LogWrite($automationLogPort, "(Server) Raspberry Pi 1 not connected yet. " & $command & " was not sent to it.")
+		If ($socketRaspberryPi1 < 0) And ($socketRaspberryPi2 < 0) Then
+			LogWrite($automationLogPort, "(Server) No Raspberry Pi is connected yet. " & $command & " was not sent.")
+			Return
 		EndIf
-		If $socketRaspberryPi2 < 0 Then
-			LogWrite($automationLogPort, "(Server) Raspberry Pi 2 not connected yet. " & $command & " was not sent to it.")
-		EndIf
+
+		$piHeartbeatTime = TimerDiff($hTimer) + $piHeartbeatInterval;
 
 		If ($command = "h0") Or ($command = "q0") Then
 			$piCommandHold = False
@@ -1085,7 +1103,6 @@ Func SendCommand($n, $command)
 			Return
 		EndIf
 
-		$piHeartbeatTime = TimerDiff($hTimer) + $piHeartbeatInterval;
 		$commandID += 1
 		If $commandID > 9 Then $commandID = 0
 		If ($socketRaspberryPi1 > 0) Then
@@ -1096,7 +1113,6 @@ Func SendCommand($n, $command)
 				LogWrite($piLogPort, "(Server) Sent " & $command & " to Raspberry Pi 1.")
 				$piCommandHold = ($command <> "h0")
 			EndIf
-			$piHeartbeatTime = TimerDiff($hTimer) + $piHeartbeatInterval;
 		EndIf
 
 		If ($socketRaspberryPi2 > 0) Then
@@ -1107,7 +1123,6 @@ Func SendCommand($n, $command)
 				LogWrite($piLogPort, "(Server) Sent " & $command & " to Raspberry Pi 2.")
 				$piCommandHold = ($command <> "h0")
 			EndIf
-			$piHeartbeatTime = TimerDiff($hTimer) + $piHeartbeatInterval;
 		EndIf
 	EndIf
 EndFunc
