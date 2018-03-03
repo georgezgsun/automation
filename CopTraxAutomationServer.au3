@@ -109,7 +109,7 @@ $allCommands[35] = "cleanup"
 ; This section defines the required parameters for automation test for each UUT
 Global $sockets[$maxConnections + 1]	; the socket for each UUT
 Global $logFiles[$maxConnections + 3]	; the handler of log file for each UUT
-Global $logContent[$maxConnections + 1]	; the handler of log file for each UUT
+Global $logContent[$maxConnections + 1]	; the simplified content of log file for each UUT
 Global $commands[$maxConnections + 1]	; the testcase for each UUT
 Global $commandTimers[$maxConnections + 1]	; the command timer for each UUT; when reaches, next test command shall be started
 Global $connectionTimers[$maxConnections + 1]	; the TCP connection timer for each UUT;  when reaches, TCP connection to that UUT may have lost
@@ -148,6 +148,7 @@ For $i = 0 To $maxConnections	; initialize the variables
 	$filesReceived[$i] = 0
 	$logFiles[$i] = 0
 	$fileToBeSent[$i] = ""
+	$boxIP[$i] = ""
 	$batchWait[$i] = True	; default value is true, not to hold other box entering batch align mode
 Next
 GUICtrlSetFont($aLog, 10, 400, 0, "Courier New")
@@ -161,6 +162,7 @@ For $i = 1 To $maxConnections
 	$pGUI[$i] = GUICtrlCreateProgress($x0 + 125, $y0, 350, 20)
 	$nGUI[$i] =	GUICtrlCreateLabel("        ", 80 + $x0, 3 + $y0, 5*9, 20)
 	$bGUI[$i] =	GUICtrlCreateButton($boxID[$i], 5 + $x0, $y0, 8*9, 20)
+	$logContent[$i] = ""
 	GUICtrlSetFont($bGUI[$i], 10, 700, 0, "Courier New")
 	GUICtrlSetBkColor($bGUI[$i], $COLOR_SKYBLUE)
 Next
@@ -319,8 +321,16 @@ While Not $testEnd	; main loop that get input, display the resilts
 		EndIf
 
 		If ($time0 > $heartBeatTimers[$i]) Then ; check the heart-beat timer
-			SendCommand($i, "heartbeat")	; send a command for heart_beat
-			PushCommand($i, "hold")	; hold any new command from executing only after get a continue response from the client
+			If $filesReceived[$i] Then
+				SendCommand($i, "eof")
+				LogWrite($i, "(Server) Last file upload not completed in one minute.")
+				LogWrite($i, "(Server) Send eof to client.")
+				FileClose($filesReceived[$i])
+			Else
+				SendCommand($i, "heartbeat")	; send a command for heart_beat
+				PushCommand($i, "hold")	; hold any new command from executing only after get a continue response from the client
+			EndIf
+
 			$heartBeatTimers[$i] = $time0 + 60*1000;
 			LogWrite($i, "(Server) Send heartbeat command to client.")
 			If $time0 < $commandTimers[$i] - 5*1000 Then
@@ -329,9 +339,15 @@ While Not $testEnd	; main loop that get input, display the resilts
 		EndIf
 
 		If $time0 > $connectionTimers[$i] Then	; test if the client is alive
-			LogWrite($i, "(Server) No reply from the client. Connection to client lost.")
-			LogWrite($automationLogPort, $boxID[$i] & " connection lost.")
-			CloseConnection($i)
+			LogWrite($i, "(Server) No reply from the client. Connection to client may have lost.")
+			$msg = PopCommand($i)	; pop the hold in command quere
+			If $msg <> "hold" Then
+				PushCommand($i, $msg)
+			EndIf
+			$connectionTimers[$i] += 10*1000;	; add 10s to connection timer
+
+			;LogWrite($automationLogPort, $boxID[$i] & " connection lost.")
+			;CloseConnection($i)
 		EndIf
 
 		If Not $batchWait[$i] Then	; If there is one not aligned
@@ -522,7 +538,7 @@ Func ParseCommand($n)
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client. Pause for " & $interval & " mins till next command.")
 
-		Case "settings", "createprofile", "upload"
+		Case "settings", "createprofile", "upload", "configure"
 			$arg = PopCommand($n)
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
@@ -577,16 +593,9 @@ Func ParseCommand($n)
 				$commandTimers[$n] += 10*1000	; add 10 more seconds
 			EndIf
 
-		Case "cleanup", "quit", "reboot", "endtest", "quittest"
+		Case "cleanup", "quit", "reboot", "endtest", "quittest", "restarttest", "restart"
 			SendCommand($n, $newCommand)	; send new test command to client
-			$commands[$n] = ""
-			LogWrite($n, "")
-			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
-			$commandTimers[$n] += 10*1000
-
-		Case "restarttest", "restart"
-			SendCommand($n, $newCommand)	; send new test command to client
-			$commands[$n] = "restart "
+			$command = StringInStr($newCommand, "start") ? "restart " : ""
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
 			$commandTimers[$n] += 10*1000
@@ -631,9 +640,6 @@ Func ParseCommand($n)
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
 			LogWrite($n, "(Server) Sending " & $sourceFileName & " in server to update " & $fileName & " in client.")
-			If StringInStr($sourceFileName, ".config") Then
-				LogWrite($n, "(Server) Configure the client to version " & $config)
-			EndIf
 			PushCommand($n, "hold send hold")	; hold any new command from executing only after get a continue response from the client
 
 		Case "send"
@@ -905,7 +911,7 @@ Func ProcessReply($n)
 	Local $reply
 	Local $len
 	Local $err
-	$time0 = TimerDiff($hTimer)
+
 	If $filesReceived[$n] Then	; This indicates the coming message shall be saved in file
 		$reply = TCPRecv($sockets[$n], 1000000, 1)	; receives in binary mode using longer length
 		$err = @error
@@ -994,8 +1000,8 @@ Func ProcessReply($n)
 
 	If StringInStr($reply, "quit") Then
 		If StringLen($commands[$n]) > 5 Then
-			LogWrite($automationLogPort, $boxID[$n] & " Tests will restart.")
-			LogWrite($n, " Tests will restart.")
+			LogWrite($automationLogPort, $boxID[$n] & " Tests was interrupted.")
+			LogWrite($n, " Tests was interrupted.")
 			GUICtrlSetData($nGUI[$n], "interrupt")
 		Else
 			If $testFailures[$n] = 0 Then
@@ -1012,9 +1018,9 @@ Func ProcessReply($n)
 				GUICtrlSetData($nGUI[$n], "FAILED" )
 				UpdateLists( "", $boxID[$n] )
 			EndIf
-			GUISetState(@SW_SHOW)
 			$testEndTime[$n] = 0
 		EndIf
+		GUICtrlSetState($nGui[$n], $GUI_SHOW)
 		CloseConnection($n)
 		Return True
 	EndIf
@@ -1167,12 +1173,21 @@ Func PushCommand($n, $newCommand)
 EndFunc
 
 Func SendCommand($n, $command)
+	Local $err
 	If $n > 0 Then
 		$sentPattern = ""
 		Local $len
 		While BinaryLen($command) ;LarryDaLooza's idea to send in chunks to reduce stress on the application
 			$len = TCPSend($sockets[$n],BinaryMid($command, 1, $maxSendLength))
-			$command = BinaryMid($command,$len+1)
+			$err = @error
+			If $err Then
+				LogWrite($n, "(Server) Connection lost with error : " & $err)
+				LogWrite($automationLogPort, "(Server) " & $boxID[$n] & " connection lost with error : " & $err)
+				CloseConnection($n)
+				$command = ""
+			Else
+				$command = BinaryMid($command,$len+1)
+			EndIf
 			$sentPattern &= $len & " "
 		WEnd
 		$heartBeatTimers[$n] = TimerDiff($hTimer) + 60 * 1000
