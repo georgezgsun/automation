@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.14)
+#pragma compile(FileVersion, 3.2.20.15)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -1021,7 +1021,11 @@ Func LogUpload($s)
 EndFunc
 
 Func IsRecording()
-	Return PixelGetColor(940,100, $mCopTrax) <> 0x038c4a
+	If $mCopTrax Then
+		Return PixelGetColor(940,100, $mCopTrax) <> 0x038c4a
+	Else
+		Return False
+	EndIf
 EndFunc
 
 Func CheckRecordedFiles($arg)
@@ -1510,6 +1514,7 @@ Func UploadFile()
 EndFunc
 
 Func UpdateFile($filename, $filesize)
+	$filename = StringReplace($filename, "|", " ")
 	$fileToBeUpdate = FileOpen($filename, 16+8+2)	; binary overwrite and force create directory
 	$bytesCounter = $filesize
 	Return True
