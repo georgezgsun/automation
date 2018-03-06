@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.23)
+#pragma compile(FileVersion, 3.2.20.28)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -145,9 +145,8 @@ Global $timeout = 1000
 
 While $mCopTrax = 0
 	$mCopTrax = WinActivate($titleCopTraxMain)
-	If Not IsDisplayCorrect() Then
+	If $mCopTrax And Not IsDisplayCorrect() Then
 		LogUpload("Coptrax Display malfunction. Restart it")
-		$mCopTrax = 0
 		ProcessClose($pCopTrax)
 		Sleep(1000)
 		RunCopTrax()
@@ -306,13 +305,19 @@ Func GetUserName()
 EndFunc
 
 Func QuitCopTrax()
-	$mCopTrax = 0
+	If Not ProcessExists($pCopTrax) Then
+		$mCopTrax = 0
+		LogUpload("No CopTrax App is running.")
+		Return true
+	EndIf
+
 	LogUpload("Try to stop CopTrax App.")
 
-	If Not ReadyForTest() Then ProcessClose($pCopTrax)
+	If Not ReadyForTest() Then Return ProcessClose($pCopTrax)
 
 	If IsRecording() And Not EndRecording(True) Then
 		LogUpload("A recording is in progress. Unable to end it. Now force to kill it.")
+		$mCopTrax = 0
 		Return ProcessClose($pCopTrax)
 	EndIf
 
@@ -323,6 +328,7 @@ Func QuitCopTrax()
 	If Not GetHandleWindowWait($titleInfo, "", 10) Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the Info window. " & @CRLF, 5)
 		LogUpload("Unable to open the info window by click on the info button.")
+		$mCopTrax = 0
 		Return ProcessClose($pCopTrax)
 	EndIf
 
@@ -331,13 +337,15 @@ Func QuitCopTrax()
 	If Not GetHandleWindowWait($titleLogin, "", 10) Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the Login window.",2)
 		LogUpload("Unable to close the Login window by click on Apply button.")
-		WinClose($titleLogin)
+		$mCopTrax = 0
 		Return ProcessClose($pCopTrax)
 	EndIf
 
 	Send("135799{TAB}{ENTER}")	; type the administator password
 	MouseClick("", 500, 150)
-	Return WinWaitClose($mCopTrax, "", 10)
+	Local $hWnd = $mCopTrax
+	$mCopTrax = 0
+	Return WinWaitClose($hWnd, "", 10)
 EndFunc
 
 Func TestUserSwitchFunction($arg)
@@ -1496,32 +1504,48 @@ EndFunc
 
 Func RunCopTrax()
 	Local $dir = "C:\Program Files (x86)\IncaX\CopTrax\"
+	LogUpload("Restarting CopTrax App.")
 	Run($dir & $pCopTrax, $dir)
 	$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
 	If $mCopTrax Then
-		$dir = GetUserName()
+		$userName = GetUserName()
 		Return True
 	Else
 		Return False
 	EndIf
 EndFunc
 
-Func Configure($config)
-	If Not QuitCopTrax() Then
-		Return False
+Func Configure($arg)
+	Local $config
+	Local $rst
+
+	$config = GetParameter($arg, "ct")	; configure the CopTrax App
+	If $config Then
+		LogUpload("Configuring CopTrax App to " & $config & ".")
+		$rst = QuitCopTrax() And CopyOver("CT-" & $config, "C:\Program Files (x86)\IncaX\CopTrax") And RunCopTrax()
 	EndIf
 
-	Local $file
-	Local $dir = "C:\Program Files (x86)\IncaX\CopTrax\"
-	If StringInStr($config, ".exe") Then
-		FileCopy("C:\CopTrax Support\" & $config, $dir & $pCopTrax, 1)
-	Else
-		$file = FileOpen($dir & "CopTrax.config", 2)	; write mode
-		FileWrite($file, "release=" & $config)
-		FileClose($file)
+	$config = GetParameter($arg, "ev")	; configure the Evidence Viewer
+	If $config Then
+		LogUpload("Configuring Evidence Viewer to " & $config & ".")
+		$rst = $rst And CopyOver("EV-" & $config, "C:\Program Files (x86)\CoptraxViewer\Test")
 	EndIf
 
-	Return RunCopTrax()
+	$config = GetParameter($arg, "bwc")	; configure the Body Ware Camera
+	If $config Then
+		LogUpload("Configuring Body Weaver Camera to " & $config & ".")
+		$rst = $rst And CopyOver("BWC-" & $config, "C:\Program Files (x86)\VIA\Icon Files")	; this is not a valid dir yet
+	EndIf
+
+	Return $rst
+EndFunc
+
+Func CopyOver($config, $destDir)
+	Sleep(500)	; sleep for a while waiting the fully close of original process
+	Local $sourceDir = "C:\CopTrax Support\" & $config
+	Local $rst = DirCopy($sourceDir, $destDir, 1)	; copies the directory $sourceDir and all sub-directories and files to $destDir in overwrite mode
+	Sleep(500)	; sleep for a while waiting the fully copy before new process begin
+	Return $rst
 EndFunc
 
 Func RunMsi($msi)
@@ -1606,6 +1630,8 @@ Func HotKeyPressed()
 	Switch @HotKeyPressed ; The last hotkey pressed.
 		Case "{Esc}", "^q" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
 			$testEnd = True	;	Stop testing marker
+			LogUpload("Automation is interrupt by operator.")
+			MsgBox($MB_OK, $mMB, "Automation is going to be shut down.",2)
 			Exit
 
 		Case "+!t" ; Keystroke is the Shift-Alt-t hotkey, to stop the CopTrax App
@@ -1712,7 +1738,7 @@ EndFunc
 
 Func GetParameter($parameters, $keyword)
 	If StringInStr($parameters, "=") Then
-		Local $parameter = StringRegExp($parameters, "(?:" & $keyword & "=)([a-zA-Z0-9]+)", $STR_REGEXPARRAYMATCH)
+		Local $parameter = StringRegExp($parameters, "(?:" & $keyword & "=)(.[^\s|]*)", $STR_REGEXPARRAYMATCH)
 		If $parameter = "" Then
 			Return ""
 		Else

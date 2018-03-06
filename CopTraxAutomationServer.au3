@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.25
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.27
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -59,7 +59,8 @@ Local $piTimeout1 = 0
 Local $piTimeout2 = 0
 Global $workDir = "C:\CopTraxTest\"
 Global $sentPattern = ""
-Global $config = "Default"
+;Global $config = "FactoryDefault"
+Global $config = "test_case"
 
 OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when the script is closed.
 Global $TCPListen = TCPListen ($ipServer, $port, $maxListen)
@@ -90,7 +91,7 @@ $allCommands[19] = "endrecord duration"
 $allCommands[20] = "startrecord duration"
 $allCommands[21] = "runapp"
 $allCommands[22] = "stopapp"
-$allCommands[23] = "configure version"
+$allCommands[23] = "configure ct ev bwc"
 $allCommands[24] = "info"
 $allCommands[25] = "camera"
 $allCommands[26] = "review"
@@ -222,6 +223,7 @@ Global $time0
 Local $msg
 Local $tLoop = ""
 Local $file
+Local $nextCommand
 While Not $testEnd	; main loop that get input, display the resilts
 	$time0 = Int(TimerDiff($hTimer))	; get current timer elaspe
 	AcceptConnection()	; accept new client's connection requist
@@ -321,14 +323,20 @@ While Not $testEnd	; main loop that get input, display the resilts
 		EndIf
 
 		If ($time0 > $heartBeatTimers[$i]) Then ; check the heart-beat timer
-			If $filesReceived[$i] Then
-				SendCommand($i, "eof")
-				LogWrite($i, "(Server) Last file upload not completed in one minute.")
-				LogWrite($i, "(Server) Send eof to client.")
-				FileClose($filesReceived[$i])
+			$nextCommand = PopCommand($i)
+			If $nextCommand = "hold" Then
+				$testFailures[$i] += 1
+				LogWrite($i, "(Server) Get no proper reply from the client for last command. Have to skip it.")
+				GUICtrlSetColor($pGUI[$i], $COLOR_RED)
+				If $filesReceived[$i] Then
+					SendCommand($i, "eof")
+					LogWrite($i, "(Server) Last file upload not completed in one minute.")
+					LogWrite($i, "(Server) Send eof to client.")
+					FileClose($filesReceived[$i])
+				EndIf
 			Else
 				SendCommand($i, "heartbeat")	; send a command for heart_beat
-				PushCommand($i, "hold")	; hold any new command from executing only after get a continue response from the client
+				PushCommand($i, "hold " & $nextCommand)	; hold any new command from executing only after get a continue response from the client
 			EndIf
 
 			$heartBeatTimers[$i] = $time0 + 60*1000;
@@ -340,14 +348,13 @@ While Not $testEnd	; main loop that get input, display the resilts
 
 		If $time0 > $connectionTimers[$i] Then	; test if the client is alive
 			LogWrite($i, "(Server) No reply from the client. Connection to client may have lost.")
-			$msg = PopCommand($i)	; pop the hold in command quere
-			If $msg <> "hold" Then
-				PushCommand($i, $msg)
-			EndIf
 			$connectionTimers[$i] += 10*1000;	; add 10s to connection timer
-
-			;LogWrite($automationLogPort, $boxID[$i] & " connection lost.")
-			;CloseConnection($i)
+			CloseConnection($i)
+			$testFailures[$i] += 1	; test failure counter +1
+			GUICtrlSetColor($pGUI[$i], $COLOR_RED)	; turn the progress bar in red
+			GUICtrlSetData($nGUI[$i], "interrupt")	; show interrupt message
+			$testEndTime[$i] = 0	; test ends
+			$remainTestTime[$i] = 0	; test ends
 		EndIf
 
 		If Not $batchWait[$i] Then	; If there is one not aligned
@@ -391,9 +398,6 @@ While Not $testEnd	; main loop that get input, display the resilts
 
 	If $msg = $idComboBox Then
 		$config = GUICtrlRead($idComboBox)
-		$file = FileOpen($workDir & "latest\CopTrax.config", 2)
-		FileWrite($file, "release=" & $config & @CRLF)
-		FileClose($file)
 		$currentTestCaseFile = $workdir & $config & ".txt"
 		LogWrite($automationLogPort, "Change the configure to " & $config & ".")
 	EndIf
@@ -592,7 +596,7 @@ Func ParseCommand($n)
 			$command = StringInStr($newCommand, "start") ? "restart " : ""
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
-			$commandTimers[$n] += 10*1000
+			;$commandTimers[$n] += 10*1000
 
 		Case "synctime"
 			$arg = @YEAR & @MON & @MDAY & @HOUR & @MIN & @SEC
@@ -1026,6 +1030,7 @@ Func ProcessReply($n)
 				UpdateLists( "", $boxID[$n] )
 			EndIf
 			$testEndTime[$n] = 0
+			$remainTestTime[$n] = 0
 		EndIf
 		GUICtrlSetState($nGui[$n], $GUI_SHOW)
 		CloseConnection($n)
