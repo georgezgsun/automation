@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.17
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.25
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -47,8 +47,8 @@ Global $totalConnection = 0
 Global $commandID = 0
 Local $ipServer = @IPAddress1
 Local $port = 16869
-Local $ipRaspberryPi1 = TCPNameToIP("10.0.9.199")
-Local $ipRaspberryPi2 = TCPNameToIP("10.0.9.198")
+Global $ipRaspberryPi1 = TCPNameToIP("10.0.9.199")
+Global $ipRaspberryPi2 = TCPNameToIP("10.0.9.198")
 Local $portRaspberryPi = 8080
 Global $socketRaspberryPi1 = -1
 Global $socketRaspberryPi2 = -1
@@ -64,7 +64,7 @@ Global $config = "Default"
 OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when the script is closed.
 Global $TCPListen = TCPListen ($ipServer, $port, $maxListen)
 
-Global $currentTestCaseFile = $workDir & "test_case.txt"
+Global $currentTestCaseFile = $workDir & $config & ".txt"
 Global Const $maxCommands = 36
 Global $allCommands[$maxCommands]	; this section defines the supported test commands
 $allCommands[0] = "record duration repeat interval"
@@ -90,8 +90,6 @@ $allCommands[19] = "endrecord duration"
 $allCommands[20] = "startrecord duration"
 $allCommands[21] = "runapp"
 $allCommands[22] = "stopapp"
-;$allCommands[21] = "runapp name"
-;$allCommands[22] = "stopapp name"
 $allCommands[23] = "configure version"
 $allCommands[24] = "info"
 $allCommands[25] = "camera"
@@ -130,14 +128,6 @@ Global $batchWait[$maxConnections + 1]	; stores the batch mode of each test duri
 Global $listFailed = ""	; the list of UUT's serial number that failed the automation test
 Global $listPassed = "" ; the list of UUT's serial number that passed the automation test
 Global $portDisplay = 0	; stores the index of UUT which log is displayed in the window
-
-XPStyleToggle(1)	; force not in XP mode, necessary for color change in progress bar
-Global $connectionPattern = ""	; stores the pattern of UUT connections. "o" means not connected; "x" means connected but not ready for trigger; "+" means connected and ready for trigger
-Global $hMainWindow = GUICreate("Automation Server Version " & FileGetVersion ( @ScriptFullPath ) & " @ " & $ipServer & ":" & $port, 480*3, 360*2)	; the main display window
-Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 5, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
-;Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 35, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
-Global $cLog = GUICtrlCreateEdit("UUT automation Progress", 240, 350, 960, 360, $WS_VSCROLL)	; the child window that displays the log of each UUT
-GUICtrlSendMsg($cLog, $EM_LIMITTEXT, -1, 0)
 Local $i
 For $i = 0 To $maxConnections	; initialize the variables
 	$sockets[$i] = -1	; Stores the sockets for each client
@@ -149,11 +139,15 @@ For $i = 0 To $maxConnections	; initialize the variables
 	$logFiles[$i] = 0
 	$fileToBeSent[$i] = ""
 	$boxIP[$i] = ""
+	$logContent[$i] = ""
 	$batchWait[$i] = True	; default value is true, not to hold other box entering batch align mode
 Next
-GUICtrlSetFont($aLog, 10, 400, 0, "Courier New")
-GUICtrlSetFont($cLog, 10, 400, 0, "Courier New")
-GUISetState(@SW_SHOW)
+
+XPStyleToggle(1)	; force not in XP mode, necessary for color change in progress bar
+Global $connectionPattern = ""	; stores the pattern of UUT connections. "o" means not connected; "x" means connected but not ready for trigger; "+" means connected and ready for trigger
+Global $hMainWindow = GUICreate("Automation Server Version " & FileGetVersion ( @ScriptFullPath ) & " @ " & $ipServer & ":" & $port, 480*3, 360*2)	; the main display window
+Global $cLog = GUICtrlCreateEdit("UUT automation Progress", 240, 350, 960, 360, $WS_VSCROLL)	; the child window that displays the log of each UUT
+GUICtrlSendMsg($cLog, $EM_LIMITTEXT, -1, 0)
 WinMove($hMainWindow, "", 240, 180)
 
 For $i = 1 To $maxConnections
@@ -162,7 +156,6 @@ For $i = 1 To $maxConnections
 	$pGUI[$i] = GUICtrlCreateProgress($x0 + 125, $y0, 350, 20)
 	$nGUI[$i] =	GUICtrlCreateLabel("        ", 80 + $x0, 3 + $y0, 5*9, 20)
 	$bGUI[$i] =	GUICtrlCreateButton($boxID[$i], 5 + $x0, $y0, 8*9, 20)
-	$logContent[$i] = ""
 	GUICtrlSetFont($bGUI[$i], 10, 700, 0, "Courier New")
 	GUICtrlSetBkColor($bGUI[$i], $COLOR_SKYBLUE)
 Next
@@ -171,8 +164,23 @@ $cID = GUICtrlCreateLabel("PASSED", 60, 320, 170, 20)	; label of passed list
 GUICtrlSetFont($cID, 12, 400, 0, "Courier New")
 $cID = GUICtrlCreateLabel("FAILED", 1200+60, 320, 170, 20)	; label of failed list
 GUICtrlSetFont($cID, 12, 400, 0, "Courier New")
-;$cID = GUICtrlCreateLabel("Time remains", 700, 10, 120, 20)	; label of main timer's name
+
 $cID = GUICtrlCreateLabel("Time remains", 720 - 130, 320, 120, 20)	; label of main timer's name
+$nGUI[0] = GUICtrlCreateLabel("00:00:00", 720, 320, 81, 18)	; label of the main timer
+Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 5, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
+Global $idComboBox = $cID
+;$cID = GUICtrlCreateLabel("Time remains", 700, 10, 120, 20)	; label of main timer's name
+;$nGUI[0] = GUICtrlCreateLabel("00:00:00", 700 + 130, 10, 81, 18)	; label of the main timer
+;Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 35, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
+;Global $idComboBox = GUICtrlCreateCombo($config, 700-200, 5, 180, 20)
+GUICtrlSetFont($idComboBox, 10, 700, 0, "Courier New")
+GUICtrlSetColor($nGUI[0], $COLOR_GREEN)	; set the main timer in color green
+GUICtrlSetFont($nGUI[0], 12, 400, 0, "Courier New")
+Global $comboList = ""
+UpdateConfigCombo($idComboBox)
+
+GUICtrlSetFont($aLog, 10, 400, 0, "Courier New")
+GUICtrlSetFont($cLog, 10, 400, 0, "Courier New")
 GUICtrlSetFont($cID, 12, 400, 0, "Courier New")
 $cID = GUICtrlCreateLabel($connectionPattern, 1200 + 40, 700, 160, 20)	; label of connection pattern
 GUICtrlSetFont($cID, 10, 400, 0, "Courier New")
@@ -181,26 +189,18 @@ GUICtrlSetFont($tLog, 12, 700, 0, "Courier New")
 GUICtrlSetBkColor($tLog, $COLOR_SKYBLUE)	; set the color of the lable the same as the buttons
 Local $cLoop = GUICtrlCreateLabel("00:00:00", 40, 700, 60, 15)	; label of connection pattern
 
-;$nGUI[0] = GUICtrlCreateLabel("00:00:00", 700 + 130, 10, 81, 18)	; label of the main timer
-$nGUI[0] = GUICtrlCreateLabel("00:00:00", 720, 320, 81, 18)	; label of the main timer
-GUICtrlSetColor($nGUI[0], $COLOR_GREEN)	; set the main timer in color green
-GUICtrlSetFont($nGUI[0], 12, 400, 0, "Courier New")
 $hListPassed = GUICtrlCreateLabel( $listPassed, 5, 350, 230, 350 )	; the label of the passed list
 GUICtrlSetColor($hListPassed, $COLOR_GREEN)
 $hListFailed = GUICtrlCreateLabel( $listFailed, 1200 + 5, 350, 230, 350 )	; the label of the failed list
 GUICtrlSetColor($hListFailed, $COLOR_RED)
-Local $idComboBox = $cID
-;Local $idComboBox = GUICtrlCreateCombo($config, 700-200, 5, 180, 20)
-;GUICtrlSetFont($idComboBox, 10, 700, 0, "Courier New")
-;$config = GUICtrlRead($idComboBox)
 GUISetState(@SW_SHOW)
-UpdateConfigCombo($idComboBox)
 
 ; the window $automationLogPort will display the main test result
 $logFiles[$automationLogPort] =FileOpen($workDir & "log\automationtest.log", 1+8) 	; Clear the client name for future updating from the client
 $logFiles[$piLogPort] =FileOpen($workDir & "log\RaspberryPi.log", 1+8) 	; Clear the client name for future updating from the client
 LogWrite($automationLogPort, "")
 LogWrite($automationLogPort, "A new batch of automation test starts.")
+LogWrite($automationLogPort, "Current setting of configuration for burn-in is " & $config & ".")
 LogWrite($piLogPort, "")
 LogWrite($piLogPort, "A new batch of automation test starts.")
 
@@ -365,8 +365,8 @@ While Not $testEnd	; main loop that get input, display the resilts
 		GUICtrlSetData( $cID, $connectionPattern )
 	EndIf
 
+	UpdateConfigCombo($idComboBox)	; check and update the combo list
 	$batchAligned = $batchCheck
-
 	If $tempTime <> $lastEndTime Then
 		GUICtrlSetData($nGUI[0], toHMS($lastEndTime))
 		$tempTime = $lastEndTime
@@ -391,20 +391,16 @@ While Not $testEnd	; main loop that get input, display the resilts
 
 	If $msg = $idComboBox Then
 		$config = GUICtrlRead($idComboBox)
-
 		$file = FileOpen($workDir & "latest\CopTrax.config", 2)
-		Local $fileContent = "release=" & $config & @CRLF
-		FileWrite($file, $fileContent)
+		FileWrite($file, "release=" & $config & @CRLF)
 		FileClose($file)
-
-		UpdateConfigCombo($idComboBox)	; update the combo list every time operator click the combo button
+		$currentTestCaseFile = $workdir & $config & ".txt"
+		LogWrite($automationLogPort, "Change the configure to " & $config & ".")
 	EndIf
 
 	$tempPattern = Int(TimerDiff($hTimer) - $time0)
 	If $tempPattern > $maxLoopTime Then
 		LogWrite($automationLogPort, "Loop time is " & $tempPattern & "ms. It is too long. Consider to restart the server.")
-;		Run($workDir & "RestartServer.bat", $workDir)
-;		Exit
 	EndIf
 	$tempPattern = tobar($tempPattern)
 
@@ -424,12 +420,9 @@ Func UpdateConfigCombo($id)
 	Local $fileList = _FileListToArray($workDir & "latest","*.mcfg", 1)	; list *.config files in ..\latest folder
 	$fileList = StringRegExpReplace(_ArrayToString($fileList), "(\.mcfg)", "")
 	$fileList = StringRegExpReplace($fileList, "(^[0-9].)", "")
-	GUICtrlSetData($id, "|" & $fileList, $config)
-
-	If StringLower($config) = "default" Then
-		$currentTestCaseFile = $workdir & "test_case.txt"
-	Else
-		$currentTestCaseFile = $workdir & $config & ".txt"
+	If $fileList <> $comboList Then
+		$comboList = $fileList
+		GUICtrlSetData($id, "|" & $fileList, $config)
 	EndIf
 EndFunc
 
@@ -507,6 +500,7 @@ Func ParseCommand($n)
 	Local $duration
 	Local $repeat
 	Local $interval
+	Local $IP
 	Switch $newCommand	; process the new command
 		Case "record"
 			$arg = PopCommand($n)
@@ -663,6 +657,15 @@ Func ParseCommand($n)
 		Case "batchtest"
 			$arg = StringLower(PopCommand($n))
 			LogWrite($n, "")
+
+			$IP = TCPNameToIP($arg)
+			If $IP Then
+				LogWrite($n, "(Server) Select the Raspberry Pi simulator at " & $IP & " to do the triggers test.")
+				LogWrite($automationLogPort, "(Server) Select the Raspberry Pi simulator at " & $IP & " to do the triggers test.")
+				$ipRaspberryPi1 = $IP
+				$ipRaspberryPi2 = @IPAddress1
+			EndIf
+
 			If $arg = "align" Then
 				If $batchMode Then
 					LogWrite($n, "(Server) PASSED. Wait till all other clients aligned.")
@@ -951,6 +954,10 @@ Func ProcessReply($n)
 	EndIf
 	$len = BinaryLen($reply)
 	If $len = 0 Then Return False   ; receive nothing, return false
+	If IsBinary($reply) Then
+		LogWrite($n, "(Server) Received unsaved upload file content with " & $len & " bytes.")
+		Return True
+	EndIf
 
 	Local $newCommand
 	Local $msg = StringSplit($reply, " ")
@@ -1176,20 +1183,20 @@ Func SendCommand($n, $command)
 	Local $err
 	If $n > 0 Then
 		$sentPattern = ""
-		Local $len
-		While BinaryLen($command) ;LarryDaLooza's idea to send in chunks to reduce stress on the application
+		Local $len = 1
+		While BinaryLen($command) And $len ; to send in chunks to reduce stress on the application
 			$len = TCPSend($sockets[$n],BinaryMid($command, 1, $maxSendLength))
 			$err = @error
-			If $err Then
-				LogWrite($n, "(Server) Connection lost with error : " & $err)
-				LogWrite($automationLogPort, "(Server) " & $boxID[$n] & " connection lost with error : " & $err)
-				CloseConnection($n)
-				$command = ""
-			Else
-				$command = BinaryMid($command,$len+1)
-			EndIf
+			$command = BinaryMid($command,$len+1)
 			$sentPattern &= $len & " "
 		WEnd
+		If $err Then
+			LogWrite($n, "(Server) Connection lost with error : " & $err)
+			LogWrite($automationLogPort, "(Server) " & $boxID[$n] & " connection lost with error : " & $err)
+			CloseConnection($n)
+			$command = ""
+		EndIf
+
 		$heartBeatTimers[$n] = TimerDiff($hTimer) + 60 * 1000
 	Else	; send the command to raspberry pi simulators
 		If ($socketRaspberryPi1 < 0) And ($socketRaspberryPi2 < 0) Then
@@ -1236,6 +1243,7 @@ Func HotKeyPressed()
    Switch @HotKeyPressed ; The last hotkey pressed.
 	  Case "!{Esc}" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
 	  $testEnd = True	;	Stop testing marker
+	  Exit
 
     EndSwitch
  EndFunc   ;==>HotKeyPressed

@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.15)
+#pragma compile(FileVersion, 3.2.20.23)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -145,7 +145,15 @@ Global $timeout = 1000
 
 While $mCopTrax = 0
 	$mCopTrax = WinActivate($titleCopTraxMain)
-	If $mCopTrax <> 0 Then
+	If Not IsDisplayCorrect() Then
+		LogUpload("Coptrax Display malfunction. Restart it")
+		$mCopTrax = 0
+		ProcessClose($pCopTrax)
+		Sleep(1000)
+		RunCopTrax()
+	EndIf
+
+	If $mCopTrax Then
 		$userName = GetUserName()
 		If IsRecording() Then
 			EndRecording(True)	; stop any recording in progress before automation test
@@ -210,11 +218,10 @@ While Not $testEnd
    Sleep(100)
 WEnd
 
-If IsRecording() Then
-	EndRecording(True)	; stops any recording in progress before automation test ends
-EndIf
-
 If $restart Then
+	If IsRecording() Then
+		EndRecording(True)	; stops any recording in progress before automation test ends
+	EndIf
 	LogUpload("quit The automation test will restart.")
 	MsgBox($MB_OK, $mMB, "Reatarting the automation test.",2)
 	RestartAutomation()
@@ -299,11 +306,14 @@ Func GetUserName()
 EndFunc
 
 Func QuitCopTrax()
-	If Not ReadyForTest() Then  Return False
+	$mCopTrax = 0
 	LogUpload("Try to stop CopTrax App.")
+
+	If Not ReadyForTest() Then ProcessClose($pCopTrax)
+
 	If IsRecording() And Not EndRecording(True) Then
-		LogUpload("A recording is in progress. Unable to end it.")
-		Return False
+		LogUpload("A recording is in progress. Unable to end it. Now force to kill it.")
+		Return ProcessClose($pCopTrax)
 	EndIf
 
 	AutoItSetOption("SendKeyDelay", 200)
@@ -313,8 +323,7 @@ Func QuitCopTrax()
 	If Not GetHandleWindowWait($titleInfo, "", 10) Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the Info window. " & @CRLF, 5)
 		LogUpload("Unable to open the info window by click on the info button.")
-		WinClose($titleInfo)
-		Return False
+		Return ProcessClose($pCopTrax)
 	EndIf
 
 	Sleep(500)
@@ -323,14 +332,12 @@ Func QuitCopTrax()
 		MsgBox($MB_OK, $mMB, "Unable to trigger the Login window.",2)
 		LogUpload("Unable to close the Login window by click on Apply button.")
 		WinClose($titleLogin)
-		Return False
+		Return ProcessClose($pCopTrax)
 	EndIf
 
 	Send("135799{TAB}{ENTER}")	; type the administator password
 	MouseClick("", 500, 150)
-	Local $rst = WinWaitClose($mCopTrax, "", 10)
-	$mCopTrax = 0
-	Return $rst
+	Return WinWaitClose($mCopTrax, "", 10)
 EndFunc
 
 Func TestUserSwitchFunction($arg)
@@ -441,8 +448,7 @@ Func CreatNewAccount($name, $password)
 		ControlClick($txt, "restart", "OK")
 		LogUpload("CopTrax will restart. Automation will wait.")
 		$mCopTrax = 0
-		Sleep(5000)	; wait a little bit for the CopTrax to restart
-		Return True
+		Sleep(4000)	; wait a little bit for the CopTrax to restart
 	EndIf
 
 	Sleep(1000)
@@ -886,7 +892,7 @@ Func TestCameraSwitchFunction()
 	Return True
 EndFunc
 
-Func TakeScreenCapture($comment, $hWnd)
+Func GetNewFilename()
 	Local $char1 = Chr(65+@HOUR)
 	Local $char2 = 65+@MIN
 	If $char2 > 90 Then
@@ -905,10 +911,14 @@ Func TakeScreenCapture($comment, $hWnd)
 		$Char3 = 48 + @SEC - 26 - 26
 	EndIf
 	$Char3 = Chr($Char3)
+	Return $boxID & $Char1 & $Char2 & $Char3
+EndFunc
 
-	Local $screenFile = $workDir & "tmp\" & $boxID & $Char1 & $Char2 & $Char3 & ".jpg"
+Func TakeScreenCapture($comment, $hWnd)
+	Local $filename = GetNewFilename() & ".jpg"
+	Local $screenFile = $workDir & "tmp\" & $filename
 	If _ScreenCapture_CaptureWnd($screenFile, $hWnd) Then
-		LogUpload("Captured " & $comment & " screen file " & $boxID & $Char1 & $Char2 & $Char3 & ".jpg. It is now on the way sending to server.")
+		LogUpload("Captured " & $comment & " screen file " & $filename & ". It is now on the way sending to server.")
 		$filesToBeSent =  $screenFile & "|" & $filesToBeSent
 		Return FileGetSize($screenFile)
 	Else
@@ -942,9 +952,12 @@ Func TestPhotoFunction()
 	EndIf
 
 	Local $photoFile = GetLatestFile(@LocalAppDataDir & "\coptrax\" & $userName & "\photo", "*.jpg")
+	Local $filename = GetNewFilename() & ".jpg"
 	If $photoFile <> "" Then
-		$filesToBeSent =  $photoFile & "|" & $filesToBeSent
-		LogUpload("Got last photo in " & $photoFile & ". It is on the way sending to server.")
+		LogUpload("Got last photo in " & $filename & ". It is on the way sending to server.")
+		$filename = $workDir & "tmp\" & $filename
+		FileCopy($photoFile, $filename, 1+8)
+		$filesToBeSent = $filename & "|" & $filesToBeSent
 		Return True
 	Else
 		Return False
@@ -1024,6 +1037,19 @@ Func IsRecording()
 	If $mCopTrax Then
 		Return PixelGetColor(940,100, $mCopTrax) <> 0x038c4a
 	Else
+		Return False
+	EndIf
+EndFunc
+
+Func IsDisplayCorrect()
+	If $mCopTrax = 0 Then Return False
+	Local $color1 = PixelGetColor(925, 120, $mCopTrax)
+	Local $color2 = PixelGetColor(1000, 508, $mCopTrax)
+	Local $color3 = PixelGetColor(240, 550, $mCopTrax)
+	If ($color1 = $color2) And ($color1 = 0xF0F0F0) And ($color3 = 0) Then
+		Return True
+	Else
+		LogUpload("Pixel at (934,122) is of color " & $color1 & ". Pixel at (1016,510) is of color " & $color2 & ". Pixel at (240,550) is of color " & $color3 & ".")
 		Return False
 	EndIf
 EndFunc
@@ -1235,15 +1261,15 @@ Func ListenToNewCommand()
 	Switch StringLower($Recv[1])
 		Case "runapp" ; get a stop command, going to stop testing and quit
 			MsgBox($MB_OK, $mMB, "Re-starting the CopTrax",2)
-			Run("c:\Program Files (x86)\IncaX\CopTrax\IncaXPCApp.exe", "c:\Program Files (x86)\IncaX\CopTrax")
-			LogUpload("PASSED Start the CopTrax")
+			RunCopTrax()
+			LogUpload("PASSED to start the CopTrax II app.")
 
 		Case "stopapp" ; get a stop command, going to stop testing and quit
 			MsgBox($MB_OK, $mMB, "Try to stop CopTrax App.",2)
 			If QuitCopTrax() Then
-				LogUpload("PASSED")
+				LogUpload("PASSED to stop CopTrax II app.")
 			Else
-				LogUpload("FAILED to stop CopTrax II.")
+				LogUpload("FAILED to stop CopTrax II app.")
 			EndIf
 
 		Case "startrecord", "record" ; Get a record command. going to test the record function
@@ -1382,6 +1408,14 @@ Func ListenToNewCommand()
 			$sendBlock = False
 			LogUpload("Continue End of file stransfer. " & $sentPattern)
 
+		Case "configure"
+			MsgBox($MB_OK, $mMB, "Configuring the client.",2)
+			If ($Recv[0] >= 2) And Configure($Recv[2]) Then
+				LogUpload("PASSED configuration of the client. The client is now of version " & $appVersion)
+			Else
+				LogUpload("FAILED configuration of the client. The client is now of version " & $appVersion)
+			EndIf
+
 		Case "send"
 			$sentPattern = ""
 			While BinaryLen($fileContent) ;LarryDaLooza's idea to send in chunks to reduce stress on the application
@@ -1443,16 +1477,7 @@ Func ListenToNewCommand()
 			FileWriteLine($file, "Echo Welcome to use CopTrax II")
 			FileClose($file)
 
-			If IsRecording() Then
-				EndRecording(True)	; stop any recording in progress before automation test
-			EndIf
-
-			If ($mCopTrax <> 0) And Not QuitCopTrax() Then
-				LogUpload("FAILED to clean the box up. Unable to stop the CopTrax App. It is required to be stopped before cleanup can take effect.")
-			Else
-				LogUpload("PASSED to clean the box up.")
-			EndIf
-
+			ProcessClose($pCopTrax)
 			LogUpload("Box is going to be shutdown.")
 			Run("C:\Coptrax Support\Tools\Cleanup.bat", "C:\Coptrax Support\Tools\", @SW_HIDE)
 			$testEnd = True
@@ -1467,7 +1492,64 @@ Func ListenToNewCommand()
 	EndSwitch
 
 	Return True
- EndFunc
+EndFunc
+
+Func RunCopTrax()
+	Local $dir = "C:\Program Files (x86)\IncaX\CopTrax\"
+	Run($dir & $pCopTrax, $dir)
+	$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
+	If $mCopTrax Then
+		$dir = GetUserName()
+		Return True
+	Else
+		Return False
+	EndIf
+EndFunc
+
+Func Configure($config)
+	If Not QuitCopTrax() Then
+		Return False
+	EndIf
+
+	Local $file
+	Local $dir = "C:\Program Files (x86)\IncaX\CopTrax\"
+	If StringInStr($config, ".exe") Then
+		FileCopy("C:\CopTrax Support\" & $config, $dir & $pCopTrax, 1)
+	Else
+		$file = FileOpen($dir & "CopTrax.config", 2)	; write mode
+		FileWrite($file, "release=" & $config)
+		FileClose($file)
+	EndIf
+
+	Return RunCopTrax()
+EndFunc
+
+Func RunMsi($msi)
+	Local $dir = "C:\CopTrax Support\"
+	If Not FileExists($dir & $msi) Then
+		Return False
+	EndIf
+
+	Local $pMsi = Run($dir & $msi, $dir)
+	Local $hMsi = GetHandleWindowWait("CopTrax")
+	If $hMsi And ControlClick($hMsi, "", "&Next>") And ControlClick($hMsi, "", "I &Agree") And ControlClick($hMsi, "", "&Next>") And ControlClick($hMsi, "", "&Next>") And ControlClick($hMsi, "", "&Next>") Then
+		Sleep(5000)
+		If WinExists("CopTrax", "OK") Then
+			ControlClick("CopTrax", "OK", "OK")
+			LogUpload("Unable to install the app. The error messages are " & WinGetText("CopTrax", "OK"))
+			ProcessClose($pCopTrax)
+			Return False
+		EndIf
+
+		LogUpload("Complete the installation. The messages are " & WinGetText($hMsi))
+		ControlClick($hMsi, "", "&Close")
+
+		Return ProcessExists($pMsi)
+	Else
+		ProcessClose($pMsi)
+		Return False
+	EndIf
+EndFunc
 
 Func EncodeToSystemTime($datetime)
 	Local $yyyy = Number(StringMid($datetime,1,4))
@@ -1524,6 +1606,7 @@ Func HotKeyPressed()
 	Switch @HotKeyPressed ; The last hotkey pressed.
 		Case "{Esc}", "^q" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
 			$testEnd = True	;	Stop testing marker
+			Exit
 
 		Case "+!t" ; Keystroke is the Shift-Alt-t hotkey, to stop the CopTrax App
 			MsgBox($MB_OK, $mMB, "Terminating the CopTrax. Bye",2)
@@ -1758,7 +1841,6 @@ EndFunc
 ; Author: Ascend4nt
 ; ========================================================================================================
 
-
 ; ==============================================================================================
 ; Func _CPUGetTotalProcessorTimes()
 ;
@@ -1796,7 +1878,6 @@ Func _CPUGetTotalProcessorTimes()
 	Return $aTimes
 EndFunc
 
-
 ; ==============================================================================================
 ; Func _ProcessUsageTracker_Destroy(ByRef $aProcUsage)
 ;
@@ -1818,7 +1899,6 @@ Func _ProcessUsageTracker_Destroy(ByRef $aProcUsage)
 	$aProcUsage = ""
 	Return True
 EndFunc
-
 
 ; ==============================================================================================
 ; Func _ProcessUsageTracker_Create($sProcess, $nPID = 0)
@@ -1912,7 +1992,6 @@ Func _ProcessUsageTracker_Create($sProcess, $nPID = 0)
 
 	Return $aProcUsage
 EndFunc
-
 
 ; ==============================================================================================
 ; Func _ProcessUsageTracker_GetUsage(ByRef $aProcUsage)
