@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.28)
+#pragma compile(FileVersion, 3.2.20.33)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -64,6 +64,7 @@ Global $userName = ""
 Global $sentPattern = ""
 
 Global $filesToBeSent = ""
+Global $uploadMode = "idle"
 Global $fileContent = ""
 Global $bytesCounter = 0
 Global $workDir = @ScriptDir & "\"
@@ -927,7 +928,7 @@ Func TakeScreenCapture($comment, $hWnd)
 	Local $screenFile = $workDir & "tmp\" & $filename
 	If _ScreenCapture_CaptureWnd($screenFile, $hWnd) Then
 		LogUpload("Captured " & $comment & " screen file " & $filename & ". It is now on the way sending to server.")
-		$filesToBeSent =  $screenFile & "|" & $filesToBeSent
+		PushFile($screenFile)
 		Return FileGetSize($screenFile)
 	Else
 		LogUpload("Unable to capture " & $comment & " screen file.")
@@ -965,7 +966,7 @@ Func TestPhotoFunction()
 		LogUpload("Got last photo in " & $filename & ". It is on the way sending to server.")
 		$filename = $workDir & "tmp\" & $filename
 		FileCopy($photoFile, $filename, 1+8)
-		$filesToBeSent = $filename & "|" & $filesToBeSent
+		PushFile($filename)
 		Return True
 	Else
 		Return False
@@ -1374,11 +1375,11 @@ Func ListenToNewCommand()
 
 		Case "upload"
 			MsgBox($MB_OK, $mMB, "Testing file upload function",2)
-			If $Recv[0] >= 2 Then
-				$filesToBeSent =  $Recv[2] & "|" & $filesToBeSent
-				UploadFile()
+			If $Recv[0] >= 2 And UploadFile($Recv[2]) Then
+				LogUpload("PASSED file upload set.")
+			Else
+				LogUpload("FAILED file upload set.")
 			EndIf
-			LogUpload("PASSED file upload start.")
 
 		Case "update"
 			MsgBox($MB_OK, $mMB, "Testing file update function",2)
@@ -1415,6 +1416,7 @@ Func ListenToNewCommand()
 		Case "eof"
 			$sendBlock = False
 			LogUpload("Continue End of file stransfer. " & $sentPattern)
+			If $uploadMode = "all" Then UploadFile("all")
 
 		Case "configure"
 			MsgBox($MB_OK, $mMB, "Configuring the client.",2)
@@ -1446,7 +1448,10 @@ Func ListenToNewCommand()
 
 		Case "status", "heartbeat"
 			ReportCPUMemory()
-			UploadFile()
+			If $uploadMode = "idle" Then
+				UploadFile("now")
+				$uploadMode = "idle"
+			EndIf
 
 		Case "info"
 			LogUpload("Continue function not programmed yet.")
@@ -1490,6 +1495,7 @@ Func ListenToNewCommand()
 			Run("C:\Coptrax Support\Tools\Cleanup.bat", "C:\Coptrax Support\Tools\", @SW_HIDE)
 			$testEnd = True
 			$restart = False
+			Exit
 
 		Case "reboot"
 			LogUpload("quit Going to reboot the box.")
@@ -1542,7 +1548,7 @@ EndFunc
 
 Func CopyOver($config, $destDir)
 	Sleep(500)	; sleep for a while waiting the fully close of original process
-	Local $sourceDir = "C:\CopTrax Support\" & $config
+	Local $sourceDir = "C:\CopTrax Support\Configures\" & $config
 	Local $rst = DirCopy($sourceDir, $destDir, 1)	; copies the directory $sourceDir and all sub-directories and files to $destDir in overwrite mode
 	Sleep(500)	; sleep for a while waiting the fully copy before new process begin
 	Return $rst
@@ -1599,24 +1605,47 @@ Func SyncTimeZone($tmz)
 	Return $s[2] = $tmz
 EndFunc
 
-Func UploadFile()
-	If $filesToBeSent = "" Then Return
+Func UploadFile($arg)
+	If $arg = "" Then Return True
+	Switch StringLower($arg)
+		Case "all"
+			$uploadMode = "all"
+		Case "idle"
+			$uploadMode = "idle"
+		Case "wait"
+			$uploadMode = "wait"
+		Case "now"
+			$uploadMode = "now"
+		Case Else
+			PushFile($arg)
+	EndSwitch
+	If $uploadMode = "wait" Or $uploadMode = "idle" Then Return True
 
-	Local $fileName = StringSplit($filesToBeSent, "|")
-	$filesToBeSent = StringTrimLeft($filesToBeSent, StringLen($fileName[1])+1)
-	If $fileName[1] = "" Then Return
+	Local $filename = PopFile()
+	If $filename = "" Then Return True
 
-	Local $file = FileOpen($filename[1],16)
+	Local $file = FileOpen($filename,16)
 	If $file = -1 Then
-		LogUpload($filename[1] & " does not exist.")
-		Return
+		LogUpload($filename & " does not exist.")
+		Return False
 	EndIf
 
 	$fileContent = FileRead($file)
 	FileClose($file)
-	Local $fileLen = BinaryLen($fileContent)
-	Sleep(1000)
-	LogUpload("file " & $filename[1] & " " & $fileLen)
+	LogUpload("file " & $filename & " " & BinaryLen($fileContent))
+	Return True
+EndFunc
+
+Func PushFile($newFile)
+	If $newFile <> "" Then $filesToBeSent &= $newFile & " "
+	Return
+EndFunc
+
+Func PopFile()
+	Local $length = StringInStr($filesToBeSent, " ", 2)
+	Local $nextFile = StringLeft($filesToBeSent, $length-1)
+	$filesToBeSent = StringTrimLeft($filesToBeSent, $length)
+	Return $nextFile
 EndFunc
 
 Func UpdateFile($filename, $filesize)
@@ -1691,26 +1720,21 @@ Func ReadConfig()
 	Local $file = FileOpen($configFile,0)	; for test case reading, readonly
 	Local $aLine
 	Local $aTxt
-	Local $eof
+	Local $eof = False
 	Do
-		$aTxt = FileReadLine($file)
-		$eof = @error < 0
-		If $aTxt = "" Then ContinueLoop
+		$aLine = FileReadLine($file)
+		If @error < 0 Then ExitLoop
 
-		$aLine = StringSplit($aTxt, " ")
-		If ($aLine = "") Or ($aLine[0] < 2) Then ContinueLoop
+		$aLine = StringRegExpReplace($aLine, "([;].*)", "")
+		$aLine = StringRegExpReplace($aLine, "([//].*)", "")
+		If $aLine = "" Then ContinueLoop
 
-		Switch StringLower($aLine[1])
-			Case "ip"
-				$ip = TCPNameToIP($aLine[2])
-			Case "port"
-				$port = Int($aLine[2])
-				If $port < 10000 Or $port > 65000 Then
-				$port = 16869
-				EndIf
-			Case "name"
-				$boxID = StringLeft(StringStripWS($aLine[2], 3), 8)
-		EndSwitch
+		$aTxt = GetParameter($aLine, "ip")
+		If $aTxt Then $ip = TCPNameToIP($aTxt)
+		$aTxt = GetParameter($aLine, "port")
+		If $aTxt Then $port = CorrectRange(Int($aTxt), 10000, 65000)
+		$aTxt = GetParameter($aLine, "name")
+		If $aTxt Then $boxID = $aTxt
 	Until $eof
 
 	FileClose($file)
@@ -1720,6 +1744,7 @@ Func RenewConfig()
 	Local $file = FileOpen($configFile,1)	; Open config file in over-write mode
 	FileWriteLine($file, "")
 	FileWriteLine($file, "name " & $boxID & " ")
+	FileWriteLine($file, "name=" & $boxID & " ")
 	FileClose($file)
 EndFunc
 

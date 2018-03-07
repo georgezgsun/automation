@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.27
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.32
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -59,8 +59,8 @@ Local $piTimeout1 = 0
 Local $piTimeout2 = 0
 Global $workDir = "C:\CopTraxTest\"
 Global $sentPattern = ""
-;Global $config = "FactoryDefault"
-Global $config = "test_case"
+Global $config = "FactoryDefault"
+Local $cheatSheet = ReadCheatSheet()
 
 OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when the script is closed.
 Global $TCPListen = TCPListen ($ipServer, $port, $maxListen)
@@ -129,6 +129,7 @@ Global $batchWait[$maxConnections + 1]	; stores the batch mode of each test duri
 Global $listFailed = ""	; the list of UUT's serial number that failed the automation test
 Global $listPassed = "" ; the list of UUT's serial number that passed the automation test
 Global $portDisplay = 0	; stores the index of UUT which log is displayed in the window
+
 Local $i
 For $i = 0 To $maxConnections	; initialize the variables
 	$sockets[$i] = -1	; Stores the sockets for each client
@@ -140,14 +141,14 @@ For $i = 0 To $maxConnections	; initialize the variables
 	$logFiles[$i] = 0
 	$fileToBeSent[$i] = ""
 	$boxIP[$i] = ""
-	$logContent[$i] = ""
+	$logContent[$i] = $cheatSheet
 	$batchWait[$i] = True	; default value is true, not to hold other box entering batch align mode
 Next
 
 XPStyleToggle(1)	; force not in XP mode, necessary for color change in progress bar
 Global $connectionPattern = ""	; stores the pattern of UUT connections. "o" means not connected; "x" means connected but not ready for trigger; "+" means connected and ready for trigger
 Global $hMainWindow = GUICreate("Automation Server Version " & FileGetVersion ( @ScriptFullPath ) & " @ " & $ipServer & ":" & $port, 480*3, 360*2)	; the main display window
-Global $cLog = GUICtrlCreateEdit("UUT automation Progress", 240, 350, 960, 360, $WS_VSCROLL)	; the child window that displays the log of each UUT
+Global $cLog = GUICtrlCreateEdit($cheatSheet, 240, 350, 960, 360, $WS_VSCROLL)	; the child window that displays the log of each UUT
 GUICtrlSendMsg($cLog, $EM_LIMITTEXT, -1, 0)
 WinMove($hMainWindow, "", 240, 180)
 
@@ -166,14 +167,14 @@ GUICtrlSetFont($cID, 12, 400, 0, "Courier New")
 $cID = GUICtrlCreateLabel("FAILED", 1200+60, 320, 170, 20)	; label of failed list
 GUICtrlSetFont($cID, 12, 400, 0, "Courier New")
 
-$cID = GUICtrlCreateLabel("Time remains", 720 - 130, 320, 120, 20)	; label of main timer's name
-$nGUI[0] = GUICtrlCreateLabel("00:00:00", 720, 320, 81, 18)	; label of the main timer
-Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 5, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
-Global $idComboBox = $cID
-;$cID = GUICtrlCreateLabel("Time remains", 700, 10, 120, 20)	; label of main timer's name
-;$nGUI[0] = GUICtrlCreateLabel("00:00:00", 700 + 130, 10, 81, 18)	; label of the main timer
-;Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 35, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
-;Global $idComboBox = GUICtrlCreateCombo($config, 700-200, 5, 180, 20)
+;$cID = GUICtrlCreateLabel("Time remains", 720 - 130, 320, 120, 20)	; label of main timer's name
+;$nGUI[0] = GUICtrlCreateLabel("00:00:00", 720, 320, 81, 18)	; label of the main timer
+;Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 5, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
+;Global $idComboBox = $cID
+$cID = GUICtrlCreateLabel("Time remains", 700, 10, 120, 20)	; label of main timer's name
+$nGUI[0] = GUICtrlCreateLabel("00:00:00", 700 + 130, 10, 81, 18)	; label of the main timer
+Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 35, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
+Global $idComboBox = GUICtrlCreateCombo($config, 700-200, 5, 180, 20)
 GUICtrlSetFont($idComboBox, 10, 700, 0, "Courier New")
 GUICtrlSetColor($nGUI[0], $COLOR_GREEN)	; set the main timer in color green
 GUICtrlSetFont($nGUI[0], 12, 400, 0, "Courier New")
@@ -185,7 +186,7 @@ GUICtrlSetFont($cLog, 10, 400, 0, "Courier New")
 GUICtrlSetFont($cID, 12, 400, 0, "Courier New")
 $cID = GUICtrlCreateLabel($connectionPattern, 1200 + 40, 700, 160, 20)	; label of connection pattern
 GUICtrlSetFont($cID, 10, 400, 0, "Courier New")
-Global $tLog = GUICtrlCreateLabel(" GF000000", 250, 330, 95, 18)	; label of UUT's serial number which log is displayed
+Global $tLog = GUICtrlCreateLabel("CheatSheet", 250, 330, 100, 18)	; label of UUT's serial number which log is displayed
 GUICtrlSetFont($tLog, 12, 700, 0, "Courier New")
 GUICtrlSetBkColor($tLog, $COLOR_SKYBLUE)	; set the color of the lable the same as the buttons
 Local $cLoop = GUICtrlCreateLabel("00:00:00", 40, 700, 60, 15)	; label of connection pattern
@@ -202,8 +203,6 @@ $logFiles[$piLogPort] =FileOpen($workDir & "log\RaspberryPi.log", 1+8) 	; Clear 
 LogWrite($automationLogPort, "")
 LogWrite($automationLogPort, "A new batch of automation test starts.")
 LogWrite($automationLogPort, "Current setting of configuration for burn-in is " & $config & ".")
-LogWrite($piLogPort, "")
-LogWrite($piLogPort, "A new batch of automation test starts.")
 
 Global $hTimer = TimerInit()	; global timer handle
 Global $testEnd = False
@@ -330,9 +329,11 @@ While Not $testEnd	; main loop that get input, display the resilts
 				GUICtrlSetColor($pGUI[$i], $COLOR_RED)
 				If $filesReceived[$i] Then
 					SendCommand($i, "eof")
+					FileClose($filesReceived[$i])	; get and save the file
+					$filesReceived[$i] = 0	;clear the flag when file transfer ends
+
 					LogWrite($i, "(Server) Last file upload not completed in one minute.")
 					LogWrite($i, "(Server) Send eof to client.")
-					FileClose($filesReceived[$i])
 				EndIf
 			Else
 				SendCommand($i, "heartbeat")	; send a command for heart_beat
@@ -352,7 +353,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 			CloseConnection($i)
 			$testFailures[$i] += 1	; test failure counter +1
 			GUICtrlSetColor($pGUI[$i], $COLOR_RED)	; turn the progress bar in red
-			GUICtrlSetData($nGUI[$i], "interrupt")	; show interrupt message
+			GUICtrlSetData($nGUI[$i], "LOST")	; show interrupt message
 			$testEndTime[$i] = 0	; test ends
 			$remainTestTime[$i] = 0	; test ends
 		EndIf
@@ -391,7 +392,11 @@ While Not $testEnd	; main loop that get input, display the resilts
 	For $i = 1 To $maxConnections
 		If $msg = $bGUI[$i] Then
 			$portDisplay = $i	; update the log display for that button
-			GUICtrlSetData($tLog, " " & $boxID[$i])
+			If $boxID[$i] Then
+				GUICtrlSetData($tLog, " " & $boxID[$i])
+			Else
+				GUICtrlSetData($tLog, "Cheatsheet")
+			EndIf
 			GUICtrlSetData($cLog, $logContent[$i])
 		EndIf
 	Next
@@ -457,6 +462,17 @@ Func toBar($x)
 	Next
 
 	Return $rst
+EndFunc
+
+Func ReadCheatSheet()
+	Local $file = FileOpen($workDir & "CheatSheet.txt")
+	If @error < 0 Then
+		Return "Cannot find CheatSheet.txt at " & $workDir
+	EndIf
+
+	Local $fileContent = FileRead($file)
+	FileClose($file)
+	Return $fileContent
 EndFunc
 
 Func UpdateLists($passed, $failed)
@@ -592,11 +608,15 @@ Func ParseCommand($n)
 			EndIf
 
 		Case "cleanup", "quit", "reboot", "endtest", "quittest", "restarttest", "restart"
-			SendCommand($n, $newCommand)	; send new test command to client
-			$command = StringInStr($newCommand, "start") ? "restart " : ""
+			If $testFailures[$n] And StringInStr($newCommand, "clean") Then
+				LogWrite($n, "(Server) There are failures during last test. So it is better not to cleanup.")
+				SendCommand($n, "quittest")
+			Else
+				SendCommand($n, $newCommand)	; send new test command to client
+			EndIf
+			;$command = StringInStr($newCommand, "start") ? "restart " : ""
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
-			;$commandTimers[$n] += 10*1000
 
 		Case "synctime"
 			$arg = @YEAR & @MON & @MDAY & @HOUR & @MIN & @SEC
@@ -903,7 +923,7 @@ EndFunc
 
 Func GetParameter($parameters, $keyword)
 	If StringInStr($parameters, "=") Then
-		Local $parameter = StringRegExp($parameters, "(?i)(?:" & $keyword & "=)([a-zA-Z0-9:_\\\.\-]+)", $STR_REGEXPARRAYMATCH)
+		Local $parameter = StringRegExp($parameters, "(?i)(?:" & $keyword & "=)(.[^\s]*)", $STR_REGEXPARRAYMATCH)
 		If IsArray($parameter) Then
 			Return $parameter[0]
 		Else
