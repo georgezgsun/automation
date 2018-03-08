@@ -4,7 +4,7 @@
 ;	The supported test command are
 ;	No.	Command		Parameters			function
 ;	1	record 		duration repeat interval	do (repeat) times of the record, each with (duration) mins and (interval) mins in between
-;	2	settings 	pre chunk cam2 cam3 keyboard	do the settings	(pre) pre-event in seconds, (chunk) in minutes, cam2/cam3/keyboard can be set enabled/disabled
+;	2	settings 	pre chunk cam2 cam3 keyboard	do the settings	pre-event in pre seconds, chunk in minutes, and cam2/cam3/keyboard as enable/enabled/disable/disabled
 ;	3	createprofile 	username password		create a new account with username and password
 ;	4	upload 		file				upload a file in the box to automation server
 ;	5	update 		file				update a file in the box with its latest version in automation server
@@ -21,7 +21,7 @@
 ;	11	checkrecord 	total newadd detailed		check the recorded files, when total is assigned a value, then check if it is equale to the total number of video files that were generated in the day
 ;								When newadd is assigned a value, then check if it is equal to the number of video files that were generated since last checkrecord
 ;								If neither total nor newadd is assigned a value, then check the detailed of last files recorded
-;	12	radar 		speed				check the radar function
+;	12	radar 						check the radar function
 ;	13	lightbar 	duration			check the lightbar trigger function, record for (duration) minutes
 ;	14	siren 		duration			check the siren trigger function, record for (duration) minutes
 ;	15	aux4 		duration			check the aux4 trigger function, record for (duration) minutes
@@ -41,107 +41,42 @@
 ;	29	synctmz						set the box's time zone according to the server
 ;	29	runapp						start the Corptrax App
 ;	30	stopapp						stop the Corptrax App
-;	31	cleanup						clean the trails of running during the automation test, delete the recorded files, delete the accounts
-;	32	quittest					stop automation test
-;	33	restarttest					re-start the automation test
-;	34	reboot						reboot the box
+;	31	config		ct ev bwc			configure the CopTrax App to ct=ver1, Evidence viwer to ev=ver2 and Body wear camera to bwc=ver3.
+;								Prepare for the CopTrax App configuration: 
+;								1) create ver1.mcfg file at C:\CopTraxAutomation\latest folder in server, 
+;								2) store the test case in ver1.txt where contains this command at c:\CopTraxAutomation folder in server, 
+;								3) store the files need to be copied over (CopTrax.config and IncaXPCApp.exe at least) in client at C:\CopTrax Support\CT-ver1 folder
+;								4) store the files need to be copied over (CopTraxEvidenceViewer.exe at least) in client at C:\CopTrax Support\EV-ver2 folder;
+;								5) store the files need to be copied over (???.exe at least) in client at C:\CopTrax Support\BWC-ver3 folder;
+;	32	cleanup						clean the trails of running during the automation test, delete the recorded files, delete the accounts
+;	33	quittest					stop automation test
+;	34	restarttest					re-start the automation test
+;	35	reboot						reboot the box
 ;=============================================================================================================================================================================
-; Each line contains a single command
-; There can be space or tabs in front of each command and between parameters
-; If the command has multiple parameters, you can assign values to them one by one in the format parameter3=value3 parameter1=value1; the parameter position does not matter.  
-; If the command has only one parameter, you can assign the value of the parameter without put keyword=parameter in front of it. For example siren 5 is equivalent to siren duration=5
-; In record and endrecord command, the default interval is 10 in case you do not specify the value 
-; Any commands after cleanup, quittest, restarttest, or reboot will be eliminated.
-; A empty line is acceptable, but it means nothing to the automation
-; Any words after ; are recognized as comments
-; It is highly recommended to begin the test with synctmz and synctime
-; It is highly recommended to put stopapp before cleanup
-; It is required to put a batchmode on before any triggers test
-; begin the test with synctmz and synctime
-; Sample test case
+; Each line contains a single command;
+; Commands and keywords are case insensitive
+; There can be space or tabs in front of each command and between parameters;
+; If the command has multiple parameters, you can assign values to them one by one in the format "parameter3=value3 parameter1=value1"; the parameter position does not matter.  
+; If the command has only one parameter, you can assign the value of the parameter without put "keyword=parameter" in front of it. For example "siren 5" is equivalent to "siren duration=5"
+; In "record" and "endrecord" command, the default interval is 10 in case you do not specify the value;
+; Any commands after "cleanup", "quittest", "restarttest", or "reboot" will not be read and parsed;
+; A empty line is acceptable, but it means nothing to the automation;
+; Any words after ; or // are recognized as comments;
+; It is highly recommended to begin the test with "synctmz" and "synctime";
+; It is required to put a "batchtest start" command at the begging of any test case when you want to do triggers test; This will make other boxes to wait this box at "batch align" command;
+; It is required to put a "batchtest align" command right begore trigger commands, which may align all the box before trigger test;
 
-;batchtest start; starts batchtest, indicates other box to wait this box at batchtest align, which may align all the box before trigger test
 synctmz
 synctime
 
-settings pre=30 chunk=20 cam2=enabled cam3=enabled
-checkapp 2.3.2.5
-;checkapp 2.2.2
-checkfirmware 2.1.1
+configure ct=WS2
 
 CreateProfile Username=auto1 password=coptrax
-photo
-camera 
-;radar
 
-;quittest
-
-record Duration=22 repeat=1
-
-settings pre=30 chunk=10
-createprofile username=auto2 password=coptrax
-record duration=12 Repeat=1
-camera
-photo
-
-
-settings pre=0 chunk=10	cam2=enabled Cam3=enabled; settings has mutiple arguments
-
-createprofile username=auto1 password=coptrax
-photo
-camera 1 // camera has no argument. However, if you put an argument here, the automation will ignore it
+settings pre=30 chunk=20 cam2=enabled cam3=enabled keyboard=disable	; enable and enabled are of the same meaning
+checkapp 2.2.2
+checkfirmware 2.1.2
 
 quittest
 
-batchtest align	; align all the box here. This box will wait here until all other boxes reach this command, then going to the triggers test
-	siren 	duration=1
-	endrecord 	1
-
-	lightbar 1
-	endrecord 1
-
-	aux4 1
-	lightswitch 1
-
-	aux5 1
-	lightswitch 1
-
-	aux6 1
-	lightswitch 1
-	
-	mic1trigger 1
-	endrecord 1
-
-	mic2trigger 1
-	endrecord 1
-
-	lightswitch 1
-	endrecord 2
-batchtest stop	; This command stops any later box to reach batchtest aligned mode. That means any other new boxes may not able to enter batchtest mode until this box finish its current testcase. This may gurentee the box to accomplish it current test without interrupted.
-checkrecord total=8
-
-createprofile username=auto2 password=coptrax
-settings pre=10 chunk=10 cam2=enabled came3=disabled	; settings has mutiple arguments
-record duration=5 repeat=2 interval=5
-pause 50	; pause for 50 seconds
-review ; there no argument
-checkrecord newadd=2
-
-createprofile username=auto1 password=coptrax
-settings pre=30 chunk=60
-record duration=5 interval=8
-pause 2
-checkrecord detailed=on
-
-settings chunk=10 pre=15 
-record repeat=2 duration=15 interval=2
-pause 500	; pause for 500 seconds
-checkrecord newadd=4	; 2 record and each has 2 video files
-
-settings chunk=30 pre=10
-record repeat=15 interval=2
-pause 600	; pause for 600 seconds
-checkrecord newadd=15
-
 cleanup
-

@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.32
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.34
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -91,7 +91,7 @@ $allCommands[19] = "endrecord duration"
 $allCommands[20] = "startrecord duration"
 $allCommands[21] = "runapp"
 $allCommands[22] = "stopapp"
-$allCommands[23] = "configure ct ev bwc"
+$allCommands[23] = "configure ct ev bwc map"
 $allCommands[24] = "info"
 $allCommands[25] = "camera"
 $allCommands[26] = "review"
@@ -148,7 +148,7 @@ Next
 XPStyleToggle(1)	; force not in XP mode, necessary for color change in progress bar
 Global $connectionPattern = ""	; stores the pattern of UUT connections. "o" means not connected; "x" means connected but not ready for trigger; "+" means connected and ready for trigger
 Global $hMainWindow = GUICreate("Automation Server Version " & FileGetVersion ( @ScriptFullPath ) & " @ " & $ipServer & ":" & $port, 480*3, 360*2)	; the main display window
-Global $cLog = GUICtrlCreateEdit($cheatSheet, 240, 350, 960, 360, $WS_VSCROLL)	; the child window that displays the log of each UUT
+Global $cLog = GUICtrlCreateEdit("Automation test results", 240, 350, 960, 360, $WS_VSCROLL)	; the child window that displays the log of each UUT
 GUICtrlSendMsg($cLog, $EM_LIMITTEXT, -1, 0)
 WinMove($hMainWindow, "", 240, 180)
 
@@ -203,6 +203,7 @@ $logFiles[$piLogPort] =FileOpen($workDir & "log\RaspberryPi.log", 1+8) 	; Clear 
 LogWrite($automationLogPort, "")
 LogWrite($automationLogPort, "A new batch of automation test starts.")
 LogWrite($automationLogPort, "Current setting of configuration for burn-in is " & $config & ".")
+GUICtrlSetData($cLog, $cheatSheet)
 
 Global $hTimer = TimerInit()	; global timer handle
 Global $testEnd = False
@@ -569,7 +570,7 @@ Func ParseCommand($n)
 
 		Case "pause"
 			$arg = PopCommand($n)
-			$commandTimers[$n] = $time0 + CorrectRange(Int($arg), 0, 3600)* 1000	; set the next command timer $arg secs later
+			$commandTimers[$n] = $time0 + CorrectRange(Int($arg), 0, 9999)* 1000	; set the next command timer $arg secs later
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Pause for " & $arg & " seconds.")
 
@@ -852,7 +853,7 @@ Func EstimateCommands($aCommand)
 			$testTime += $repeat * ($duration + $interval) * 60
 		ElseIf StringInStr($allCommands[$j], "duration") > 4 Then
 			$parameters = $commandList[$i+1]
-			$duration = CorrectRange(Int(GetParameter($parameters, "duration")), 1, 999)
+			$duration = CorrectRange(Int(GetParameter($parameters, "duration")), 1, 9999)
 			If StringInStr($allCommands[$j], "pause") Then	; pause in seconds instead of minutes now
 				$testTime += $duration
 			Else
@@ -925,7 +926,7 @@ Func GetParameter($parameters, $keyword)
 	If StringInStr($parameters, "=") Then
 		Local $parameter = StringRegExp($parameters, "(?i)(?:" & $keyword & "=)(.[^\s]*)", $STR_REGEXPARRAYMATCH)
 		If IsArray($parameter) Then
-			Return $parameter[0]
+			Return StringReplace($parameter[0], "|", "\!")	; replace | with \!
 		Else
 			Return ""
 		EndIf
@@ -1068,7 +1069,7 @@ Func ProcessReply($n)
 	Return True
 EndFunc
 
-Func StartNewTest($n, $ID, $boxUser, $clientVersion)
+Func StartNewTest($n, $ID, $resume, $clientVersion)
 	$boxID[$n] = $ID	; get the boxID from client
 	$filesReceived[$n] = 0	; clear the upload files
 	$fileToBeSent[$n] = ""	; clear file need to be sent to client
@@ -1087,6 +1088,12 @@ Func StartNewTest($n, $ID, $boxUser, $clientVersion)
 	GUICtrlSetData($bGUI[$n], $boxID[$n])	; update the text on the button
 	GUICtrlSetData($tLog, " " & $boxID[$n])	; update the serial number on top the main log display
 	GUICtrlSetData($cLog, $logContent[$n])	; display and update the log content
+
+	If $resume = "resume" And StringLen($commands[$n]) > 4 Then
+		LogWrite($n, " ")
+		LogWrite($n, "Test resumed.")
+		Return
+	EndIf
 
 	$filename = $workdir & $boxID[$n] & ".txt"	; try to find if any individual test case exits
 	If Not FileExists($filename) Then	; If there is no individual test case, try to read general test case.
@@ -1158,7 +1165,7 @@ Func AcceptConnection ()
 	If $newSocket < 0 Then Return
 
 	Local $IP = SocketToIP($newSocket)
-	;Local $time0 = TimerDiff($hTimer)
+	Local $resume = False
 	Local $i = 0
 	Local $port = 0
 	Local $port0 = 0
@@ -1167,6 +1174,7 @@ Func AcceptConnection ()
 			If $sockets[$i] > 0 Then
 				TCPCloseSocket($sockets[$i])
 				$sockets[$i] = -1
+				$resume = True
 			EndIf
 
 			$port = $i
@@ -1186,11 +1194,15 @@ Func AcceptConnection ()
 	EndIf
 
 	$sockets[$port] = $newSocket	;assigns that socket the incomming connection.
-	$commands[$port] = "hold"	; Stores hold command to temperally hold the the commands until gets a name reply
 	$heartBeatTimers[$port] = $time0 + 1000*60
 	$commandTimers[$port] = $time0 + 5*1000	; Set command timer to be 5s later
 	$connectionTimers[$port] = $time0 + 2000*60	; Set connection lost timer to be 2mins later
 	$boxIP[$port] = $IP
+	If $resume Then
+		PushCommand($port, "hold")
+	Else
+		$commands[$port] = "hold"	; Stores hold command to temperally hold the the commands until gets a name reply
+	EndIf
 EndFunc
 
 Func PopCommand($n)

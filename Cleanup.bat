@@ -1,5 +1,5 @@
 Echo Warning! This will cleanup the automation test trails
-ping localhost -n 10
+ping localhost -n 20
 Del /S /F /Q F:\*.mp4
 Del /S /F /Q G:\*.mp4
 Del /S /F /Q H:\*.mp4

@@ -1,0 +1,94 @@
+;=============================================================================================================================================================================
+;	Automation Test Case Version 2.x				
+;=============================================================================================================================================================================
+;	The supported test command are
+;	No.	Command		Parameters			function
+;	1	record 		duration repeat interval	do (repeat) times of the record, each with (duration) mins and (interval) mins in between
+;	2	settings 	pre chunk cam2 cam3 keyboard	do the settings	pre-event in pre seconds, chunk in minutes, and cam2/cam3/keyboard as enable/enabled/disable/disabled
+;	3	createprofile 	username password		create a new account with username and password
+;	4	upload 		file				upload a file in the box to automation server
+;	5	update 		file				update a file in the box with its latest version in automation server
+;	6	checkapp 	version				check the CopTrax App version
+;	7	checkfirmware 	version				check the CopTrax box's firmware version
+;	8	checklibrary 	version				check the CopTrax Library version
+;	9	batchtest 	mode				set the batch test mode to be start/align/stop
+; 								When the mode is set to start, it will hold any other box to start triggers test until this box is aligned.
+;								When the mode is set to align, it will hold this box to continue any further tests until all other boxes in batch test mode are aligned.
+;								When the mode is set to stop, it will stop any later boxes to enter batch test align mode.
+;								When envolving triggers test, you may have to put batchtest mode=start at the beginning, and to put batchtest mode=align right before any trigger commands.
+;								One box can be aligned once in each test. An batchtest mode=stop is automatically assigned when the box get aligned.
+;	10	pause 		duration			pause for (duration) seconds
+;	11	checkrecord 	total newadd detailed		check the recorded files, when total is assigned a value, then check if it is equale to the total number of video files that were generated in the day
+;								When newadd is assigned a value, then check if it is equal to the number of video files that were generated since last checkrecord
+;								If neither total nor newadd is assigned a value, then check the detailed of last files recorded
+;	12	radar 						check the radar function
+;	13	lightbar 	duration			check the lightbar trigger function, record for (duration) minutes
+;	14	siren 		duration			check the siren trigger function, record for (duration) minutes
+;	15	aux4 		duration			check the aux4 trigger function, record for (duration) minutes
+;	16	aux5 		duration			check the aux5 trigger function, record for (duration) minutes
+;	17	aux6 		duration			check the aux6 trigger function, record for (duration) minutes
+;	18	lightswitch 	duration			check the lightswitch trigger function, start/stop a record for (duration) minutes
+;	19	mic1trigger 	duration			check the remote mic1's trigger function, record for (duration) minutes
+;	20	mic2trigger 	duration			check the remote mic2's  trigger function, record for (duration) minutes
+;	21	endrecord 	duration			stop a record and than wait for (duration) minutes
+;	22	startrecord 	duration			stop a record for (duration) minutes
+;	23	status						report the error in event log, current memory, CPUs occupation and CopTrax App cpu occupation
+;	24	photo						check the take photo function
+;	25	info						has not yet programmed
+;	26	camera						check the main camera, two rear cameras working status
+;	27	review						check the review function
+;	28	synctime					set the box's date and time according to the server
+;	29	synctmz						set the box's time zone according to the server
+;	29	runapp						start the Corptrax App
+;	30	stopapp						stop the Corptrax App
+;	31	config		ct ev bwc			configure the CopTrax App to ct=ver1, Evidence viwer to ev=ver2 and Body wear camera to bwc=ver3.
+;								Prepare for the CopTrax App configuration: 
+;								1) create ver1.mcfg file at C:\CopTraxAutomation\latest folder in server, 
+;								2) store the test case in ver1.txt where contains this command at c:\CopTraxAutomation folder in server, 
+;								3) store the files need to be copied over (CopTrax.config and IncaXPCApp.exe at least) in client at C:\CopTrax Support\CT-ver1 folder
+;								4) store the files need to be copied over (CopTraxEvidenceViewer.exe at least) in client at C:\CopTrax Support\EV-ver2 folder;
+;								5) store the files need to be copied over (???.exe at least) in client at C:\CopTrax Support\BWC-ver3 folder;
+;	32	cleanup						clean the trails of running during the automation test, delete the recorded files, delete the accounts
+;	33	quittest					stop automation test
+;	34	restarttest					re-start the automation test
+;	35	reboot						reboot the box
+;=============================================================================================================================================================================
+; Each line contains a single command;
+; Commands and keywords are case insensitive
+; There can be space or tabs in front of each command and between parameters;
+; If the command has multiple parameters, you can assign values to them one by one in the format "parameter3=value3 parameter1=value1"; the parameter position does not matter.  
+; If the command has only one parameter, you can assign the value of the parameter without put "keyword=parameter" in front of it. For example "siren 5" is equivalent to "siren duration=5"
+; In "record" and "endrecord" command, the default interval is 10 in case you do not specify the value;
+; Any commands after "cleanup", "quittest", "restarttest", or "reboot" will not be read and parsed;
+; A empty line is acceptable, but it means nothing to the automation;
+; Any words after ; or // are recognized as comments;
+; It is highly recommended to begin the test with "synctmz" and "synctime";
+; It is required to put a "batchtest start" command at the begging of any test case when you want to do triggers test; This will make other boxes to wait this box at "batch align" command;
+; It is required to put a "batchtest align" command right begore trigger commands, which may align all the box before trigger test;
+
+synctmz
+synctime
+
+configure ct=FactoryDefault
+
+CreateProfile Username=auto1 password=coptrax
+
+settings pre=30 chunk=20 cam2=enabled cam3=enabled keyboard=disable	; enable and enabled are of the same meaning
+checkapp 2.4.3
+checkfirmware 2.1.2
+
+photo
+camera 
+radar
+
+record Duration=22 repeat=10	// commands and keywords are case insensitive
+
+
+CreateProfile username=auto2 password=coptrax cam2=disable	// cam2 argument will be ignored
+
+settings pre=30 chunk=10 keyboard=disabled
+record duration=12 Repeat=10
+camera
+photo
+
+quittest

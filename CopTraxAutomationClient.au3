@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.33)
+#pragma compile(FileVersion, 3.2.20.37)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -52,10 +52,14 @@ Global Const $TIMEOUTINSECEND = 150
 Global Const $maxSendLength = 100000	; set maximum legth of bytes that a TCPsend command may send
 
 TCPStartup()
-Global $ip =  TCPNameToIP("10.0.7.38")
+Global $ip =  TCPNameToIP("10.0.5.211")
 Global $port = 16869
 Global $Socket = -1
-Global $boxID = "CopTrax0"
+Global $boxID = "Unknown"
+Global $CopTraxAppDir = "C:\Program Files (x86)\IncaX\CopTrax\"
+Global $configDir = $CopTraxAppDir
+Global $mapDir = @LocalAppDataDir & "\CopTraxEvidenceViewer\"
+Global $bwcDir = "C:\Program Files (x86)\VIA\Icon Files"
 Global $firmwareVersion = ""
 Global $libraryVersion = ""
 Global $appVersion = ""
@@ -178,6 +182,7 @@ Global $videoFilesCam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($pat
 Global $videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi")
 
 Local $currentTime = TimerDiff($hTimer)
+Local $resume = "new"
 While Not $testEnd
 	$currentTime = TimerDiff($hTimer)
 	If $mCopTrax = 0 Then
@@ -195,7 +200,8 @@ While Not $testEnd
 			EndIf
 			FileClose($logFile)	; close local log
 
-			LogUpload("name " & $boxID & " " & $userName & " " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)
+			LogUpload("name " & $boxID & " " & $resume & " " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)
+			$resume = "resume"	; resume the test after re-connect to the server
 			MsgBox($MB_OK, $mMB, "Connected to server.",2)
 			$timeout = $currentTime + 1000*$TIMEOUTINSECEND
 		Else
@@ -211,8 +217,7 @@ While Not $testEnd
 	  EndIf
 
 	  If  $currentTime > $timeout Then
-		  $testEnd = True
-		  $restart = True
+		$Socket = -1
 	  EndIf
    EndIf
    Sleep(100)
@@ -1375,10 +1380,10 @@ Func ListenToNewCommand()
 
 		Case "upload"
 			MsgBox($MB_OK, $mMB, "Testing file upload function",2)
-			If $Recv[0] >= 2 And UploadFile($Recv[2]) Then
-				LogUpload("PASSED file upload set.")
+			If $Recv[0] >= 2 Then
+				UploadFile($Recv[2])
 			Else
-				LogUpload("FAILED file upload set.")
+				LogUpload("FAILED missing parameter to set the file upload.")
 			EndIf
 
 		Case "update"
@@ -1509,9 +1514,8 @@ Func ListenToNewCommand()
 EndFunc
 
 Func RunCopTrax()
-	Local $dir = "C:\Program Files (x86)\IncaX\CopTrax\"
 	LogUpload("Restarting CopTrax App.")
-	Run($dir & $pCopTrax, $dir)
+	Run($CopTraxAppDir & $pCopTrax, $CopTraxAppDir)
 	$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
 	If $mCopTrax Then
 		$userName = GetUserName()
@@ -1528,7 +1532,8 @@ Func Configure($arg)
 	$config = GetParameter($arg, "ct")	; configure the CopTrax App
 	If $config Then
 		LogUpload("Configuring CopTrax App to " & $config & ".")
-		$rst = QuitCopTrax() And CopyOver("CT-" & $config, "C:\Program Files (x86)\IncaX\CopTrax") And RunCopTrax()
+		$rst = QuitCopTrax() And CopyOver("CT-" & $config, $CopTraxAppDir)
+		$rst = RunCopTrax() And $rst	; RunCopTrax no matter previous operation success or not
 	EndIf
 
 	$config = GetParameter($arg, "ev")	; configure the Evidence Viewer
@@ -1537,10 +1542,16 @@ Func Configure($arg)
 		$rst = $rst And CopyOver("EV-" & $config, "C:\Program Files (x86)\CoptraxViewer\Test")
 	EndIf
 
+	$config = GetParameter($arg, "map")	; configure the Evidence Viewer
+	If $config Then
+		LogUpload("Configuring Evidence Viewer using map of " & $config & ".")
+		$rst = $rst And CopyOver("EV-" & $config, $mapDir)
+	EndIf
+
 	$config = GetParameter($arg, "bwc")	; configure the Body Ware Camera
 	If $config Then
 		LogUpload("Configuring Body Weaver Camera to " & $config & ".")
-		$rst = $rst And CopyOver("BWC-" & $config, "C:\Program Files (x86)\VIA\Icon Files")	; this is not a valid dir yet
+		$rst = $rst And CopyOver("BWC-" & $config, $bwcDir)	; this is not a valid dir yet
 	EndIf
 
 	Return $rst
@@ -1562,7 +1573,9 @@ Func RunMsi($msi)
 
 	Local $pMsi = Run($dir & $msi, $dir)
 	Local $hMsi = GetHandleWindowWait("CopTrax")
-	If $hMsi And ControlClick($hMsi, "", "&Next>") And ControlClick($hMsi, "", "I &Agree") And ControlClick($hMsi, "", "&Next>") And ControlClick($hMsi, "", "&Next>") And ControlClick($hMsi, "", "&Next>") Then
+	Local $rst = $hMsi And ControlClick($hMsi, "", "&Next>") And pause() And ControlClick($hMsi, "", "I &Agree") And pause()
+	$rst = $rst And ControlClick($hMsi, "", "&Next>") And pause() And ControlClick($hMsi, "", "&Next>") And pause() And ControlClick($hMsi, "", "&Next>")
+	If $rst Then
 		Sleep(5000)
 		If WinExists("CopTrax", "OK") Then
 			ControlClick("CopTrax", "OK", "OK")
@@ -1579,6 +1592,11 @@ Func RunMsi($msi)
 		ProcessClose($pMsi)
 		Return False
 	EndIf
+EndFunc
+
+Func pause()
+	sleep(200)
+	Return True
 EndFunc
 
 Func EncodeToSystemTime($datetime)
@@ -1606,7 +1624,7 @@ Func SyncTimeZone($tmz)
 EndFunc
 
 Func UploadFile($arg)
-	If $arg = "" Then Return True
+	If $arg = "" Then Return
 	Switch StringLower($arg)
 		Case "all"
 			$uploadMode = "all"
@@ -1617,23 +1635,29 @@ Func UploadFile($arg)
 		Case "now"
 			$uploadMode = "now"
 		Case Else
-			PushFile($arg)
+			PushFile(StringReplace($filename, "\!", "|"))	; change \! back to !
 	EndSwitch
-	If $uploadMode = "wait" Or $uploadMode = "idle" Then Return True
+
+	If $uploadMode = "wait" Or $uploadMode = "idle" Then
+		LogUpload("PASSED file upload set.")	; no upload at this time, so reply PASSED
+		Return
+	EndIf
 
 	Local $filename = PopFile()
-	If $filename = "" Then Return True
+	If $filename = "" Then Return
 
+	$filename = StringReplace($filename, "\_", " ")	; change \_ back to space
 	Local $file = FileOpen($filename,16)
 	If $file = -1 Then
-		LogUpload($filename & " does not exist.")
-		Return False
+		LogUpload("FAILED " & $filename & " does not exist.")	; reply FAILED when cannot find the file
+		Return
 	EndIf
+	LogUpload("PASSED file upload set.")	; reply PASSED when find the file
 
 	$fileContent = FileRead($file)
 	FileClose($file)
 	LogUpload("file " & $filename & " " & BinaryLen($fileContent))
-	Return True
+	Return
 EndFunc
 
 Func PushFile($newFile)
@@ -1649,7 +1673,8 @@ Func PopFile()
 EndFunc
 
 Func UpdateFile($filename, $filesize)
-	$filename = StringReplace($filename, "|", " ")
+	$filename = StringReplace($filename, "\!", "|")
+	$filename = StringReplace($filename, "\_", " ")
 	$fileToBeUpdate = FileOpen($filename, 16+8+2)	; binary overwrite and force create directory
 	$bytesCounter = $filesize
 	Return True
@@ -1729,12 +1754,18 @@ Func ReadConfig()
 		$aLine = StringRegExpReplace($aLine, "([//].*)", "")
 		If $aLine = "" Then ContinueLoop
 
-		$aTxt = GetParameter($aLine, "ip")
+		$aTxt = GetParameter($aLine, "ip")	; read the server IP address, default=10.0.5.211
 		If $aTxt Then $ip = TCPNameToIP($aTxt)
-		$aTxt = GetParameter($aLine, "port")
+		$aTxt = GetParameter($aLine, "port")	; read the server port, default = 16869
 		If $aTxt Then $port = CorrectRange(Int($aTxt), 10000, 65000)
-		$aTxt = GetParameter($aLine, "name")
+		$aTxt = GetParameter($aLine, "name")	; read the box serial number, default = Unknown
 		If $aTxt Then $boxID = $aTxt
+		$aTxt = GetParameter($aLine, "ctconfig")	; read the location of CopTrax configure, default is the same location
+		If $aTxt Then $configDir = $aTxt
+		$aTxt = GetParameter($aLine, "map")	; read the location to store the map
+		If $aTxt Then $mapDir = $aTxt
+		$aTxt = GetParameter($aLine, "bwc")	; read the location to store the map
+		If $aTxt Then $bwcDir = $aTxt
 	Until $eof
 
 	FileClose($file)
@@ -1743,7 +1774,6 @@ EndFunc
 Func RenewConfig()
 	Local $file = FileOpen($configFile,1)	; Open config file in over-write mode
 	FileWriteLine($file, "")
-	FileWriteLine($file, "name " & $boxID & " ")
 	FileWriteLine($file, "name=" & $boxID & " ")
 	FileClose($file)
 EndFunc
@@ -1763,11 +1793,11 @@ EndFunc
 
 Func GetParameter($parameters, $keyword)
 	If StringInStr($parameters, "=") Then
-		Local $parameter = StringRegExp($parameters, "(?:" & $keyword & "=)(.[^\s|]*)", $STR_REGEXPARRAYMATCH)
+		Local $parameter = StringRegExp($parameters, "(?:" & $keyword & "[= ])(.[^\s|]*)", $STR_REGEXPARRAYMATCH)
 		If $parameter = "" Then
 			Return ""
 		Else
-			Return $parameter[0]
+			Return StringReplace($parameter[0], "\_", " ") ; replace \_ back to space
 		EndIf
 	Else
 		Return ""
