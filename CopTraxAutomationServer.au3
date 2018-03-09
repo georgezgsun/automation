@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.34
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.41
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -91,7 +91,7 @@ $allCommands[19] = "endrecord duration"
 $allCommands[20] = "startrecord duration"
 $allCommands[21] = "runapp"
 $allCommands[22] = "stopapp"
-$allCommands[23] = "configure ct ev bwc map"
+$allCommands[23] = "configure ct config map map"
 $allCommands[24] = "info"
 $allCommands[25] = "camera"
 $allCommands[26] = "review"
@@ -100,8 +100,8 @@ $allCommands[28] = "synctmz"
 $allCommands[29] = "radar"
 $allCommands[30] = "status"
 $allCommands[31] = "photo"
+$allCommands[33] = "restarttest mode"
 $allCommands[32] = "quittest"
-$allCommands[33] = "restarttest"
 $allCommands[34] = "reboot"
 $allCommands[35] = "cleanup"
 
@@ -323,26 +323,26 @@ While Not $testEnd	; main loop that get input, display the resilts
 		EndIf
 
 		If ($time0 > $heartBeatTimers[$i]) Then ; check the heart-beat timer
-			$nextCommand = PopCommand($i)
-			If $nextCommand = "hold" Then
+			If PopCommand($i, False) = "hold" Then
 				$testFailures[$i] += 1
-				LogWrite($i, "(Server) Get no proper reply from the client for last command. Have to skip it.")
+				LogWrite($i, "(Server) Get inproper reply from the client for last command. Have to skip it.")
 				GUICtrlSetColor($pGUI[$i], $COLOR_RED)
 				If $filesReceived[$i] Then
-					SendCommand($i, "eof")
 					FileClose($filesReceived[$i])	; get and save the file
 					$filesReceived[$i] = 0	;clear the flag when file transfer ends
 
 					LogWrite($i, "(Server) Last file upload not completed in one minute.")
-					LogWrite($i, "(Server) Send eof to client.")
 				EndIf
+				SendCommand($i, "cancel")
+				PopCommand($i)
+				LogWrite($i, "(Server) Send cancel to client.")
 			Else
 				SendCommand($i, "heartbeat")	; send a command for heart_beat
-				PushCommand($i, "hold " & $nextCommand)	; hold any new command from executing only after get a continue response from the client
+				PushCommand($i, "hold ")	; hold any new command from executing only after get a continue response from the client
+				LogWrite($i, "(Server) Send heartbeat command to client.")
 			EndIf
 
 			$heartBeatTimers[$i] = $time0 + 60*1000;
-			LogWrite($i, "(Server) Send heartbeat command to client.")
 			If $time0 < $commandTimers[$i] - 5*1000 Then
 				$heartBeatTimers[$i] += 5 * 1000	; wait 5 more seconds in case heartbeat is too close to next command, compatible with batchhold
 			EndIf
@@ -608,16 +608,29 @@ Func ParseCommand($n)
 				$commandTimers[$n] += 10*1000	; add 10 more seconds
 			EndIf
 
-		Case "cleanup", "quit", "reboot", "endtest", "quittest", "restarttest", "restart"
-			If $testFailures[$n] And StringInStr($newCommand, "clean") Then
-				LogWrite($n, "(Server) There are failures during last test. So it is better not to cleanup.")
+		Case "quit", "reboot", "endtest", "quittest"
+			SendCommand($n, $newCommand)	; send new test command to client
+			LogWrite($n, "")
+			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
+
+		Case "cleanup"
+			If $testFailures[$n] Then
+				LogWrite($n, "(Server) There are failures in this test. So it is better not to cleanup.")
 				SendCommand($n, "quittest")
 			Else
 				SendCommand($n, $newCommand)	; send new test command to client
 			EndIf
-			;$command = StringInStr($newCommand, "start") ? "restart " : ""
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
+
+		Case "restarttest", "restart"
+			$arg = StringLower(PopCommand($n))
+			If ($arg = "onerror") And ($testFailures[$n]=0) Then
+				LogWrite($n, "(Server) Not sends restart command to client because there are no failure in this test.")
+			Else
+				LogWrite($n, "(Server) Sent restart command to client.")
+				SendCommand($n, "restart")
+			EndIf
 
 		Case "synctime"
 			$arg = @YEAR & @MON & @MDAY & @HOUR & @MIN & @SEC
@@ -788,7 +801,7 @@ Func ReadTestCase($fileName)
 	Local $eof = false
 	Local $endofTestCase = ""
 	Local $i
-	For $i = $maxCommands - 4 To $maxCommands - 1	; last 4 commands
+	For $i = $maxCommands - 3 To $maxCommands - 1	; last 4 commands
 		$endofTestCase &= $allCommands[$i]
 	Next
 
@@ -1091,7 +1104,7 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 
 	If $resume = "resume" And StringLen($commands[$n]) > 4 Then
 		LogWrite($n, " ")
-		LogWrite($n, "Test resumed.")
+		LogWrite($n, "Test resumed. Pop the " & PopCommand($n) & " from the command queue.")
 		Return
 	EndIf
 
@@ -1205,10 +1218,12 @@ Func AcceptConnection ()
 	EndIf
 EndFunc
 
-Func PopCommand($n)
+Func PopCommand($n, $pop = True)
 	Local $length = StringInStr($commands[$n], " ", 2)
 	Local $nextCommand = StringLeft($commands[$n], $length-1)
-	$commands[$n] = StringTrimLeft($commands[$n], $length)
+	If $pop Then
+		$commands[$n] = StringTrimLeft($commands[$n], $length)
+	EndIf
 	Return $nextCommand
 EndFunc
 

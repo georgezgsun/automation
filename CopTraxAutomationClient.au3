@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.37)
+#pragma compile(FileVersion, 3.2.20.45)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -91,7 +91,6 @@ Else
 EndIf
 
 Global $chunkTime = 30
-Global $sendBlock = False
 Global $mCopTrax = 0
 Global $pCopTrax = "IncaXPCApp.exe"
 Global $hEventLogSystem = _EventLog__Open("", "System")
@@ -181,7 +180,7 @@ Local $path2 = $path1 & "\cam2"
 Global $videoFilesCam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4")
 Global $videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi")
 
-Local $currentTime = TimerDiff($hTimer)
+Local $currentTime
 Local $resume = "new"
 While Not $testEnd
 	$currentTime = TimerDiff($hTimer)
@@ -194,11 +193,16 @@ While Not $testEnd
 
 	If $Socket < 0 Then
 		$Socket = TCPConnect($ip, $port)
-		If $Socket >= 0 Then
-			If IsRecording() Then
+		$err = @error
+		If $Socket > 0 Then
+			If ($resume <> "resume") And IsRecording() Then
 				EndRecording(True)	; stops any recording in progress before automation test ends
 			EndIf
-			FileClose($logFile)	; close local log
+
+			If $logFile Then
+				FileClose($logFile)	; close local log
+				$logFile = 0;
+			EndIf
 
 			LogUpload("name " & $boxID & " " & $resume & " " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)
 			$resume = "resume"	; resume the test after re-connect to the server
@@ -206,14 +210,16 @@ While Not $testEnd
 			$timeout = $currentTime + 1000*$TIMEOUTINSECEND
 		Else
 	  		If  $currentTime > $timeout Then
-				MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server.", 5)
-				$timeout = TimerDiff($hTimer) + 1000*10	; check the networks connection every 10s.
+				MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server." & @CRLF &"Error code " & $err, 5)
+				$timeout = $currentTime + 1000*10	; check the networks connection every 10s.
+				TCPCloseSocket($Socket)
 				$Socket = -1
+				$logFile = FileOpen( $workDir & "local.log", 1+8)
 			EndIf
 		EndIf
    Else
 	  If ListenToNewCommand() Then
-		$timeout = TimerDiff($hTimer) + 1000 * $TIMEOUTINSECEND
+		$timeout = $currentTime + 1000 * $TIMEOUTINSECEND
 	  EndIf
 
 	  If  $currentTime > $timeout Then
@@ -225,7 +231,7 @@ WEnd
 
 If $restart Then
 	If IsRecording() Then
-		EndRecording(True)	; stops any recording in progress before automation test ends
+		EndRecording(True)	; stops any recording in progress before automation restart
 	EndIf
 	LogUpload("quit The automation test will restart.")
 	MsgBox($MB_OK, $mMB, "Reatarting the automation test.",2)
@@ -235,7 +241,6 @@ Else
 	MsgBox($MB_OK, $mMB, "Testing ends. Bye.",5)
 EndIf
 
-TCPShutdown() ; Close the TCP service.
 If $fileToBeUpdate Then
 	FileClose($fileToBeUpdate)
 EndIf
@@ -1033,14 +1038,19 @@ Func TestReviewFunction()
 EndFunc
 
 Func LogUpload($s)
-   If $sendBlock Or $Socket < 0 Then
+   If $Socket < 0 Then
 	   MsgBox($MB_OK, $mMB, $s, 5)
 	   _FileWriteLog($logFile, $s)
 	   Return
    EndIf
 
    TCPSend($Socket, $s & " ")
-   If StringInStr($s, "FAILED", 1) = 1 Then
+   If @error <> 0 Then
+	   CloseConnection($err)
+	   Return
+	EndIf
+
+	If StringInStr($s, "FAILED", 1) = 1 Then
 		TakeScreenCapture("failure", $mCopTrax)
 	Else
 		Sleep(1000)
@@ -1229,6 +1239,12 @@ Func CalculateTimeDiff($time1,$time2)
    Return $t2 - $t1 + $t0
 EndFunc
 
+Func CloseConnection($err)
+	TCPCloseSocket($Socket)
+	$Socket = -1
+	LogUpload("Connection lost with error " & $err)
+EndFunc
+
 Func ListenToNewCommand()
 	Local $raw
 	Local $len
@@ -1240,10 +1256,7 @@ Func ListenToNewCommand()
 		If $err <> 0 Then	; In case there is error, the connection has lost, restart the automation test
 			FileClose($fileToBeUpdate)
 			$fileToBeUpdate = 0
-
-			LogUpload("Connection lost with error " & $err)
-			$testEnd = True
-			$restart = True
+			CloseConnection($err)
 			Return False
 		EndIf
 
@@ -1264,9 +1277,7 @@ Func ListenToNewCommand()
 	$raw = TCPRecv($Socket, 1000)	; In listen to command mode, receives in text mode with shorter length
 	$err = @error
 	If $err <> 0 Then	; In case there is error, the connection has lost, restart the automation test
-		LogUpload("Connection lost with error " & $err)
-		$testEnd = True
-		$restart = True
+		CloseConnection($err)
 		Return False
 	EndIf
 	If $raw = "" Then Return False
@@ -1382,6 +1393,7 @@ Func ListenToNewCommand()
 			MsgBox($MB_OK, $mMB, "Testing file upload function",2)
 			If $Recv[0] >= 2 Then
 				UploadFile($Recv[2])
+				LogUpload("PASSED upload setting.")
 			Else
 				LogUpload("FAILED missing parameter to set the file upload.")
 			EndIf
@@ -1418,10 +1430,13 @@ Func ListenToNewCommand()
 				LogUpload("Continue Warning on the check of recorded files.")
 			EndIf
 
-		Case "eof"
-			$sendBlock = False
+		Case "eof", "cancel"
 			LogUpload("Continue End of file stransfer. " & $sentPattern)
-			If $uploadMode = "all" Then UploadFile("all")
+			If StringLower($Recv[1]) = "eof" Then
+				PopFile(True)	; pop the previous file out of the stack when receives eof
+				If $uploadMode = "all" Then UploadFile("all")
+				EndIf
+			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "configure"
 			MsgBox($MB_OK, $mMB, "Configuring the client.",2)
@@ -1433,13 +1448,17 @@ Func ListenToNewCommand()
 
 		Case "send"
 			$sentPattern = ""
-			While BinaryLen($fileContent) ;LarryDaLooza's idea to send in chunks to reduce stress on the application
+			$len = 1
+			While BinaryLen($fileContent) And $len;LarryDaLooza's idea to send in chunks to reduce stress on the application
 				$len = TCPSend($Socket,BinaryMid($fileContent, 1, $maxSendLength))
+				$err = @error
 				$fileContent = BinaryMid($fileContent,$len+1,BinaryLen($fileContent)-$len)
 				$sentPattern &= $len & " "
 			WEnd
-    		;TCPSend($Socket,$fileContent)
-			$sendBlock = True
+			If $err <> 0 Then
+				CloseConnection($err)
+			EndIf
+			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "quit", "endtest", "quittest"
 			LogUpload("quit The test client will stop.")
@@ -1457,6 +1476,7 @@ Func ListenToNewCommand()
 				UploadFile("now")
 				$uploadMode = "idle"
 			EndIf
+			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "info"
 			LogUpload("Continue function not programmed yet.")
@@ -1560,8 +1580,19 @@ EndFunc
 Func CopyOver($config, $destDir)
 	Sleep(500)	; sleep for a while waiting the fully close of original process
 	Local $sourceDir = "C:\CopTrax Support\Configures\" & $config
-	Local $rst = DirCopy($sourceDir, $destDir, 1)	; copies the directory $sourceDir and all sub-directories and files to $destDir in overwrite mode
-	Sleep(500)	; sleep for a while waiting the fully copy before new process begin
+	Local $rst = False
+	Local $i = 0
+	While Not $rst	And $i < 3
+		$rst = DirCopy($sourceDir, $destDir, 1) ; copies the directory $sourceDir and all sub-directories and files to $destDir in overwrite mode
+		$i += 1
+		Sleep(500)
+	WEnd
+
+	If $rst Then
+		LogUpload("Configures are copied to " & $destDir & ". " & $i)
+	Else
+		LogUpload("Warning! Configures are not copied to " & $destDir)
+	EndIf
 	Return $rst
 EndFunc
 
@@ -1639,20 +1670,18 @@ Func UploadFile($arg)
 	EndSwitch
 
 	If $uploadMode = "wait" Or $uploadMode = "idle" Then
-		LogUpload("PASSED file upload set.")	; no upload at this time, so reply PASSED
 		Return
 	EndIf
 
-	Local $filename = PopFile()
+	Local $filename = PopFile(False)	; not pop the file until it is received by server
 	If $filename = "" Then Return
 
 	$filename = StringReplace($filename, "\_", " ")	; change \_ back to space
 	Local $file = FileOpen($filename,16)
 	If $file = -1 Then
-		LogUpload("FAILED " & $filename & " does not exist.")	; reply FAILED when cannot find the file
+		LogUpload("Cannot find " & $filename & ".")
 		Return
 	EndIf
-	LogUpload("PASSED file upload set.")	; reply PASSED when find the file
 
 	$fileContent = FileRead($file)
 	FileClose($file)
@@ -1665,10 +1694,12 @@ Func PushFile($newFile)
 	Return
 EndFunc
 
-Func PopFile()
+Func PopFile($pop = True)
 	Local $length = StringInStr($filesToBeSent, " ", 2)
 	Local $nextFile = StringLeft($filesToBeSent, $length-1)
-	$filesToBeSent = StringTrimLeft($filesToBeSent, $length)
+	If $pop Then
+		$filesToBeSent = StringTrimLeft($filesToBeSent, $length)
+	EndIf
 	Return $nextFile
 EndFunc
 
@@ -1706,7 +1737,7 @@ Func HotKeyPressed()
 			Run("c:\Program Files (x86)\IncaX\CopTrax\IncaXPCApp.exe", "c:\Program Files (x86)\IncaX\CopTrax")
 
 		Case "!{SPACE}" ; Keystroke is the Alt-Space hotkey, to show the automation testing in-progress
-			MsgBox($MB_OK, $mMB, "CopTrax Automation testing is in progress.",2)
+			MsgBox($MB_OK, $mMB, "CopTrax Automation testing is in progress. " & $Socket ,2)
 
 	EndSwitch
 EndFunc   ;==>HotKeyPressed
@@ -1737,7 +1768,6 @@ Func ReportCPUMemory()
 EndFunc
 
 Func OnAutoItExit()
-	LogUpload("quit")
 	TCPShutdown() ; Close the TCP service.
  EndFunc   ;==>OnAutoItExit
 
@@ -1792,13 +1822,9 @@ Func GetHandleWindowWait($title, $text = "", $seconds = 5)
 EndFunc
 
 Func GetParameter($parameters, $keyword)
-	If StringInStr($parameters, "=") Then
-		Local $parameter = StringRegExp($parameters, "(?:" & $keyword & "[= ])(.[^\s|]*)", $STR_REGEXPARRAYMATCH)
-		If $parameter = "" Then
-			Return ""
-		Else
-			Return StringReplace($parameter[0], "\_", " ") ; replace \_ back to space
-		EndIf
+	Local $parameter = StringRegExp($parameters, "(?:" & $keyword & "[= ])(.[^\s|]*)", $STR_REGEXPARRAYMATCH)
+	If IsArray($parameter) Then
+		Return StringReplace($parameter[0], "\_", " ") ; replace \_ back to space
 	Else
 		Return ""
 	EndIf
