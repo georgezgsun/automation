@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.41
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.43
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -91,7 +91,7 @@ $allCommands[19] = "endrecord duration"
 $allCommands[20] = "startrecord duration"
 $allCommands[21] = "runapp"
 $allCommands[22] = "stopapp"
-$allCommands[23] = "configure ct config map map"
+$allCommands[23] = "configure ct release map"
 $allCommands[24] = "info"
 $allCommands[25] = "camera"
 $allCommands[26] = "review"
@@ -338,13 +338,13 @@ While Not $testEnd	; main loop that get input, display the resilts
 				LogWrite($i, "(Server) Send cancel to client.")
 			Else
 				SendCommand($i, "heartbeat")	; send a command for heart_beat
-				PushCommand($i, "hold ")	; hold any new command from executing only after get a continue response from the client
+				PushCommand($i, "hold")	; hold any new command from executing only after get a continue response from the client
 				LogWrite($i, "(Server) Send heartbeat command to client.")
 			EndIf
 
 			$heartBeatTimers[$i] = $time0 + 60*1000;
-			If $time0 < $commandTimers[$i] - 5*1000 Then
-				$heartBeatTimers[$i] += 5 * 1000	; wait 5 more seconds in case heartbeat is too close to next command, compatible with batchhold
+			If $time0 > $commandTimers[$i] - 5*1000 Then
+				$commandTimers[$i] += 5 * 1000	; wait 5 more seconds in case heartbeat is too close to next command, compatible with batchhold
 			EndIf
 		EndIf
 
@@ -809,8 +809,8 @@ Func ReadTestCase($fileName)
 		$aLine = FileReadLine($testFile)
 		If @error < 0 Then ExitLoop
 
-		$aLine = StringRegExpReplace($aLine, "([;].*)", "")
-		$aLine = StringRegExpReplace($aLine, "([//].*)", "")
+		$aLine = StringRegExpReplace($aLine, "(;.*)", "")
+		$aLine = StringRegExpReplace($aLine, "(//.*)", "")
 		If $aLine = "" Then ContinueLoop
 
 		$aCommand = ReadCommand($aLine)
@@ -1072,10 +1072,9 @@ Func ProcessReply($n)
 	EndIf
 
 	If StringInStr($reply, "PASSED", 1) Or StringInStr($reply, "Continue") Then
-		;PopCommand($n)	; unhold the test command by pop the hold command
-		$newCommand = PopCommand($n)	; unhold the test command by pop the hold command
-		If $newCommand <> "hold" Then
-			PushCommand($n, $newCommand)
+		If PopCommand($n, False) = "hold" Then
+			PopCommand($n) ; unhold the test command by pop the hold command
+		Else
 			LogWrite($n, "(Server) Wrong pop of new test command " & $newCommand)
 		EndIf
 	EndIf
@@ -1084,6 +1083,23 @@ EndFunc
 
 Func StartNewTest($n, $ID, $resume, $clientVersion)
 	$boxID[$n] = $ID	; get the boxID from client
+
+	LogWrite($automationLogPort, $boxID[$n] & " connected on " & $boxIP[$n] & ".")
+
+	$portDisplay = $n
+	GUICtrlSetData($bGUI[$n], $boxID[$n])	; update the text on the button
+	GUICtrlSetData($tLog, " " & $boxID[$n])	; update the serial number on top the main log display
+
+	Local $nextCommand = PopCommand($n, False)
+	If StringInStr($resume, "re") And $nextCommand Then
+		LogWrite($n, " ")
+		LogWrite($n, "Test resumed.")
+		If $nextCommand = "hold" Then
+			LogWrite($n, "Pop the " & PopCommand($n) & " in front of the command queue.")
+		EndIf
+		Return
+	EndIf
+
 	$filesReceived[$n] = 0	; clear the upload files
 	$fileToBeSent[$n] = ""	; clear file need to be sent to client
 	$testFailures[$n] = 0	; initialize the result true until any failure
@@ -1091,22 +1107,11 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 	If $logFiles[$n] <> 0 Then
 		FileClose($logFiles[$n])
 	EndIf
-
 	Local $filename = $workDir & "log\" & $boxID[$n] & ".log"
 	$logFiles[$n] = FileOpen($filename, 1+8) ; open log file for append write in text mode
-	LogWrite($automationLogPort, $boxID[$n] & " connected on " & $boxIP[$n] & ".")
 
-	$portDisplay = $n
-	$logContent[$n] = ""	; clear the main log display window
-	GUICtrlSetData($bGUI[$n], $boxID[$n])	; update the text on the button
-	GUICtrlSetData($tLog, " " & $boxID[$n])	; update the serial number on top the main log display
+	$logContent[$n] = ""	; clear the main log display window for a new test
 	GUICtrlSetData($cLog, $logContent[$n])	; display and update the log content
-
-	If $resume = "resume" And StringLen($commands[$n]) > 4 Then
-		LogWrite($n, " ")
-		LogWrite($n, "Test resumed. Pop the " & PopCommand($n) & " from the command queue.")
-		Return
-	EndIf
 
 	$filename = $workdir & $boxID[$n] & ".txt"	; try to find if any individual test case exits
 	If Not FileExists($filename) Then	; If there is no individual test case, try to read general test case.
@@ -1129,7 +1134,6 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 	LogWrite($n, " Automation test for CopTrax DVR box " & $boxID[$n])
 	LogWrite($n, " Current version of the test server : " & FileGetVersion ( @ScriptFullPath ))
 
-	;Local $clientVersion = $msg[4]	; get the automation client version
 	Local $latestVersion = FileGetVersion($workDir & "latest\CopTraxAutomationClient.exe")
 	If _VersionCompare($clientVersion, $latestVersion) < 0 Then
 		If _VersionCompare($clientVersion, "2.12.20.50") < 0 Then

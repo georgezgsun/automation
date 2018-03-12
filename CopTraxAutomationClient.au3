@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.45)
+#pragma compile(FileVersion, 3.2.20.47)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -1461,7 +1461,7 @@ Func ListenToNewCommand()
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "quit", "endtest", "quittest"
-			LogUpload("quit The test client will stop.")
+			LogUpload("quit Got " & $raw & " command. The test client will stop.")
 			$testEnd = True	;	Stop testing marker
 			$restart = False
 
@@ -1546,32 +1546,42 @@ Func RunCopTrax()
 EndFunc
 
 Func Configure($arg)
-	Local $config
-	Local $rst
+	Local $ct
+	Local $release
+	Local $map
+	Local $rst = False
+	Local $file
 
-	$config = GetParameter($arg, "ct")	; configure the CopTrax App
-	If $config Then
-		LogUpload("Configuring CopTrax App to " & $config & ".")
-		$rst = QuitCopTrax() And CopyOver("CT-" & $config, $CopTraxAppDir)
-		$rst = RunCopTrax() And $rst	; RunCopTrax no matter previous operation success or not
+	$ct = GetParameter($arg, "ct")	; configure the CopTrax App
+	$release = GetParameter($arg, "release")	; configure the Evidence Viewer
+	If $ct Or $release Then
+		If Not QuitCopTrax() Then Return $rst
+
+		If $ct Then
+			LogUpload("Configuring CopTrax App to " & $ct & ".")
+			$rst = CopyOver("CT-" & $ct, $CopTraxAppDir)
+		EndIf
+
+		If $release Then
+			LogUpload("Configuring Coptrax App to release " & $release & ".")
+			$file = FileOpen($CopTraxAppDir & "CopTrax.config", 2) ; Open the coptrax.config file in overwrite mode
+			If $file <> -1 Then
+				FileWriteLine($file, "release=" & $release)
+				FileClose($file)
+			Else
+				$rst = False
+			EndIf
+		EndIf
+
+		If Not RunCopTrax() Then
+			$rst = False
+		EndIf
 	EndIf
 
-	$config = GetParameter($arg, "ev")	; configure the Evidence Viewer
-	If $config Then
-		LogUpload("Configuring Evidence Viewer to " & $config & ".")
-		$rst = $rst And CopyOver("EV-" & $config, "C:\Program Files (x86)\CoptraxViewer\Test")
-	EndIf
-
-	$config = GetParameter($arg, "map")	; configure the Evidence Viewer
-	If $config Then
-		LogUpload("Configuring Evidence Viewer using map of " & $config & ".")
-		$rst = $rst And CopyOver("EV-" & $config, $mapDir)
-	EndIf
-
-	$config = GetParameter($arg, "bwc")	; configure the Body Ware Camera
-	If $config Then
-		LogUpload("Configuring Body Weaver Camera to " & $config & ".")
-		$rst = $rst And CopyOver("BWC-" & $config, $bwcDir)	; this is not a valid dir yet
+	$map = GetParameter($arg, "map")	; configure the Evidence Viewer
+	If $map Then
+		LogUpload("Configuring Evidence Viewer using map of " & $map & ".")
+		$rst = $rst And FileCopy("C:\CopTrax Support\maps\" & $map & ".map", $mapDir, 1) ; overwrite the existing map
 	EndIf
 
 	Return $rst
