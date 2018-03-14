@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.43
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.46
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -66,7 +66,7 @@ OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when t
 Global $TCPListen = TCPListen ($ipServer, $port, $maxListen)
 
 Global $currentTestCaseFile = $workDir & $config & ".txt"
-Global Const $maxCommands = 36
+Global Const $maxCommands = 37
 Global $allCommands[$maxCommands]	; this section defines the supported test commands
 $allCommands[0] = "record duration repeat interval"
 $allCommands[1] = "settings pre chunk cam2 cam3 keyboard"
@@ -100,10 +100,11 @@ $allCommands[28] = "synctmz"
 $allCommands[29] = "radar"
 $allCommands[30] = "status"
 $allCommands[31] = "photo"
-$allCommands[33] = "restarttest mode"
-$allCommands[32] = "quittest"
-$allCommands[34] = "reboot"
-$allCommands[35] = "cleanup"
+$allCommands[32] = "onfailure command"
+$allCommands[33] = "restarttest"
+$allCommands[34] = "quittest"
+$allCommands[35] = "reboot"
+$allCommands[36] = "cleanup"
 
 ; This section defines the required parameters for automation test for each UUT
 Global $sockets[$maxConnections + 1]	; the socket for each UUT
@@ -324,14 +325,11 @@ While Not $testEnd	; main loop that get input, display the resilts
 
 		If ($time0 > $heartBeatTimers[$i]) Then ; check the heart-beat timer
 			If PopCommand($i, False) = "hold" Then
-				$testFailures[$i] += 1
 				LogWrite($i, "(Server) Get inproper reply from the client for last command. Have to skip it.")
-				GUICtrlSetColor($pGUI[$i], $COLOR_RED)
 				If $filesReceived[$i] Then
 					FileClose($filesReceived[$i])	; get and save the file
 					$filesReceived[$i] = 0	;clear the flag when file transfer ends
-
-					LogWrite($i, "(Server) Last file upload not completed in one minute.")
+					LogWrite($i, "(Server) Last file upload not completed in one minute. Have to abort the sending.")
 				EndIf
 				SendCommand($i, "cancel")
 				PopCommand($i)
@@ -427,7 +425,7 @@ OnAutoItExit()
 Exit
 
 Func UpdateConfigCombo($id)
-	Local $fileList = _FileListToArray($workDir & "latest","*.mcfg", 1)	; list *.config files in ..\latest folder
+	Local $fileList = _FileListToArray($workDir,"*.mcfg", 1)	; list *.config files in ..\latest folder
 	$fileList = StringRegExpReplace(_ArrayToString($fileList), "(\.mcfg)", "")
 	$fileList = StringRegExpReplace($fileList, "(^[0-9].)", "")
 	If $fileList <> $comboList Then
@@ -608,28 +606,30 @@ Func ParseCommand($n)
 				$commandTimers[$n] += 10*1000	; add 10 more seconds
 			EndIf
 
-		Case "quit", "reboot", "endtest", "quittest"
+		Case "quit", "reboot", "endtest", "quittest", "restart", "restarttest", "cleanup"
 			SendCommand($n, $newCommand)	; send new test command to client
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
 
-		Case "cleanup"
-			If $testFailures[$n] Then
-				LogWrite($n, "(Server) There are failures in this test. So it is better not to cleanup.")
-				SendCommand($n, "quittest")
-			Else
-				SendCommand($n, $newCommand)	; send new test command to client
-			EndIf
-			LogWrite($n, "")
-			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
+		Case "onfailure"
+			$arg = PopCommand($n)
+			If $testFailures[$n] > 0 Then
+				If StringInStr($arg, "start") Then
+					SendCommand($n, "restart")
+					LogWrite($n, "(Server) Send restart command to client because there are " & $testFailures[$n] & " failures in this test.")
+				EndIf
 
-		Case "restarttest", "restart"
-			$arg = StringLower(PopCommand($n))
-			If ($arg = "onerror") And ($testFailures[$n]=0) Then
-				LogWrite($n, "(Server) Not sends restart command to client because there are no failure in this test.")
+				If StringInStr($arg, "quit") Then
+					SendCommand($n, "restart")
+					LogWrite($n, "(Server) Send quit command to client because there are " & $testFailures[$n] & "  failures in this test.")
+				EndIf
+
+				If StringInStr($arg, "boot") Then
+					SendCommand($n, "reboot")
+					LogWrite($n, "(Server) Send reboot command to client because there are " & $testFailures[$n] & "  failures in this test.")
+				EndIf
 			Else
-				LogWrite($n, "(Server) Sent restart command to client.")
-				SendCommand($n, "restart")
+				LogWrite($n, "(Server) No command was sent to client because there is no failure in the test so far.")
 			EndIf
 
 		Case "synctime"
@@ -801,7 +801,7 @@ Func ReadTestCase($fileName)
 	Local $eof = false
 	Local $endofTestCase = ""
 	Local $i
-	For $i = $maxCommands - 3 To $maxCommands - 1	; last 4 commands
+	For $i = $maxCommands - 4 To $maxCommands - 1	; last 4 commands
 		$endofTestCase &= $allCommands[$i]
 	Next
 
@@ -1075,7 +1075,7 @@ Func ProcessReply($n)
 		If PopCommand($n, False) = "hold" Then
 			PopCommand($n) ; unhold the test command by pop the hold command
 		Else
-			LogWrite($n, "(Server) Wrong pop of new test command " & $newCommand)
+			LogWrite($n, "(Server) Next test command is " & PopCommand($n, False))
 		EndIf
 	EndIf
 	Return True

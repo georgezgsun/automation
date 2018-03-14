@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.47)
+#pragma compile(FileVersion, 3.2.20.55)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -120,15 +120,6 @@ If WinExists("", "Open CopTrax") Then
 	Local $CopTraxDir = "c:\Program Files (x86)\IncaX\CopTrax\"	; path to CopTraxApp
 	Run( $CopTraxDir & $pCopTrax, $CopTraxDir)	; start CopTrax App again
 
-;	If WinExists($titleAccount ) Then
-;		ProcessClose($pCopTrax)	; first close CopTrax App
-;		ControlClick("", "Open CopTrax", "[NAME:panelValidation]")	; Then click the panel validation tool
-;		RunValidationTool()	; Then run validation tool
-;		Local $CopTraxDir = "c:\Program Files (x86)\IncaX\CopTrax\"	; path to CopTraxApp
-;		Run( $CopTraxDir & $pCopTrax, $CopTraxDir)	; start CopTrax App again
-;	EndIf
-
-;	ControlClick("", "Open CopTrax", "[NAME:panelCopTrax]")
 	Sleep(5000)
 EndIf
 
@@ -233,11 +224,11 @@ If $restart Then
 	If IsRecording() Then
 		EndRecording(True)	; stops any recording in progress before automation restart
 	EndIf
-	LogUpload("quit The automation test will restart.")
+	LogUpload("The automation test will be restarted.")
 	MsgBox($MB_OK, $mMB, "Reatarting the automation test.",2)
 	RestartAutomation()
 Else
-	LogUpload("quit End of automation test.")
+	LogUpload("End of automation test.")
 	MsgBox($MB_OK, $mMB, "Testing ends. Bye.",5)
 EndIf
 
@@ -1432,7 +1423,7 @@ Func ListenToNewCommand()
 
 		Case "eof", "cancel"
 			LogUpload("Continue End of file stransfer. " & $sentPattern)
-			If StringLower($Recv[1]) = "eof" Then
+			If StringInStr($raw, "eof") Then
 				PopFile(True)	; pop the previous file out of the stack when receives eof
 				If $uploadMode = "all" Then UploadFile("all")
 				EndIf
@@ -1588,22 +1579,35 @@ Func Configure($arg)
 EndFunc
 
 Func CopyOver($config, $destDir)
-	Sleep(500)	; sleep for a while waiting the fully close of original process
 	Local $sourceDir = "C:\CopTrax Support\Configures\" & $config
-	Local $rst = False
-	Local $i = 0
-	While Not $rst	And $i < 3
-		$rst = DirCopy($sourceDir, $destDir, 1) ; copies the directory $sourceDir and all sub-directories and files to $destDir in overwrite mode
-		$i += 1
-		Sleep(500)
-	WEnd
-
-	If $rst Then
-		LogUpload("Configures are copied to " & $destDir & ". " & $i)
-	Else
-		LogUpload("Warning! Configures are not copied to " & $destDir)
+	Local $list = _FileListToArray( $sourceDir, "*", 1, True )	; list all the files in the folder with full path
+	If Not IsArray($list) Or $list[0] = 0 Then
+		LogUpload("Warning! Cannot find any file in " & $sourceDir & ".")
+		Return False
 	EndIf
-	Return $rst
+
+	Local $i
+	Local $rst = 0
+	Local $end = 0
+	For $i = 1 To $list[0]
+		Do
+			If FileCopy($list[$i], $destDir, 1) Then; copies the directory $sourceDir and all sub-directories and files to $destDir in overwrite mode
+				$rst += 1
+				$end = 3
+			Else
+				LogUpload($list[$i] & " was not copied to " & $destDir & ". Try again.")
+				$end += 1
+			EndIf
+		Until $end >= 3
+	Next
+
+	If $rst = $list[0] Then
+		LogUpload("Configures are copied to " & $destDir & ".")
+		Return True
+	Else
+		LogUpload("Warning! Only " & $rst & " out of " & $list[0] & " files were copied from " & $sourceDir & " to " & $destDir)
+		Return False
+	EndIf
 EndFunc
 
 Func RunMsi($msi)
@@ -1725,7 +1729,7 @@ Func HotKeyPressed()
 	Switch @HotKeyPressed ; The last hotkey pressed.
 		Case "{Esc}", "^q" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
 			$testEnd = True	;	Stop testing marker
-			LogUpload("Automation is interrupt by operator.")
+			LogUpload("quit Automation is interrupt by operator.")
 			MsgBox($MB_OK, $mMB, "Automation is going to be shut down.",2)
 			Exit
 
