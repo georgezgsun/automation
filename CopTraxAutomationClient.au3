@@ -1392,18 +1392,18 @@ Func ListenToNewCommand()
 		Case "update"
 			MsgBox($MB_OK, $mMB, "Testing file update function",2)
 			If ($Recv[0] >=3) And UpdateFile($Recv[2], Int($Recv[3])) Then
-				LogUpload("Continue")
+				LogUpload("Continue Got the update command. Ready for to receive.")
 			Else
 				LogUpload("FAILED to update " & $Recv[2])
 			EndIf
 
 		Case "synctime"
-			MsgBox($MB_OK, $mMB, "Synchronizing client time to server",2)
 			If ($Recv[0] >= 2) And SyncDateTime($Recv[2]) Then
 				LogUpload("PASSED date and time syncing. The client is now " & @YEAR & "/" & @MON & "/" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC)
 			Else
 				LogUpload("FAILED to sync date and time.")
 			EndIf
+			MsgBox($MB_OK, $mMB, "Synchronizing client time to server",2)
 
 		Case "synctmz"
 			MsgBox($MB_OK, $mMB, "Synchronizing client timezone to server's",2)

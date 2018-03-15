@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.46
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.48
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -35,7 +35,7 @@ _Singleton('Automation test server')
 HotKeySet("!{Esc}", "HotKeyPressed") ; Alt-Esc to stop testing
 
 TCPStartup() ; Start the TCP service.
-AutoItSetOption ( "TCPTimeout", 1 )
+AutoItSetOption("TCPTimeout", 1)
 
 Global Const $maxConnections = 20	; define the max client numbers
 Global Const $maxListen = 100	; define the max client numbers
@@ -168,10 +168,6 @@ GUICtrlSetFont($cID, 12, 400, 0, "Courier New")
 $cID = GUICtrlCreateLabel("FAILED", 1200+60, 320, 170, 20)	; label of failed list
 GUICtrlSetFont($cID, 12, 400, 0, "Courier New")
 
-;$cID = GUICtrlCreateLabel("Time remains", 720 - 130, 320, 120, 20)	; label of main timer's name
-;$nGUI[0] = GUICtrlCreateLabel("00:00:00", 720, 320, 81, 18)	; label of the main timer
-;Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 5, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
-;Global $idComboBox = $cID
 $cID = GUICtrlCreateLabel("Time remains", 700, 10, 120, 20)	; label of main timer's name
 $nGUI[0] = GUICtrlCreateLabel("00:00:00", 700 + 130, 10, 81, 18)	; label of the main timer
 Global $aLog = GUICtrlCreateEdit("Automation Progress", 480, 35, 475, 300, $WS_VSCROLL)	; the child window that displays the automation log
@@ -620,7 +616,7 @@ Func ParseCommand($n)
 				EndIf
 
 				If StringInStr($arg, "quit") Then
-					SendCommand($n, "restart")
+					SendCommand($n, "quit")
 					LogWrite($n, "(Server) Send quit command to client because there are " & $testFailures[$n] & "  failures in this test.")
 				EndIf
 
@@ -1022,10 +1018,10 @@ Func ProcessReply($n)
 	EndIf
 
 	If StringInStr($reply, "FAILED", 1) Then	; Got a FAILED reply,
-		$newCommand = PopCommand($n)	; unhold the test command by pop the hold command
-		If $newCommand <> "hold" Then
-			PushCommand($n, $newCommand)
-			LogWrite($n, "(Server) Wrong pop of new test command " & $newCommand)
+		If PopCommand($n, False) = "hold" Then
+			PopCommand($n) ; unhold the test command by pop the hold command
+		Else
+			LogWrite($n, "(Server) Next test command is " & PopCommand($n, False))
 		EndIf
 		$testFailures[$n] += 1
 		GUICtrlSetColor($pGUI[$n], $COLOR_RED)
@@ -1168,10 +1164,9 @@ EndFunc
 Func OnAutoItExit()
    TCPShutdown() ; Close the TCP service.
    Local $i
-   For $i = 0 To $maxConnections+1
+   For $i = 0 To $maxConnections
 	  If $logFiles[$i] <> 0 Then
 		 FileClose($logFiles[$i])
-		 $logFiles[$i] = 0
 	  EndIf
    Next
 EndFunc   ;==>OnAutoItExit
@@ -1300,14 +1295,12 @@ Func HotKeyPressed()
 	  Case "!{Esc}" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
 	  $testEnd = True	;	Stop testing marker
 	  Exit
-
     EndSwitch
  EndFunc   ;==>HotKeyPressed
 
 Func SocketToIP($iSocket)
-    Local $tSockAddr = 0, $aRet = 0
-    $tSockAddr = DllStructCreate("short;ushort;uint;char[8]")
-    $aRet = DllCall("Ws2_32.dll", "int", "getpeername", "int", $iSocket, "struct*", $tSockAddr, "int*", DllStructGetSize($tSockAddr))
+    Local $tSockAddr = DllStructCreate("short;ushort;uint;char[8]")
+    Local $aRet = DllCall("Ws2_32.dll", "int", "getpeername", "int", $iSocket, "struct*", $tSockAddr, "int*", DllStructGetSize($tSockAddr))
     If Not @error And $aRet[0] = 0 Then
         $aRet = DllCall("Ws2_32.dll", "str", "inet_ntoa", "int", DllStructGetData($tSockAddr, 3))
         If Not @error Then Return $aRet[0]
