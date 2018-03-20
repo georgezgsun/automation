@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.48
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.54
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -225,7 +225,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 	$time0 = Int(TimerDiff($hTimer))	; get current timer elaspe
 	AcceptConnection()	; accept new client's connection requist
 
-	If $batchMode Then
+	If $batchMode And $batchAligned Then
 		If $socketRaspberryPi1 <= 0 Then
 			$socketRaspberryPi1 = TCPConnect($ipRaspberryPi1, $portRaspberryPi)	; When RSP1 not connected, try to connect it
 			If $socketRaspberryPi1 > 0 Then
@@ -319,8 +319,8 @@ While Not $testEnd	; main loop that get input, display the resilts
 			GUICtrlSetData($nGUI[$i], toHMS($remainTestTime[$i]))
 		EndIf
 
-		If ($time0 > $heartBeatTimers[$i]) Then ; check the heart-beat timer
-			If PopCommand($i, False) = "hold" Then
+		If $time0 > $heartBeatTimers[$i] Then ; check the heart-beat timer
+			If PopCommand($i, False) = "hold" Then	; in case the next command is hold
 				LogWrite($i, "(Server) Get inproper reply from the client for last command. Have to skip it.")
 				If $filesReceived[$i] Then
 					FileClose($filesReceived[$i])	; get and save the file
@@ -330,15 +330,14 @@ While Not $testEnd	; main loop that get input, display the resilts
 				SendCommand($i, "cancel")
 				PopCommand($i)
 				LogWrite($i, "(Server) Send cancel to client.")
-			Else
+			ElseIf PopCommand($i, False) = "batchhold" Then ; in case the next command is batchhold
+				SendCommand($i, "info")	; send an quick reply command when in batchhold mode
+				PushCommand($i, "hold")	; hold any new command from executing only after get a continue response from the client
+				LogWrite($i, "(Server) Send info command to client while waiting for other clients to reach aligned mode.")
+			ElseIf	$time0 < $commandTimers[$i] - 50 * 1000 Then	; send the heartbeat command only when next available command is 50s away
 				SendCommand($i, "heartbeat")	; send a command for heart_beat
 				PushCommand($i, "hold")	; hold any new command from executing only after get a continue response from the client
 				LogWrite($i, "(Server) Send heartbeat command to client.")
-			EndIf
-
-			$heartBeatTimers[$i] = $time0 + 60*1000;
-			If $time0 > $commandTimers[$i] - 5*1000 Then
-				$commandTimers[$i] += 5 * 1000	; wait 5 more seconds in case heartbeat is too close to next command, compatible with batchhold
 			EndIf
 		EndIf
 
@@ -369,7 +368,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 	EndIf
 
 	UpdateConfigCombo($idComboBox)	; check and update the combo list
-	$batchAligned = $batchCheck
+	$batchAligned = $batchCheck And $totalConnection	; Aligned only when there are UUT connected
 	If $tempTime <> $lastEndTime Then
 		GUICtrlSetData($nGUI[0], toHMS($lastEndTime))
 		$tempTime = $lastEndTime
@@ -414,7 +413,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 	EndIf
 WEnd
 
-; SendCommand(0, "q0") ; let RaspberryPi to quit
+;SendCommand(0, "q1") ; let RaspberryPi to close the socket
 
 OnAutoItExit()
 
@@ -691,6 +690,7 @@ Func ParseCommand($n)
 		Case "batchtest"
 			$arg = StringLower(PopCommand($n))
 			LogWrite($n, "")
+			LogWrite($n, "(Server) Got batchtest " & $arg & " command.")
 
 			$IP = TCPNameToIP($arg)
 			If $IP Then
@@ -720,6 +720,9 @@ Func ParseCommand($n)
 
 			If $arg = "stop" Then
 				LogWrite($n, "(Server) Enter stop batch test mode, disabled all other later boxes from achieving align mode.")
+				SendCommand(0, "q1") ; let RaspberryPi to close the socket
+				LogWrite($automationLogPort, "(Server) Close the connection to Raspberry Pi simulator and send it q1 command to let it close the connection.")
+				LogWrite($piLogPort, "(Server) Close the connection to Raspberry Pi simulator and send it q1 command to let it close the connection.")
 				If $socketRaspberryPi1 Then
 					TCPCloseSocket($socketRaspberryPi1)
 				EndIf

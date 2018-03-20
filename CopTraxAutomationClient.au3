@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.55)
+#pragma compile(FileVersion, 3.2.20.57)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -48,6 +48,7 @@ Global Const $titleReview = "Playback" ; "CopTrax | Video Playback"
 Global Const $titleSettings = "Setup" ; "CopTrax II Setup"
 Global Const $titleStatus = "CopTrax Status" ; "CopTrax Status"
 Global Const $titleEndRecord = "Report Taken" ; "Report Taken"
+Global Const $titlePhoto = "Information" ; Photo
 Global Const $TIMEOUTINSECEND = 150
 Global Const $maxSendLength = 100000	; set maximum legth of bytes that a TCPsend command may send
 
@@ -837,7 +838,7 @@ Func CheckEventLog()
 		$aEvent = _EventLog__Read($hEventLogSystem, True, True)	;read the event log forwards from last read
 
 		If $aEvent[7] = 1 Then
-			LogUpload("System error event at " &  $aEvent[4] & " " & $aEvent[5] & ", ID=" & $aEvent[6] & ", " & $aEvent[13])
+			LogUpload("Get system error event at " &  $aEvent[4] & " " & $aEvent[5] & ", ID=" & $aEvent[6] & ", " & $aEvent[13])
 			If $aEvent[6] = 10110 Then $rst = False
 		EndIf
 	Until Not $aEvent[0]
@@ -846,7 +847,7 @@ Func CheckEventLog()
 		$aEvent = _EventLog__Read($hEventLogApp, True, True)	;read the event log forwards from last read
 
 		If $aEvent[7] = 1 Then
-			LogUpload("Application error event at " &  $aEvent[4] & " " & $aEvent[5] & ", ID=" & $aEvent[6] & ", " & $aEvent[13])
+			LogUpload("Get application error event at " &  $aEvent[4] & " " & $aEvent[5] & ", ID=" & $aEvent[6] & ", " & $aEvent[13])
 		EndIf
 	Until Not $aEvent[0]
 
@@ -854,7 +855,7 @@ Func CheckEventLog()
 		$aEvent = _EventLog__Read($hEventLogCopTrax, True, True)	;read the event log forwards from last read
 
 		If $aEvent[7] = 1 Then
-			LogUpload("Application error event at " &  $aEvent[4] & " " & $aEvent[5] & ", ID=" & $aEvent[6] & ", " & $aEvent[13])
+			LogUpload("Get CopTrax App error event at " &  $aEvent[4] & " " & $aEvent[5] & ", ID=" & $aEvent[6] & ", " & $aEvent[13])
 		EndIf
 	Until Not $aEvent[0]
 
@@ -943,11 +944,14 @@ Func TestPhotoFunction()
 	LogUpload("Begin Photo function testing.")
 	MouseClick("", 960, 350);
 
-	Local $hWnd = GetHandleWindowWait("Information", "", 10)
+	Local $hWnd = GetHandleWindowWait($titlePhoto, "OK", 5)
 	If $hWnd = 0 Then
-		MsgBox($MB_OK, $mMB, "Click to trigger the Photo function failed.",2)
-		LogUpload("Unable to test the Photo function by click on the photo button.")
-		Return False
+		$hWnd = GetHandleWindowWait($titleEndRecord, "OK", 5)
+		If $hWnd = 0 Then
+			MsgBox($MB_OK, $mMB, "Click to trigger the Photo function failed.",2)
+			LogUpload("Unable to test the Photo function by click on the photo button.")
+			Return False
+		EndIf
 	EndIf
 
 	Sleep(2000)
