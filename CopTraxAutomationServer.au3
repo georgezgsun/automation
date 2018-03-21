@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.54
+#AutoIt3Wrapper_Res_Fileversion=2.2.15.56
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -225,8 +225,8 @@ While Not $testEnd	; main loop that get input, display the resilts
 	$time0 = Int(TimerDiff($hTimer))	; get current timer elaspe
 	AcceptConnection()	; accept new client's connection requist
 
-	If $batchMode And $batchAligned Then
-		If $socketRaspberryPi1 <= 0 Then
+	If $batchMode Then
+		If ($socketRaspberryPi1 <= 0) And $batchAligned Then
 			$socketRaspberryPi1 = TCPConnect($ipRaspberryPi1, $portRaspberryPi)	; When RSP1 not connected, try to connect it
 			If $socketRaspberryPi1 > 0 Then
 				LogWrite($automationLogPort, "(Server) Raspberry Pi simulator 1 connected.")
@@ -236,7 +236,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 			EndIf
 		EndIf
 
-		If $socketRaspberryPi2 <= 0 Then
+		If ($socketRaspberryPi2 <= 0) And $batchAligned Then
 			$socketRaspberryPi2 = TCPConnect($ipRaspberryPi2, $portRaspberryPi)	; When RSP2 not connected, try to connect it
 			If $socketRaspberryPi2 > 0 Then
 				LogWrite($automationLogPort, "(Server) Raspberry Pi simulator 2 connected.")
@@ -280,7 +280,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 		EndIf
 	EndIf
 
-	$batchCheck = True
+	$batchCheck = ($totalConnection > 0)
 	$totalConnection = 0
 	$tempPattern = ""
 	$lastEndTime = 0
@@ -617,6 +617,7 @@ Func ParseCommand($n)
 				If StringInStr($arg, "quit") Then
 					SendCommand($n, "quit")
 					LogWrite($n, "(Server) Send quit command to client because there are " & $testFailures[$n] & "  failures in this test.")
+					$commands[$n] = ""	; end of the test, show failed
 				EndIf
 
 				If StringInStr($arg, "boot") Then
@@ -1165,6 +1166,13 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 EndFunc
 
 Func OnAutoItExit()
+	If $socketRaspberryPi1 Then
+		TCPCloseSocket($socketRaspberryPi1)
+	EndIf
+	If $socketRaspberryPi2 Then
+		TCPCloseSocket($socketRaspberryPi2)
+	EndIf
+
    TCPShutdown() ; Close the TCP service.
    Local $i
    For $i = 0 To $maxConnections
