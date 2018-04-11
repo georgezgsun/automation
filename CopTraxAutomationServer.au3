@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.2.15.56
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.2
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -66,7 +66,7 @@ OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when t
 Global $TCPListen = TCPListen ($ipServer, $port, $maxListen)
 
 Global $currentTestCaseFile = $workDir & $config & ".txt"
-Global Const $maxCommands = 37
+Global Const $maxCommands = 38
 Global $allCommands[$maxCommands]	; this section defines the supported test commands
 $allCommands[0] = "record duration repeat interval"
 $allCommands[1] = "settings pre chunk cam2 cam3 keyboard"
@@ -101,10 +101,11 @@ $allCommands[29] = "radar"
 $allCommands[30] = "status"
 $allCommands[31] = "photo"
 $allCommands[32] = "onfailure command"
-$allCommands[33] = "restarttest"
-$allCommands[34] = "quittest"
-$allCommands[35] = "reboot"
-$allCommands[36] = "cleanup"
+$allCommands[33] = "about"
+$allCommands[34] = "restarttest"
+$allCommands[35] = "quittest"
+$allCommands[36] = "reboot"
+$allCommands[37] = "cleanup"
 
 ; This section defines the required parameters for automation test for each UUT
 Global $sockets[$maxConnections + 1]	; the socket for each UUT
@@ -500,6 +501,11 @@ Func CloseConnection($n)
 EndFunc
 
 Func ParseCommand($n)
+	If $filesReceived[$n] Then	; This indicates there exists file uploading, do not send new command until it ends
+		$testEndTime[$n] += 5
+		Return False
+	EndIf
+
 	Local $newCommand = PopCommand($n)
 	$commandTimers[$n] =  $time0 + 5*1000 ; time for next command to be executed
 
@@ -592,7 +598,7 @@ Func ParseCommand($n)
 			PushCommand($n, "hold")	; hold any new command from executing only after get a passed/continue response from the client
 			$batchWait[$n] = False	; enter batchtest stop mode, stops any other box from entering aligned mode
 
-		Case "review", "photo", "info", "status", "eof", "radar", "stopapp", "runapp", "camera"
+		Case "review", "photo", "info", "status", "eof", "radar", "stopapp", "runapp", "camera", "about"
 			SendCommand($n, $newCommand)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "")
@@ -616,13 +622,13 @@ Func ParseCommand($n)
 
 				If StringInStr($arg, "quit") Then
 					SendCommand($n, "quit")
-					LogWrite($n, "(Server) Send quit command to client because there are " & $testFailures[$n] & "  failures in this test.")
+					LogWrite($n, "(Server) Send quit command to client because there are " & $testFailures[$n] & " failures in this test.")
 					$commands[$n] = ""	; end of the test, show failed
 				EndIf
 
 				If StringInStr($arg, "boot") Then
 					SendCommand($n, "reboot")
-					LogWrite($n, "(Server) Send reboot command to client because there are " & $testFailures[$n] & "  failures in this test.")
+					LogWrite($n, "(Server) Send reboot command to client because there are " & $testFailures[$n] & " failures in this test.")
 				EndIf
 			Else
 				LogWrite($n, "(Server) No command was sent to client because there is no failure in the test so far.")

@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.2.20.57)
+#pragma compile(FileVersion, 3.4.10.3)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -42,6 +42,7 @@ HotKeySet("!{SPACE}", "HotKeyPressed") ; Alt-Space show the running CopTraxAutom
 Global Const $titleCopTraxMain = "CopTrax II v"	; "CopTrax II v2.x.x"
 Global Const $titleAccount = "Account" ; "CopTrax - Login / Create Account"
 Global Const $titleInfo = "Action" ; "Menu Action"
+Global Const $titleAbout = "About" ; About CopTrax II
 Global Const $titleLogin = "Login"
 Global Const $titleRadar = "Radar" ; "CopTrax | Radar"
 Global Const $titleReview = "Playback" ; "CopTrax | Video Playback"
@@ -64,6 +65,8 @@ Global $bwcDir = "C:\Program Files (x86)\VIA\Icon Files"
 Global $firmwareVersion = ""
 Global $libraryVersion = ""
 Global $appVersion = ""
+Global $releaseRead = ""
+Global $releaseSet = "Universal"
 Global $title = "CopTrax II is not up yet"
 Global $userName = ""
 Global $sentPattern = ""
@@ -351,6 +354,46 @@ Func QuitCopTrax()
 	Return WinWaitClose($hWnd, "", 10)
 EndFunc
 
+Func TestAbout()
+	LogUpload("Try to read CopTrax App about info.")
+
+	If Not ReadyForTest() Then Return ProcessClose($pCopTrax)
+
+	If IsRecording() Then
+		LogUpload("A recording is in progress.")
+		Return False
+	EndIf
+
+	MouseClick("",960,560)	; click on the info button
+	Sleep(400)
+
+	If Not GetHandleWindowWait($titleInfo, "", 10) Then
+		MsgBox($MB_OK, $mMB, "Unable to trigger the Info window. " & @CRLF, 5)
+		LogUpload("Unable to open the info window by click on the info button.")
+		Return False
+	EndIf
+
+	Sleep(500)
+	Send("{TAB}{HOME}{TAB}{ENTER}")	; choose the Administrator
+	Local $hWnd = GetHandleWindowWait($titleAbout, "OK", 5)
+	If Not $hWnd Then
+		MsgBox($MB_OK, $mMB, "Unable to trigger the About window.",2)
+		LogUpload("Unable to close the About window by click on Apply button.")
+		Return False
+	EndIf
+
+	Local $txt = WinGetText($hWnd)
+	Local $releaseTemp = StringRegExp($txt, "(?:[0-9]+\.[0-9]+\.[0-9]+\.?[0-9a-zA-Z]*)( [a-zA-Z]*)", $STR_REGEXPARRAYGLOBALMATCH)
+	If IsArray($releaseTemp) Then
+		$releaseRead = $releaseTemp[0]
+	EndIf
+
+	TakeScreenCapture("About info of CopTrax II", $hWnd)
+	Send("{Enter}")
+
+	Return True
+EndFunc
+
 Func TestUserSwitchFunction($arg)
 	If Not ReadyForTest() Then  Return False
 	If IsRecording() Then
@@ -569,9 +612,11 @@ Func TestSettingsFunction($arg)
 	MouseClick("",960, 460)
 	LogUpload("Start settings function testing.")
 
+	$releaseRead = "Universal"
 	If GetHandleWindowWait($titleLogin) Then
 		Send("135799{TAB}{ENTER}")	; type the administator password
 		MouseClick("", 500, 150)
+		$releaseRead = "WSP"
 	EndIf
 
 	;WinWaitActive($titleSettings, "", 10)	;"CopTrax II Setup"
@@ -702,6 +747,7 @@ Func TestSettingsFunction($arg)
 
 		If StringInStr($txt, "Baud", 1) Then	; GPS & Radar
 			ControlClick($hWnd, "", "Test")
+			ClickCheckButton($hWnd, "Enable Radar Detection")	; check Enable Radar Detection
 			Sleep(2000)
 		EndIf
 
@@ -1165,14 +1211,29 @@ Func CheckRecordedFiles($arg)
 		EndIf
 	Next
 
-	Local $chunk1 = CalculateChunkTime($latestFiles[1])
-	Local $chunk2 = CalculateChunkTime($latestFiles[10])
-	LogUpload("For " & $latestFiles[1] & ", the chunk time is " & $chunk1 & " seconds.")
-	LogUpload("For " & $latestFiles[10] & ", the chunk time is " & $chunk2 & " seconds.")
-	If $chunk1 > $chunkTime*60 + 30 Then $chk = False
-   ;If $chunk2 > $chunkTime*60 + 30 Then $chk = False
+	Local $durations = GetDurationTime($latestFiles[1])
+	Local $chunk1 = Number(GetParameter($durations, "video"))
+	Local $chunk2 = Number(GetParameter($durations, "audio"))
+	LogUpload("For " & $latestFiles[1] & ", the video duration is " &  $chunk1 & " s, the audio duration is " & $chunk2 & "s.")
+	If $chunk1 > $chunkTime*60 + 10 Then
+		$chk = False
+		LogUpload("The recorded video duration by Cam1 is longer than the preset chunk time.")
+	EndIf
 
-   Return true
+	If $chunk1 - $chunk2 > 10 Then
+		$chk = False
+		LogUpload("The audio duration is too short when comparing to the video duration.")
+	EndIf
+	$durations = GetDurationTime($latestFiles[10])
+	$chunk1 = GetParameter($durations, "video")
+	$chunk2 = GetParameter($durations, "audio")
+	LogUpload("For " & $latestFiles[10] & ", the video duration is " &  $chunk1 & " s, the audio duration is " & $chunk2 & "s.")
+	If $chunk1 > $chunkTime*60 + 10 Then
+		$chk = False
+		LogUpload("The recorded video duration by Cam1 is longer than the preset chunk time.")
+	EndIf
+
+	Return true
 EndFunc
 
 Func GetVideoFileNum($path, $type)
@@ -1192,7 +1253,7 @@ EndFunc
 
 Func GetLatestFile($path,$type)
 	; List the files only in the directory using the default parameters.
-	Local $aFileList = _FileListToArray($path, $type, 1, True)
+	Local $aFileList = _FileListToArray($path, $type, 1, True)	; return the full path
 
 	If @error > 0 Then Return ""
 
@@ -1219,10 +1280,45 @@ Func GetFiletimeFromFilename($file)
 EndFunc   ;==>Example
 
 Func CalculateChunkTime($file)
-   Local $createTime = GetFiletimeFromFilename($file)	; get create time from filename
-   Local $modifiedTime = FileGetTime($file, 0, 1)	; get modified time from meta data
+	Local $createTime = GetFiletimeFromFilename($file)	; get create time from filename
+	Local $modifiedTime = FileGetTime($file, 0, 1)	; get modified time from meta data
 
-   Return CalculateTimeDiff($createTime,$modifiedTime)
+	Return CalculateTimeDiff($createTime,$modifiedTime)
+EndFunc
+
+Func GetDurationTime($file)
+	Local $file0 = "audio.aac"
+	FileDelete($workDir & $file0)
+
+	Local $batchFile = FileOpen($workDir & "CheckVideoAudio.bat", 2)
+	FileWriteLine($batchFile, "Echo Check the latest record for video and audio length.")
+	FileWriteLine($batchFile, "C:")
+	FileWriteLine($batchFile, "CD " & $workDir)
+	FileWriteLine($batchFile, "ffmpeg -i " & $file & " -vn -acodec copy " & $file0)
+	FileWriteLine($batchFile, "ffprobe -v error -show_entries format=duration " & $file & " > video.txt")
+	FileWriteLine($batchFile, "ffprobe -v error -show_entries format=duration " & $file0 & " > audio.txt")
+	FileWriteLine($batchFile, "exit")
+	FileClose($batchFile)
+	RunWait($workDir & "CheckVideoAudio.bat")
+
+	Local $rstFile = FileOpen($workDir & "video.txt")
+	Local $txt = FileRead($rstFile)
+	Local $video = StringRegExp($txt, "(?:duration=)([0-9\.]*)", 1)
+	Local $videoDuration = "NONE"
+	If IsArray($video) Then
+		$videoDuration = $video[0]
+	EndIf
+	FileClose($rstFile)
+
+	$rstFile = FileOpen($workDir & "audio.txt")
+	Local $audio = StringRegExp(FileRead($rstFile), "(?:duration=)([0-9\.]*)", 1)
+	Local $audioDuration = "NONE"
+	If IsArray($audio) Then
+		$audioDuration = $audio[0]
+	EndIf
+	FileClose($rstFile)
+
+	Return "video=" & $videoDuration & " audio=" & $audioDuration
 EndFunc
 
 Func CalculateTimeDiff($time1,$time2)
@@ -1387,8 +1483,8 @@ Func ListenToNewCommand()
 		Case "upload"
 			MsgBox($MB_OK, $mMB, "Testing file upload function",2)
 			If $Recv[0] >= 2 Then
-				UploadFile($Recv[2])
 				LogUpload("PASSED upload setting.")
+				UploadFile($Recv[2])
 			Else
 				LogUpload("FAILED missing parameter to set the file upload.")
 			EndIf
@@ -1430,7 +1526,7 @@ Func ListenToNewCommand()
 			If StringInStr($raw, "eof") Then
 				PopFile(True)	; pop the previous file out of the stack when receives eof
 				If $uploadMode = "all" Then UploadFile("all")
-				EndIf
+			EndIf
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "configure"
@@ -1476,8 +1572,17 @@ Func ListenToNewCommand()
 		Case "info"
 			LogUpload("Continue function not programmed yet.")
 
+		Case "about"
+			MsgBox($MB_OK, $mMB, "Checking CopTrax about infomation.",2)
+
+			If testAbout() Then
+				LogUpload("PASSED CopTrax About Info check. The CopTrax is of version " & $appVersion & " " & $releaseRead & ".")
+			Else
+				LogUpload("FAILED CopTrax version check. The current CopTrax is of version " & $appVersion & " " & $releaseRead & ".")
+			EndIf
+
 		Case "checkfirmware"
-			MsgBox($MB_OK, $mMB, "Checking client version is " & $Recv[2] & " or not..",2)
+			MsgBox($MB_OK, $mMB, "Checking client firmware.",2)
 			If $firmwareVersion = "" Then
 				LogUpload("FAILED firmware version check. Run settings command before checking the firmware version.")
 			ElseIf ($Recv[0] >= 2) And ($firmwareVersion = $Recv[2]) Then
@@ -1487,16 +1592,16 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "checkapp"
-			MsgBox($MB_OK, $mMB, "Checking CopTrax version is " & $Recv[2] & " or not.",2)
+			MsgBox($MB_OK, $mMB, "Checking CopTrax version and release.",2)
 
-			If ($Recv[0] >= 2) And ($appVersion = $Recv[2]) Then
-				LogUpload("PASSED CopTrax version check. The CopTrax version is " & $appVersion)
+			If ($Recv[0] >= 2) And ($appVersion = $Recv[2]) And ($releaseRead = $releaseSet) Then
+				LogUpload("PASSED CopTrax version check. The CopTrax is of version " & $appVersion & " " & $releaseRead & ".")
 			Else
-				LogUpload("FAILED CopTrax version check. The current CopTrax version is " & $appVersion & ", not " & $Recv[2])
+				LogUpload("FAILED CopTrax version check. The current CopTrax is of version " & $appVersion & " " & $releaseRead & ", not " & $Recv[2])
 			EndIf
 
 		Case "checklibrary"
-			MsgBox($MB_OK, $mMB, "Checking library version is " & $Recv[2] & " or not..",2)
+			MsgBox($MB_OK, $mMB, "Checking CopTrax library version.",2)
 
 			If ($Recv[0] >= 2) And ($libraryVersion = $Recv[2]) Then
 				LogUpload("PASSED library version check. The library version is " & $libraryVersion)
@@ -1544,7 +1649,7 @@ Func Configure($arg)
 	Local $ct
 	Local $release
 	Local $map
-	Local $rst = False
+	Local $rst = True
 	Local $file
 
 	$ct = GetParameter($arg, "ct")	; configure the CopTrax App
@@ -1559,6 +1664,7 @@ Func Configure($arg)
 
 		If $release Then
 			LogUpload("Configuring Coptrax App to release " & $release & ".")
+			$releaseSet = $release
 			$file = FileOpen($CopTraxAppDir & "CopTrax.config", 2) ; Open the coptrax.config file in overwrite mode
 			If $file <> -1 Then
 				FileWriteLine($file, "release=" & $release)
@@ -1673,7 +1779,7 @@ Func SyncTimeZone($tmz)
 EndFunc
 
 Func UploadFile($arg)
-	If $arg = "" Then Return
+	If $arg = "" Then Return False
 	Switch StringLower($arg)
 		Case "all"
 			$uploadMode = "all"
@@ -1688,23 +1794,23 @@ Func UploadFile($arg)
 	EndSwitch
 
 	If $uploadMode = "wait" Or $uploadMode = "idle" Then
-		Return
+		Return False
 	EndIf
 
 	Local $filename = PopFile(False)	; not pop the file until it is received by server
-	If $filename = "" Then Return
+	If $filename = "" Then Return False
 
 	$filename = StringReplace($filename, "\_", " ")	; change \_ back to space
 	Local $file = FileOpen($filename,16)
 	If $file = -1 Then
 		LogUpload("Cannot find " & $filename & ".")
-		Return
+		Return False
 	EndIf
 
 	$fileContent = FileRead($file)
 	FileClose($file)
 	LogUpload("file " & $filename & " " & BinaryLen($fileContent))
-	Return
+	Return True
 EndFunc
 
 Func PushFile($newFile)
