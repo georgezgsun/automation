@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.3)
+#pragma compile(FileVersion, 3.4.10.9)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -90,8 +90,6 @@ If $testEnd Then
 	MsgBox($MB_OK, $mMB, "Automation test finds new update." & @CRLF & "Restarting now to complete the update.", 2)
 	RestartAutomation()
 	Exit
-Else
-	MsgBox($MB_OK, $mMB, "Automation testing start. Connecting to" & $ip & "..." & @CRLF & "Esc to quit", 2)
 EndIf
 
 Global $chunkTime = 30
@@ -127,8 +125,14 @@ If WinExists("", "Open CopTrax") Then
 	Sleep(5000)
 EndIf
 
+Do
+	MsgBox($MB_OK, $mMB, "Waiting for CopTrax App to run..", 2)
+Until ProcessExists($pCopTrax)
+MsgBox($MB_OK, $mMB, "Found CopTrax App running. Starting automation test. " & @CRLF & "Connecting to" & $ip & "..." & @CRLF & "Esc to quit.", 5)
+
 If WinExists($titleAccount) Then
 	WinActivate($titleAccount)
+	Run("schtasks /Delete /TN Automation /F", "", @SW_HIDE)
 	Run("schtasks /Create /XML C:\CopTraxAutomation\autorun.xml /TN Automation", "", @SW_HIDE)
 	Sleep(1000)
 	If Not CreatNewAccount("auto1", "coptrax") Then
@@ -382,8 +386,9 @@ Func TestAbout()
 		Return False
 	EndIf
 
+	$releaseRead = ""
 	Local $txt = WinGetText($hWnd)
-	Local $releaseTemp = StringRegExp($txt, "(?:[0-9]+\.[0-9]+\.[0-9]+\.?[0-9a-zA-Z]*)( [a-zA-Z]*)", $STR_REGEXPARRAYGLOBALMATCH)
+	Local $releaseTemp = StringRegExp($txt, "(?:[0-9]+\.[0-9]+\.[0-9]+\.?[0-9a-zA-Z]* )([a-zA-Z]*)", $STR_REGEXPARRAYGLOBALMATCH)
 	If IsArray($releaseTemp) Then
 		$releaseRead = $releaseTemp[0]
 	EndIf
@@ -444,6 +449,7 @@ Func CreatNewAccount($name, $password)
 
 	$txt = WinGetText($hWnd)
 	If StringInStr($txt, "Key") Then
+		$releaseRead = "Universal"
 		Send("{TAB 3}{END}")
 		If Not GetHandleWindowWait("Server") Then
 			MsgBox($MB_OK, $mMB, "Unable to open Server Configuration window. " & @CRLF, 5)
@@ -463,9 +469,9 @@ Func CreatNewAccount($name, $password)
 			$txt = WinGetText("Server", "Test")
 			$i += 1
 			Sleep(1000)
-		Until StringInStr($txt, "Connection OK") Or $i > 5
+		Until StringInStr($txt, "Connection OK") Or $i > 10
 
-		If $i > 5 Then
+		If $i > 10 Then
 			WinClose("Server")
 			LogUpload("Unable to connect to the required server. The text read are " & $txt)
 			WinClose($hWnd)
@@ -497,25 +503,36 @@ Func CreatNewAccount($name, $password)
 		Return False
 	EndIf
 
+	Sleep(1000)
 	$txt = "CopTrax"
 	If WinExists($txt,"restart") Then
 		ControlClick($txt, "restart", "OK")
-		LogUpload("CopTrax will restart. Automation will wait.")
-		$mCopTrax = 0
-		Sleep(4000)	; wait a little bit for the CopTrax to restart
+	EndIf
+	LogUpload("New profile has been created. CopTrax will restart. Automation will wait.")
+
+	$mCopTrax = 0
+	Local $i = 0
+	While WinExists($titleStatus) And ($i < 5)
+		Sleep(1000)
+		$i += 1
+	WEnd
+	If $i >= 5 Then
+		LogUpload("The accessories are not ready.")
+		Return False
 	EndIf
 
-	Sleep(1000)
-	If $testEnd Then Return False
-
+	$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
 	If Not $mCopTrax Then
-		$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
+		LogUpload("CopTrax App is unable to restart.")
+		Return False
 	EndIf
 
 	$userName = GetUserName()
 	If $userName <> $name Then
 		LogUpload("Unable to switch user. Current user is " & $userName)
 		Return False
+	Else
+		LogUpload("Current user is switched to " & $userName)
 	EndIf
 
 	Local $path0 = @MyDocumentsDir & "\CopTraxTemp"
@@ -612,7 +629,6 @@ Func TestSettingsFunction($arg)
 	MouseClick("",960, 460)
 	LogUpload("Start settings function testing.")
 
-	$releaseRead = "Universal"
 	If GetHandleWindowWait($titleLogin) Then
 		Send("135799{TAB}{ENTER}")	; type the administator password
 		MouseClick("", 500, 150)
@@ -1011,7 +1027,7 @@ Func TestPhotoFunction()
 		Return False
 	EndIf
 
-	Local $photoFile = GetLatestFile(@LocalAppDataDir & "\coptrax\" & $userName & "\photo", "*.jpg")
+	Local $photoFile = GetLatestFile(GetVideoFilePath() & "\photo", "*.jpg")
 	Local $filename = GetNewFilename() & ".jpg"
 	If $photoFile <> "" Then
 		LogUpload("Got last photo in " & $filename & ". It is on the way sending to server.")
