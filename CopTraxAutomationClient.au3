@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.9)
+#pragma compile(FileVersion, 3.4.10.13)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -131,15 +131,13 @@ Until ProcessExists($pCopTrax)
 MsgBox($MB_OK, $mMB, "Found CopTrax App running. Starting automation test. " & @CRLF & "Connecting to" & $ip & "..." & @CRLF & "Esc to quit.", 5)
 
 If WinExists($titleAccount) Then
+	MsgBox($MB_OK, $mMB, "First time run. Create a temp acount.", 10)
 	WinActivate($titleAccount)
 	Run("schtasks /Delete /TN Automation /F", "", @SW_HIDE)
 	Run("schtasks /Create /XML C:\CopTraxAutomation\autorun.xml /TN Automation", "", @SW_HIDE)
-	Sleep(1000)
 	If Not CreatNewAccount("auto1", "coptrax") Then
 		MsgBox($MB_OK, $mMB, "Something wrong! Quit automation test now.", 5)
 		Exit
-	Else
-		MsgBox($MB_OK, $mMB, "First time run. Created a new acount.", 2)
 	EndIf
 EndIf
 
@@ -361,7 +359,7 @@ EndFunc
 Func TestAbout()
 	LogUpload("Try to read CopTrax App about info.")
 
-	If Not ReadyForTest() Then Return ProcessClose($pCopTrax)
+	If Not ReadyForTest() Then Return False
 
 	If IsRecording() Then
 		LogUpload("A recording is in progress.")
@@ -436,6 +434,7 @@ EndFunc
 
 Func CreatNewAccount($name, $password)
 	Local $hWnd = GetHandleWindowWait($titleAccount, "", 10)
+	Local $hServer = 0
 	Local $txt = ""
 	If  $hWnd = 0 Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the CopTrax-Login/Create Account window. " & @CRLF, 5)
@@ -450,8 +449,10 @@ Func CreatNewAccount($name, $password)
 	$txt = WinGetText($hWnd)
 	If StringInStr($txt, "Key") Then
 		$releaseRead = "Universal"
-		Send("{TAB 3}{END}")
-		If Not GetHandleWindowWait("Server") Then
+		ControlClick($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:1]")
+		Send("{END}")
+		$hServer = GetHandleWindowWait("Server")
+		If Not $hServer Then
 			MsgBox($MB_OK, $mMB, "Unable to open Server Configuration window. " & @CRLF, 5)
 			LogUpload("Unable to open Server Configuration window. ")
 			WinClose($hWnd)
@@ -459,21 +460,24 @@ Func CreatNewAccount($name, $password)
 		EndIf
 
 		Sleep(500)
-		Send("10.0.6.32{TAB}")
-		MouseClick("", 350,70)
-		ControlCommand("Server", "", "[INSTANCE:1]", "Check")
-		ControlClick("Server", "", "Test")
+		If Not ControlFocus($hServer, "", "[REGEXPCLASS:(.*EDIT.*); INSTANCE:2]") Then
+			WinClose($hServer)
+			LogUpload("Unable to focus on the Host Name input on handler " & $hServer & ".")
+		EndIf
+		Send("10.0.6.32")
+		ControlCommand($hServer, "", "[INSTANCE:1]", "Check")
+		ControlClick($hServer, "", "Test")
 
 		Local $i=0
 		Do
-			$txt = WinGetText("Server", "Test")
+			$txt = WinGetText($hServer, "Test")
 			$i += 1
 			Sleep(1000)
 		Until StringInStr($txt, "Connection OK") Or $i > 10
 
 		If $i > 10 Then
-			WinClose("Server")
-			LogUpload("Unable to connect to the required server. The text read are " & $txt)
+			WinClose($hServer)
+			LogUpload("Unable to connect to the required server. The text read are " & $txt & @CRLF & ".")
 			WinClose($hWnd)
 			Return False
 		EndIf
@@ -482,16 +486,18 @@ Func CreatNewAccount($name, $password)
 
 		Sleep(500)
 		Send("{TAB 2}")
+	Else
+		$releaseRead = "WSP"
 	EndIf
 
 	If $testEnd Then Return False
 
-	Send($name & "{Tab}")
+	Send("{End}+{Home}" & $name & "{Tab}")
 	Sleep(500)
 
-	Send($password & "{Tab}")	; type the user password
+	Send("{End}+{Home}" & $password & "{Tab}")	; type the user password
 	Sleep(500)
-	Send($password & "{Tab}")	; re-type the user password
+	Send("{End}+{Home}" & $password & "{Tab}")	; re-type the user password
 
 	Sleep(2000)
 	$txt = WinGetText($hWnd)
@@ -633,6 +639,8 @@ Func TestSettingsFunction($arg)
 		Send("135799{TAB}{ENTER}")	; type the administator password
 		MouseClick("", 500, 150)
 		$releaseRead = "WSP"
+	Else
+		$releaseRead = "Universal"
 	EndIf
 
 	;WinWaitActive($titleSettings, "", 10)	;"CopTrax II Setup"
@@ -753,6 +761,16 @@ Func TestSettingsFunction($arg)
 				If $pColor > 0 Then
 					MouseClick("", $x0, $y0)
 					LogUpload("Pixel color at (" & $x0 & "," & $y0 & " ) is " & $pColor & ", so click on it.")
+				EndIf
+				If ($y0 > 200) And ($y0 < 330) Then
+					MouseClick("", $x0+317, $y0)
+					Send("f")
+					Local $j = 1
+					Local $m = Round(($y0-220)/35)
+					For $j = 1 To $m
+						Send("{Down}")
+					Next
+					Send("{Enter}")
 				EndIf
 			Next
 		EndIf
@@ -995,7 +1013,7 @@ Func TakeScreenCapture($comment, $hWnd)
 		PushFile($screenFile)
 		Return FileGetSize($screenFile)
 	Else
-		LogUpload("Unable to capture " & $comment & " screen file.")
+		LogUpload("Unable to capture " & $comment & " screen file " & $screenFile & " for window " & $hWnd)
 		Return 0
 	EndIf
 EndFunc
@@ -1632,7 +1650,7 @@ Func ListenToNewCommand()
 			FileClose($file)
 
 			ProcessClose($pCopTrax)
-			LogUpload("Box is going to be shutdown.")
+			LogUpload("quit Box is going to be cleanup and shutdown.")
 			Run("C:\Coptrax Support\Tools\Cleanup.bat", "C:\Coptrax Support\Tools\", @SW_HIDE)
 			$testEnd = True
 			$restart = False
@@ -1953,12 +1971,15 @@ Func GetHandleWindowWait($title, $text = "", $seconds = 5)
 	Local $i = 0
 	If $seconds < 1 Then $seconds = 1
 	If $seconds > 10 Then $seconds = 10
-	While ($hWnd = 0) And ($i < $seconds)
-		WinActivate($title)
-		$hWnd = WinWaitActive($title, $text, 1)
+	Do
+		$hWnd = WinActivate($title, $text)
+		If $hWnd And ($hWnd = WinWaitActive($title, $text, 1)) Then
+			Return $hWnd
+		EndIf
 		$i += 1
-	WEnd
-	Return $hWnd
+		Sleep(1000)
+	Until $i > $seconds
+	Return 0
 EndFunc
 
 Func GetParameter($parameters, $keyword)
