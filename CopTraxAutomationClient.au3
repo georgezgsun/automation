@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.13)
+#pragma compile(FileVersion, 3.4.10.14)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -66,7 +66,7 @@ Global $firmwareVersion = ""
 Global $libraryVersion = ""
 Global $appVersion = ""
 Global $releaseRead = ""
-Global $releaseSet = "Universal"
+Global $releaseSet = "Unset"
 Global $title = "CopTrax II is not up yet"
 Global $userName = ""
 Global $sentPattern = ""
@@ -135,7 +135,7 @@ If WinExists($titleAccount) Then
 	WinActivate($titleAccount)
 	Run("schtasks /Delete /TN Automation /F", "", @SW_HIDE)
 	Run("schtasks /Create /XML C:\CopTraxAutomation\autorun.xml /TN Automation", "", @SW_HIDE)
-	If Not CreatNewAccount("auto1", "coptrax") Then
+	If Not CreateNewAccount("auto1", "coptrax") Then
 		MsgBox($MB_OK, $mMB, "Something wrong! Quit automation test now.", 5)
 		Exit
 	EndIf
@@ -429,11 +429,11 @@ Func TestUserSwitchFunction($arg)
 	Send("{Tab}s{Tab}{Enter}")	; choose switch Account
 	Sleep(500)
 
-	Return CreatNewAccount($username, $password)
+	Return CreateNewAccount($username, $password)
 EndFunc
 
-Func CreatNewAccount($name, $password)
-	Local $hWnd = GetHandleWindowWait($titleAccount, "", 10)
+Func CreateNewAccount($name, $password)
+	Local $hWnd = GetHandleWindowWait($titleAccount, "Register", 10)
 	Local $hServer = 0
 	Local $txt = ""
 	If  $hWnd = 0 Then
@@ -451,7 +451,7 @@ Func CreatNewAccount($name, $password)
 		$releaseRead = "Universal"
 		ControlClick($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:1]")
 		Send("{END}")
-		$hServer = GetHandleWindowWait("Server")
+		$hServer = GetHandleWindowWait("Server", "Test")
 		If Not $hServer Then
 			MsgBox($MB_OK, $mMB, "Unable to open Server Configuration window. " & @CRLF, 5)
 			LogUpload("Unable to open Server Configuration window. ")
@@ -460,7 +460,7 @@ Func CreatNewAccount($name, $password)
 		EndIf
 
 		Sleep(500)
-		If Not ControlFocus($hServer, "", "[REGEXPCLASS:(.*EDIT.*); INSTANCE:2]") Then
+		If Not ControlFocus($hServer, "Test", "[REGEXPCLASS:(.*EDIT.*); INSTANCE:2]") Then
 			WinClose($hServer)
 			LogUpload("Unable to focus on the Host Name input on handler " & $hServer & ".")
 		EndIf
@@ -1628,6 +1628,8 @@ Func ListenToNewCommand()
 		Case "checkapp"
 			MsgBox($MB_OK, $mMB, "Checking CopTrax version and release.",2)
 
+			If $releaseSet = "Unset" Then $releaseSet = $releaseRead	; backward compatible
+
 			If ($Recv[0] >= 2) And ($appVersion = $Recv[2]) And ($releaseRead = $releaseSet) Then
 				LogUpload("PASSED CopTrax version check. The CopTrax is of version " & $appVersion & " " & $releaseRead & ".")
 			Else
@@ -1967,18 +1969,18 @@ Func RenewConfig()
 EndFunc
 
 Func GetHandleWindowWait($title, $text = "", $seconds = 5)
-	Local $hWnd = 0
-	Local $i = 0
+	Local $hWnd0 = 0
+	Local $hWnd1 = 0
 	If $seconds < 1 Then $seconds = 1
 	If $seconds > 10 Then $seconds = 10
 	Do
-		$hWnd = WinActivate($title, $text)
-		If $hWnd And ($hWnd = WinWaitActive($title, $text, 1)) Then
-			Return $hWnd
+		$hWnd0 = WinActivate($title, $text)
+		$hWnd1 = WinWaitActive($title, $text, 1)
+		If $hWnd0 And ($hWnd0 = $hWnd1) Then
+			Return $hWnd0
 		EndIf
-		$i += 1
-		Sleep(1000)
-	Until $i > $seconds
+		$seconds -= 1
+	Until $seconds <= 0
 	Return 0
 EndFunc
 
