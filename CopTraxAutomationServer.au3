@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.2
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.4
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -368,7 +368,6 @@ While Not $testEnd	; main loop that get input, display the resilts
 		GUICtrlSetData( $cID, $connectionPattern )
 	EndIf
 
-	UpdateConfigCombo($idComboBox)	; check and update the combo list
 	$batchAligned = $batchCheck And $totalConnection	; Aligned only when there are UUT connected
 	If $tempTime <> $lastEndTime Then
 		GUICtrlSetData($nGUI[0], toHMS($lastEndTime))
@@ -376,30 +375,36 @@ While Not $testEnd	; main loop that get input, display the resilts
 	EndIf
 
 	$msg = GUIGetMsg()
-	If $msg = $GUI_EVENT_CLOSE Then
-		LogWrite($automationLogPort, "Automation test end by operator.")
-		LogWrite($automationLogPort, "")
-		LogWrite($piLogPort, "Automation test end by operator.")
-		LogWrite($piLogPort, "")
-		$testEnd = true
-	EndIf
+	If $msg Then
+		UpdateConfigCombo($idComboBox)	; check and update the combo list
 
-	For $i = 1 To $maxConnections
-		If $msg = $bGUI[$i] Then
-			$portDisplay = $i	; update the log display for that button
-			If $boxID[$i] Then
-				GUICtrlSetData($tLog, " " & $boxID[$i])
-			Else
-				GUICtrlSetData($tLog, "Cheatsheet")
-			EndIf
-			GUICtrlSetData($cLog, $logContent[$i])
+		If $msg = $GUI_EVENT_CLOSE Then
+			LogWrite($automationLogPort, "Automation test end by operator.")
+			LogWrite($automationLogPort, "")
+			LogWrite($piLogPort, "Automation test end by operator.")
+			LogWrite($piLogPort, "")
+			$testEnd = true
+			ExitLoop
 		EndIf
-	Next
 
-	If $msg = $idComboBox Then
-		$config = GUICtrlRead($idComboBox)
-		$currentTestCaseFile = $workdir & $config & ".txt"
-		LogWrite($automationLogPort, "Change the configure to " & $config & ".")
+		For $i = 1 To $maxConnections
+			If $msg = $bGUI[$i] Then
+				$portDisplay = $i	; update the log display for that button
+				If $boxID[$i] Then
+					GUICtrlSetData($tLog, " " & $boxID[$i])
+				Else
+					GUICtrlSetData($tLog, "Cheatsheet")
+				EndIf
+				GUICtrlSetData($cLog, $logContent[$i])
+				ExitLoop
+			EndIf
+		Next
+
+		If $msg = $idComboBox Then
+			$config = GUICtrlRead($idComboBox)
+			$currentTestCaseFile = $workdir & $config & ".txt"
+			LogWrite($automationLogPort, "Change the configure to " & $config & ".")
+		EndIf
 	EndIf
 
 	$tempPattern = Int(TimerDiff($hTimer) - $time0)
@@ -688,6 +693,7 @@ Func ParseCommand($n)
 		Case "batchhold"
 			If $batchAligned Then
 				LogWrite($n, "(Server) All clients aligned.")
+				$piCommandHold = False
 			Else
 				PushCommand($n, "batchhold")	; the batchhold command can only be cleared by all active clients entering batch wait mode
 			EndIf
@@ -752,7 +758,7 @@ Func ParseCommand($n)
 EndFunc
 
 Func LogWrite($n,$s)
-	If $n > $maxConnections + 1 Then Return
+	If $n < 0 Or $n > $maxConnections + 1 Then Return
 
 	_FileWriteLog($logFiles[$n],$s)
 	$s = @HOUR & ":" & @MIN & ":" & @SEC & " " & $s & @CRLF	; show the log with time stamps
@@ -1088,22 +1094,32 @@ Func ProcessReply($n)
 EndFunc
 
 Func StartNewTest($n, $ID, $resume, $clientVersion)
+	If Not StringRegExp($ID, "[A-Za-z]{2}[0-9]{6}")  Then
+		LogWrite($automationLogPort, "The Serial Number reported from the box " & $ID & " is invalid. Reboot the box now.")
+		SendCommand($n, "reboot")
+		PushCommand($n, "hold")
+		Return
+	EndIf
 	$boxID[$n] = $ID	; get the boxID from client
 
-	LogWrite($automationLogPort, $boxID[$n] & " connected on " & $boxIP[$n] & ".")
+	LogWrite($automationLogPort, $boxID[$n] & " connected on " & $boxIP[$n] & " at channel " & $n & ".")
 
 	$portDisplay = $n
 	GUICtrlSetData($bGUI[$n], $boxID[$n])	; update the text on the button
 	GUICtrlSetData($tLog, " " & $boxID[$n])	; update the serial number on top the main log display
 
-	Local $nextCommand = PopCommand($n, False)
-	If StringInStr($resume, "re") And $nextCommand Then
-		LogWrite($n, " ")
-		LogWrite($n, "Test resumed.")
-		If $nextCommand = "hold" Then
-			LogWrite($n, "Pop the " & PopCommand($n) & " in front of the command queue.")
+	Local $nextCommand
+	If StringInStr($resume, "resume") Then
+		Do
+			$nextCommand = PopCommand($n)
+		Until $nextCommand <> "hold"
+
+		If $nextCommand Then
+			PushCommand($n, "hold " & $nextCommand)
+			LogWrite($n, " ")
+			LogWrite($n, "(Server) Test resumed. Next command is " & $nextCommand)
+			Return
 		EndIf
-		Return
 	EndIf
 
 	$filesReceived[$n] = 0	; clear the upload files
@@ -1212,14 +1228,17 @@ Func AcceptConnection ()
 		EndIf
 		If $sockets[$i] < 0 Then	;Find the first open socket.
 			$port = $i
-			If $boxIP[$i] <> "" Then
+			If $boxIP[$i] = "" Then
 				$port0 = $i
 			EndIf
 		EndIf
 	Next
+	$port = ($port0 > $port) ? $port0 : $port
 
-	If $port0 > $port Then
-		$port = $port0
+	If $resume Then
+		LogWrite($automationLogPort, "A box reconnected at " & $IP & " on channel " & $port)
+	Else
+		LogWrite($automationLogPort, " A new box connected at " & $IP & " on channel " & $port)
 	EndIf
 
 	$sockets[$port] = $newSocket	;assigns that socket the incomming connection.
