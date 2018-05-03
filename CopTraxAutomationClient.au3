@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.14)
+#pragma compile(FileVersion, 3.4.10.15)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -109,11 +109,6 @@ AutoItSetOption("SendKeyDelay", 100)
 Global $logFile = FileOpen( $workDir & "local.log", 1+8)
 
 If WinExists("", "Open CopTrax") Then
-	Local $filename = "C:\CopTrax Support\Tools\Automation.bat"
-	Local $file = FileOpen($filename, $FO_OVERWRITE );
-	FileWriteLine($file, "Echo Welcome to use CopTrax II")
-	FileClose($file)
-
 	If ProcessExists($pCopTrax) Then
 		ProcessClose($pCopTrax)
 	EndIf
@@ -122,6 +117,7 @@ If WinExists("", "Open CopTrax") Then
 	Local $CopTraxDir = "c:\Program Files (x86)\IncaX\CopTrax\"	; path to CopTraxApp
 	Run( $CopTraxDir & $pCopTrax, $CopTraxDir)	; start CopTrax App again
 
+	Run("schtasks /Delete /TN Automation /F", "", @SW_HIDE)	; delete the automation scheduler when there is welcome screen
 	Sleep(5000)
 EndIf
 
@@ -133,8 +129,7 @@ MsgBox($MB_OK, $mMB, "Found CopTrax App running. Starting automation test. " & @
 If WinExists($titleAccount) Then
 	MsgBox($MB_OK, $mMB, "First time run. Create a temp acount.", 10)
 	WinActivate($titleAccount)
-	Run("schtasks /Delete /TN Automation /F", "", @SW_HIDE)
-	Run("schtasks /Create /XML C:\CopTraxAutomation\autorun.xml /TN Automation", "", @SW_HIDE)
+
 	If Not CreateNewAccount("auto1", "coptrax") Then
 		MsgBox($MB_OK, $mMB, "Something wrong! Quit automation test now.", 5)
 		Exit
@@ -245,6 +240,7 @@ EndIf
 _EventLog__Close($hEventLogSystem)
 _EventLog__Close($hEventLogApp)
 _EventLog__Close($hEventLogCopTrax)
+Run("C:\CopTrax Support\Tools\CopTraxWelcome\EnableWelcomeScreen.exe", "C:\CopTrax Support\Tools\CopTraxWelcome", @SW_HIDE)	; Enable the welcome screen every time
 
 Exit
 
@@ -1045,15 +1041,20 @@ Func TestPhotoFunction()
 		Return False
 	EndIf
 
-	Local $photoFile = GetLatestFile(GetVideoFilePath() & "\photo", "*.jpg")
+	Local $photoPath = GetVideoFilePath() & "\photo"
+	If Not FileExists($photoPath) Then
+		$photoPath = @LocalAppDataDir & "\coptrax\" & $userName & "\photo"
+	EndIf
+	Local $photoFile = GetLatestFile($photoPath, "*.jpg")
 	Local $filename = GetNewFilename() & ".jpg"
-	If $photoFile <> "" Then
-		LogUpload("Got last photo in " & $filename & ". It is on the way sending to server.")
+	If $photoFile Then
+		LogUpload("Got last photo " & $photoFile & ". It is on the way sending to server as " & $filename & ".")
 		$filename = $workDir & "tmp\" & $filename
 		FileCopy($photoFile, $filename, 1+8)
 		PushFile($filename)
 		Return True
 	Else
+
 		Return False
 	EndIf
 EndFunc
@@ -1604,7 +1605,7 @@ Func ListenToNewCommand()
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "info"
-			LogUpload("Continue function not programmed yet.")
+			LogUpload("Continue It is a null command at this moment.")
 
 		Case "about"
 			MsgBox($MB_OK, $mMB, "Checking CopTrax about infomation.",2)
@@ -1826,7 +1827,7 @@ Func UploadFile($arg)
 		Case "now"
 			$uploadMode = "now"
 		Case Else
-			PushFile(StringReplace($filename, "\!", "|"))	; change \! back to !
+			PushFile(StringReplace($arg, "\!", "|"))	; change \! back to !
 	EndSwitch
 
 	If $uploadMode = "wait" Or $uploadMode = "idle" Then
@@ -1855,7 +1856,7 @@ Func PushFile($newFile)
 EndFunc
 
 Func PopFile($pop = True)
-	Local $length = StringInStr($filesToBeSent, " ", 2)
+	Local $length = StringInStr($filesToBeSent, " ", 2)	; there is a space at the end of string
 	Local $nextFile = StringLeft($filesToBeSent, $length-1)
 	If $pop Then
 		$filesToBeSent = StringTrimLeft($filesToBeSent, $length)
@@ -1929,6 +1930,7 @@ EndFunc
 
 Func OnAutoItExit()
 	TCPShutdown() ; Close the TCP service.
+	Run("C:\CopTrax Support\Tools\CopTraxWelcome\EnableWelcomeScreen.exe", "C:\CopTrax Support\Tools\CopTraxWelcome", @SW_HIDE)	; Enable the welcome screen every time
  EndFunc   ;==>OnAutoItExit
 
 Func ReadConfig()
@@ -1954,7 +1956,7 @@ Func ReadConfig()
 		If $aTxt Then $configDir = $aTxt
 		$aTxt = GetParameter($aLine, "map")	; read the location to store the map
 		If $aTxt Then $mapDir = $aTxt
-		$aTxt = GetParameter($aLine, "bwc")	; read the location to store the map
+		$aTxt = GetParameter($aLine, "bwc")	; read the location to store the Body wore Camera
 		If $aTxt Then $bwcDir = $aTxt
 	Until $eof
 
