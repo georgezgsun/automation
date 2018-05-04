@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.15)
+#pragma compile(FileVersion, 3.4.10.16)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -1685,7 +1685,7 @@ EndFunc
 Func Configure($arg)
 	Local $ct
 	Local $release
-	Local $map
+	Local $bwc
 	Local $rst = True
 	Local $file
 
@@ -1716,10 +1716,16 @@ Func Configure($arg)
 		EndIf
 	EndIf
 
-	$map = GetParameter($arg, "map")	; configure the Evidence Viewer
-	If $map Then
-		LogUpload("Configuring Evidence Viewer using map of " & $map & ".")
-		$rst = $rst And FileCopy("C:\CopTrax Support\maps\" & $map & ".map", $mapDir, 1) ; overwrite the existing map
+	$bwc = GetParameter($arg, "bwc")	; configure the Evidence Viewer
+	If $bwc Then
+		Run("schtasks /Delete /TN BWCManager /F", "", @SW_HIDE)
+		LogUpload("Configuring Body Wore Camera to turn " & $bwc & ".")
+		If StringInStr($bwc, "on") Then
+			Run("schtasks /Create /XML C:\CopTraxAutomation\BWCManagerStartup.xml /TN BWCManager", "", @SW_HIDE)
+			LogUpload("Body Wore Camera Manager is configured to startup.")
+		Else
+			LogUpload("Body Wore Camera Manager is configured not to startup.")
+		EndIf
 	EndIf
 
 	Return $rst

@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.4
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.5
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -91,7 +91,7 @@ $allCommands[19] = "endrecord duration"
 $allCommands[20] = "startrecord duration"
 $allCommands[21] = "runapp"
 $allCommands[22] = "stopapp"
-$allCommands[23] = "configure ct release map"
+$allCommands[23] = "configure ct release bwc"
 $allCommands[24] = "info"
 $allCommands[25] = "camera"
 $allCommands[26] = "review"
