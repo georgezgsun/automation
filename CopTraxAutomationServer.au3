@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.5
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.7
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -515,7 +515,7 @@ Func ParseCommand($n)
 	$commandTimers[$n] =  $time0 + 5*1000 ; time for next command to be executed
 
 	If $newCommand = "" Then 	; no command left to be precessed
-		SendCommand($n, "quit")
+		SendCommand($n, "quittest")
 		$testEndTime[$n] += 5
 		Return False
 	EndIf
@@ -1210,7 +1210,6 @@ Func AcceptConnection ()
 	If $newSocket < 0 Then Return
 
 	Local $IP = SocketToIP($newSocket)
-	Local $resume = False
 	Local $i = 0
 	Local $port = 0
 	Local $port0 = 0
@@ -1219,7 +1218,6 @@ Func AcceptConnection ()
 			If $sockets[$i] > 0 Then
 				TCPCloseSocket($sockets[$i])
 				$sockets[$i] = -1
-				$resume = True
 			EndIf
 
 			$port = $i
@@ -1228,17 +1226,19 @@ Func AcceptConnection ()
 		EndIf
 		If $sockets[$i] < 0 Then	;Find the first open socket.
 			$port = $i
-			If $boxIP[$i] = "" Then
+			If $boxIP[$i] = "" Then	; Find the first never occupied socket
 				$port0 = $i
 			EndIf
 		EndIf
 	Next
 	$port = ($port0 > $port) ? $port0 : $port
 
-	If $resume Then
-		LogWrite($automationLogPort, "A box reconnected at " & $IP & " on channel " & $port)
+	If $boxIP[$port] = $IP Then
+		LogWrite($automationLogPort, "A resumed box reconnected at " & $IP & " on channel " & $port)
 	Else
 		LogWrite($automationLogPort, " A new box connected at " & $IP & " on channel " & $port)
+		GUICtrlSetData($bGUI[$port], "new box")	; update the text on the button
+		$commands[$port] = ""
 	EndIf
 
 	$sockets[$port] = $newSocket	;assigns that socket the incomming connection.
@@ -1246,11 +1246,7 @@ Func AcceptConnection ()
 	$commandTimers[$port] = $time0 + 5*1000	; Set command timer to be 5s later
 	$connectionTimers[$port] = $time0 + 2000*60	; Set connection lost timer to be 2mins later
 	$boxIP[$port] = $IP
-	If $resume Then
-		PushCommand($port, "hold")
-	Else
-		$commands[$port] = "hold"	; Stores hold command to temperally hold the the commands until gets a name reply
-	EndIf
+	PushCommand($port, "hold")
 EndFunc
 
 Func PopCommand($n, $pop = True)

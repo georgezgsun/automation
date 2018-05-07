@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.16)
+#pragma compile(FileVersion, 3.4.10.17)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -108,36 +108,32 @@ AutoItSetOption("SendKeyDelay", 100)
 
 Global $logFile = FileOpen( $workDir & "local.log", 1+8)
 
-If WinExists("", "Open CopTrax") Then
+If WinExists("", "Open CopTrax") Then	; In case there running the welcome screen, try to stop the CopTrax App and the automation
 	If ProcessExists($pCopTrax) Then
 		ProcessClose($pCopTrax)
 	EndIf
 
-	WinWaitClose("", "Open CopTrax")
-	Local $CopTraxDir = "c:\Program Files (x86)\IncaX\CopTrax\"	; path to CopTraxApp
-	Run( $CopTraxDir & $pCopTrax, $CopTraxDir)	; start CopTrax App again
-
 	Run("schtasks /Delete /TN Automation /F", "", @SW_HIDE)	; delete the automation scheduler when there is welcome screen
-	Sleep(5000)
+	Exit
 EndIf
 
-Do
-	MsgBox($MB_OK, $mMB, "Waiting for CopTrax App to run..", 2)
-Until ProcessExists($pCopTrax)
-MsgBox($MB_OK, $mMB, "Found CopTrax App running. Starting automation test. " & @CRLF & "Connecting to" & $ip & "..." & @CRLF & "Esc to quit.", 5)
+Do	; Try to confirm the running of CopTrax App and the network connection to server before running automation
+	If Not ProcessExists($pCopTrax) Then MsgBox($MB_OK, $mMB, "Waiting for CopTrax App to run..", 2)
+	If $Socket < 0 Then $Socket = TCPConnect($ip, $port)
+	If $Socket < 0 Then MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server.", 2)
+Until ProcessExists($pCopTrax) And $Socket > 0
+MsgBox($MB_OK, $mMB, "Found CopTrax App running. Connected to server at " & $ip & ". Starting automation test." & @CRLF & "Esc to quit.", 5)
 
 If WinExists($titleAccount) Then
-	MsgBox($MB_OK, $mMB, "First time run. Create a temp acount.", 10)
+	MsgBox($MB_OK, $mMB, "First time run. Try to create a temporal acount.", 2)
 	WinActivate($titleAccount)
 
 	If Not CreateNewAccount("auto1", "coptrax") Then
-		MsgBox($MB_OK, $mMB, "Something wrong! Quit automation test now.", 5)
+		MsgBox($MB_OK, $mMB, "Something wrong! Have to reboot the box now.", 5)
+		Shutdown(2+4)	; force the window to reboot
 		Exit
 	EndIf
 EndIf
-
-Global $hTimer = TimerInit()	; Begin the timer and store the handler
-Global $timeout = 1000
 
 While $mCopTrax = 0
 	$mCopTrax = WinActivate($titleCopTraxMain)
@@ -161,9 +157,15 @@ While $mCopTrax = 0
 	EndIf
 WEnd
 
-If Not StringRegExp($boxID, "[A-Za-z]{2}[0-9]{6}")  Then
+Local $count = 3
+While Not StringRegExp($boxID, "[A-Za-z]{2}[0-9]{6}") And ($count > 0)	; try to get the serial number before the start of automation
 	MsgBox($MB_OK, $mMB, "Now reading Serial Number from the box.", 2)
 	TestSettingsFunction("NULL")
+	$count -= 1
+WEnd
+If $count <= 0 Then
+	MsgBox($MB_OK, $mMB, "Cannot read the serial number of the box! Have to quit the automation test now.", 5)
+	Exit
 EndIf
 
 Local $path0 = @MyDocumentsDir & "\CopTraxTemp"
@@ -171,9 +173,12 @@ Local $path1 = GetVideoFilePath()
 Local $path2 = $path1 & "\cam2"
 Global $videoFilesCam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4")
 Global $videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi")
+Global $hTimer = TimerInit()	; Begin the timer and store the handler
+Global $timeout = 20*1000	; Set the first time out to be 20s later
+
+LogUpload("name " & $boxID & " new " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)	; new start of automation test
 
 Local $currentTime
-Local $resume = "new"
 While Not $testEnd
 	$currentTime = TimerDiff($hTimer)
 	If $mCopTrax = 0 Then
@@ -187,17 +192,12 @@ While Not $testEnd
 		$Socket = TCPConnect($ip, $port)
 		$err = @error
 		If $Socket > 0 Then
-			If ($resume <> "resume") And IsRecording() Then
-				EndRecording(True)	; stops any recording in progress before automation test ends
-			EndIf
-
 			If $logFile Then
 				FileClose($logFile)	; close local log
 				$logFile = 0;
 			EndIf
 
-			LogUpload("name " & $boxID & " " & $resume & " " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)
-			$resume = "resume"	; resume the test after re-connect to the server
+			LogUpload("name " & $boxID & " resume " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)
 			MsgBox($MB_OK, $mMB, "Connected to server.",2)
 			$timeout = $currentTime + 1000*$TIMEOUTINSECEND
 		Else
@@ -639,7 +639,6 @@ Func TestSettingsFunction($arg)
 		$releaseRead = "Universal"
 	EndIf
 
-	;WinWaitActive($titleSettings, "", 10)	;"CopTrax II Setup"
 	Local $hWnd = GetHandleWindowWait($titleSettings, "", 10)	;"CopTrax II Setup"
 	If $hWnd = 0 Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the settings function.", 2)
@@ -650,11 +649,6 @@ Func TestSettingsFunction($arg)
 	Local $positionY = 60
 	AutoItSetOption ( "PixelCoordMode", 0 )
 	Do
-		If $testEnd Then
-			LogUpload("Automation test end by operator.")
-			Return False
-		EndIf
-
 		Local $txt = WinGetText($hWnd)
 
 		If StringInStr($txt, "Capture", 1) Then	; Cameras
@@ -675,18 +669,17 @@ Func TestSettingsFunction($arg)
 				Case "120"
 					Send("+{Tab}91{ENTER}")
 			EndSwitch
-			Sleep(1000)
 
 			If StringInStr($cam2, "able") Then
 				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "2")	; select Camera 2
-				sleep(5000)
+				sleep(2500)
 
 				If StringInStr($cam2, "enable") Then	; compatible with both enable and enabled
 					ClickCheckButton($hWnd, "Enable secondary camera")
 					ClickCheckButton($hWnd, "Always record both cameras")
 					Sleep(500)
 					ControlClick($hWnd, "", "Test")
-					Sleep(2500)
+					Sleep(2000)
 				EndIf
 				If StringInStr($cam2, "disable") Then	; compatible with both disable and disabled
 					ClickCheckButton($hWnd, "Enable secondary camera", False)
@@ -696,13 +689,13 @@ Func TestSettingsFunction($arg)
 
 			If StringInStr($cam3, "able") Then
 				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "3")	; select Camera 3
-				sleep(5000)
+				sleep(2500)
 
 				If StringInStr($cam3, "enable") Then	; compatible with both enable and enabled
 					ClickCheckButton($hWnd, "Enable third camera")
 					Sleep(500)
 					ControlClick($hWnd, "", "Test")
-					Sleep(2500)
+					Sleep(2000)
 				EndIf
 				If StringInStr($cam3, "disable") Then	; compatible with both disable and disabled
 					ClickCheckButton($hWnd, "Enable third camera", False)
@@ -778,7 +771,7 @@ Func TestSettingsFunction($arg)
 		If StringInStr($txt, "Baud", 1) Then	; GPS & Radar
 			ControlClick($hWnd, "", "Test")
 			ClickCheckButton($hWnd, "Enable Radar Detection")	; check Enable Radar Detection
-			Sleep(2000)
+			Sleep(1000)
 		EndIf
 
 		If StringInStr($txt, "Max", 1) Then	; Upload & Storage
@@ -1020,9 +1013,9 @@ Func TestPhotoFunction()
 	LogUpload("Begin Photo function testing.")
 	MouseClick("", 960, 350);
 
-	Local $hWnd = GetHandleWindowWait($titlePhoto, "OK", 5)
+	Local $hWnd = GetHandleWindowWait($titleEndRecord, "OK", 5)
 	If $hWnd = 0 Then
-		$hWnd = GetHandleWindowWait($titleEndRecord, "OK", 5)
+		$hWnd = GetHandleWindowWait($titlePhoto, "OK", 5)
 		If $hWnd = 0 Then
 			MsgBox($MB_OK, $mMB, "Click to trigger the Photo function failed.",2)
 			LogUpload("Unable to test the Photo function by click on the photo button.")
@@ -1661,7 +1654,6 @@ Func ListenToNewCommand()
 
 		Case "reboot"
 			LogUpload("quit Going to reboot the box.")
-			OnAutoItExit()
 			Shutdown(2+4)	; force the window to reboot
 			Exit
 
@@ -1883,7 +1875,7 @@ Func HotKeyPressed()
 		Case "{Esc}", "^q" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
 			$testEnd = True	;	Stop testing marker
 			LogUpload("quit Automation is interrupt by operator.")
-			MsgBox($MB_OK, $mMB, "Automation is going to be shut down.",2)
+			MsgBox($MB_OK, $mMB, "Automation test is stopped.",2)
 			Exit
 
 		Case "+!t" ; Keystroke is the Shift-Alt-t hotkey, to stop the CopTrax App
