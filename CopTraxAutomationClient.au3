@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.17)
+#pragma compile(FileVersion, 3.4.10.23)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -38,6 +38,7 @@ HotKeySet("+!t", "HotKeyPressed") ; Shift-Alt-t to stop CopTrax
 HotKeySet("+!s", "HotKeyPressed") ; Shift-Alt-s, to start CopTrax
 HotKeySet("+!r", "HotKeyPressed") ; Shift-Alt-r, to restart the automation test client
 HotKeySet("!{SPACE}", "HotKeyPressed") ; Alt-Space show the running CopTraxAutomation
+HotKeySet("^{SPACE}", "HotKeyPressed") ; Ctrl-Space show the running CopTraxAutomation
 
 Global Const $titleCopTraxMain = "CopTrax II v"	; "CopTrax II v2.x.x"
 Global Const $titleAccount = "Account" ; "CopTrax - Login / Create Account"
@@ -70,6 +71,8 @@ Global $releaseSet = "Unset"
 Global $title = "CopTrax II is not up yet"
 Global $userName = ""
 Global $sentPattern = ""
+Global $EnableWelcomeScreen = "OFF"
+Global $EnableAutomation = "OFF"
 
 Global $filesToBeSent = ""
 Global $uploadMode = "idle"
@@ -77,6 +80,7 @@ Global $fileContent = ""
 Global $bytesCounter = 0
 Global $workDir = @ScriptDir & "\"
 Global $configFile = $workDir & "client.cfg"
+Global $logFile = FileOpen( $workDir & "local.log", 1+8)
 ReadConfig()
 
 Global $fileToBeUpdate = $workDir & "tmp\" & @ScriptName
@@ -106,23 +110,25 @@ OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when t
 AutoItSetOption ("WinTitleMatchMode", 2)
 AutoItSetOption("SendKeyDelay", 100)
 
-Global $logFile = FileOpen( $workDir & "local.log", 1+8)
-
-If WinExists("", "Open CopTrax") Then	; In case there running the welcome screen, try to stop the CopTrax App and the automation
-	If ProcessExists($pCopTrax) Then
-		ProcessClose($pCopTrax)
-	EndIf
-
-	Run("schtasks /Delete /TN Automation /F", "", @SW_HIDE)	; delete the automation scheduler when there is welcome screen
+If WinExists("", "Open CopTrax") Then	; In case there running the welcome screen, exit
 	Exit
 EndIf
 
+$Socket = TCPConnect($ip, $port)
 Do	; Try to confirm the running of CopTrax App and the network connection to server before running automation
-	If Not ProcessExists($pCopTrax) Then MsgBox($MB_OK, $mMB, "Waiting for CopTrax App to run..", 2)
-	If $Socket < 0 Then $Socket = TCPConnect($ip, $port)
-	If $Socket < 0 Then MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server.", 2)
+	If Not ProcessExists($pCopTrax) Then
+		RunCopTrax()
+		MsgBox($MB_OK, $mMB, "Waiting for CopTrax App to run..", 2)
+	EndIf
+
+	If $Socket < 0 Then
+		MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server.", 2)
+		$Socket = TCPConnect($ip, $port)
+	EndIf
 Until ProcessExists($pCopTrax) And $Socket > 0
 MsgBox($MB_OK, $mMB, "Found CopTrax App running. Connected to server at " & $ip & ". Starting automation test." & @CRLF & "Esc to quit.", 5)
+FileClose($logFile)
+$logFile = 0
 
 If WinExists($titleAccount) Then
 	MsgBox($MB_OK, $mMB, "First time run. Try to create a temporal acount.", 2)
@@ -151,9 +157,6 @@ While $mCopTrax = 0
 		EndIf
 	Else
 		MsgBox($MB_OK, $mMB, "CopTrax II is not up yet.", 2)
-		If $testEnd Then
-			Exit
-		EndIf
 	EndIf
 WEnd
 
@@ -230,7 +233,7 @@ If $restart Then
 	RestartAutomation()
 Else
 	LogUpload("End of automation test.")
-	MsgBox($MB_OK, $mMB, "Testing ends. Bye.",5)
+	MsgBox($MB_OK, $mMB, "Testing ends. Bye.",2)
 EndIf
 
 If $fileToBeUpdate Then
@@ -240,7 +243,6 @@ EndIf
 _EventLog__Close($hEventLogSystem)
 _EventLog__Close($hEventLogApp)
 _EventLog__Close($hEventLogCopTrax)
-Run("C:\CopTrax Support\Tools\CopTraxWelcome\EnableWelcomeScreen.exe", "C:\CopTrax Support\Tools\CopTraxWelcome", @SW_HIDE)	; Enable the welcome screen every time
 
 Exit
 
@@ -280,9 +282,9 @@ Func RestartAutomation()
 	Local $filename = $workDir & "RestartClient.bat"
 	Local $sourceFile = $workDir & "tmp\" & @ScriptName
 	Local $file = FileOpen($filename, $FO_OVERWRITE)
-	FileWriteLine($file,"ping localhost -n 5")
+	FileWriteLine($file,"ping localhost -n 10")
 	If (FileGetSize($sourcefile) > 1000000) And (_VersionCompare(FileGetVersion(@AutoItExe), FileGetVersion($sourceFile)) < 0) Then
-		FileWriteLine($file,"copy " & $sourceFile & " " & @AutoItExe)
+		FileWriteLine($file,"copy /Y " & $sourceFile & " " & @AutoItExe)
 	EndIf
 	FileWriteLine($file,"del " & $sourceFile)
 	FileWriteLine($file, "start  /d " & $workDir & " " & @AutoItExe)
@@ -785,7 +787,9 @@ Func TestSettingsFunction($arg)
 		EndIf
 
 		If StringInStr($txt, "Welcome", 1) Then	; Misc
-			ClickCheckButton($hwnd,"Enable Welcome App")
+			If StringinStr($EnableWelcomeScreen, "on") Then
+				ClickCheckButton($hwnd,"Enable Welcome App")
+			EndIf
 
 			If StringInStr($keyboard, "enable") Then	; compatible with both enable and enabled
 				ClickCheckButton($hwnd,"Enable on-screen keyboard")
@@ -848,11 +852,6 @@ Func ReadyForTest()
 
 	If WinExists($titleLogin) Then
 		WinClose($titleLogin)
-		Sleep(100)
-	EndIf
-
-	If WinExists($titleInfo) Then
-		WinClose($titleInfo)
 		Sleep(100)
 	EndIf
 
@@ -1107,16 +1106,19 @@ Func TestReviewFunction()
 EndFunc
 
 Func LogUpload($s)
-   If $Socket < 0 Then
-	   MsgBox($MB_OK, $mMB, $s, 5)
-	   _FileWriteLog($logFile, $s)
-	   Return
-   EndIf
+	If $Socket < 0 Then
+		MsgBox($MB_OK, $mMB, $s, 5)
+		If $logFile Then _FileWriteLog($logFile, $s)
+		Return
+	EndIf
 
-   TCPSend($Socket, $s & " ")
-   If @error <> 0 Then
-	   CloseConnection($err)
-	   Return
+	If Not TCPSend($Socket, $s & " ") Then
+		TCPCloseSocket($Socket)
+		$Socket = -1
+		If $logFile Then
+			_FileWriteLog($logFile, "Cannot Send the message " & $s & " to server. Connection lost.")
+		EndIf
+		Return
 	EndIf
 
 	If StringInStr($s, "FAILED", 1) = 1 Then
@@ -1580,12 +1582,12 @@ Func ListenToNewCommand()
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "quit", "endtest", "quittest"
-			LogUpload("quit Got " & $raw & " command. The test client will stop.")
+			LogUpload("quit Got " & $raw & " command. The test client will stop. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
 			$testEnd = True	;	Stop testing marker
 			$restart = False
 
 		Case "restart", "restarttest"
-			LogUpload("quit The test client will restart.")
+			LogUpload("quit The test client will restart. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
 			$testEnd = True	;	Stop testing marker
 			$restart = True
 
@@ -1646,14 +1648,17 @@ Func ListenToNewCommand()
 			FileClose($file)
 
 			ProcessClose($pCopTrax)
-			LogUpload("quit Box is going to be cleanup and shutdown.")
+			Run(@comSpec & " /c schtasks /Delete /TN Automation /F")
+			$EnableAutomation = "OFF"
+			LogUpload("quit Box is going to be cleanup and shutdown. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
 			Run("C:\Coptrax Support\Tools\Cleanup.bat", "C:\Coptrax Support\Tools\", @SW_HIDE)
 			$testEnd = True
 			$restart = False
 			Exit
 
 		Case "reboot"
-			LogUpload("quit Going to reboot the box.")
+			Run(@comSpec & " /c schtasks /Create /XML C:\CopTraxAutomation\autorun.xml /TN Automation", "", @SW_HIDE)
+			LogUpload("quit Going to reboot the box. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned ON.")
 			Shutdown(2+4)	; force the window to reboot
 			Exit
 
@@ -1710,10 +1715,10 @@ Func Configure($arg)
 
 	$bwc = GetParameter($arg, "bwc")	; configure the Evidence Viewer
 	If $bwc Then
-		Run("schtasks /Delete /TN BWCManager /F", "", @SW_HIDE)
+		Run('schtasks /Delete /TN "BWC Manager Startup" /F', "", @SW_HIDE)
 		LogUpload("Configuring Body Wore Camera to turn " & $bwc & ".")
 		If StringInStr($bwc, "on") Then
-			Run("schtasks /Create /XML C:\CopTraxAutomation\BWCManagerStartup.xml /TN BWCManager", "", @SW_HIDE)
+			Run('schtasks /Create /XML C:\CopTraxAutomation\BWCManagerStartup.xml /TN "BWC Manager Startup" /F', "", @SW_HIDE)
 			LogUpload("Body Wore Camera Manager is configured to startup.")
 		Else
 			LogUpload("Body Wore Camera Manager is configured not to startup.")
@@ -1733,17 +1738,17 @@ Func CopyOver($config, $destDir)
 
 	Local $i
 	Local $rst = 0
-	Local $end = 0
+	Local $end = 3
 	For $i = 1 To $list[0]
 		Do
 			If FileCopy($list[$i], $destDir, 1) Then; copies the directory $sourceDir and all sub-directories and files to $destDir in overwrite mode
 				$rst += 1
-				$end = 3
+				$end = 0
 			Else
 				LogUpload($list[$i] & " was not copied to " & $destDir & ". Try again.")
-				$end += 1
+				$end -= 1
 			EndIf
-		Until $end >= 3
+		Until $end <= 0
 	Next
 
 	If $rst = $list[0] Then
@@ -1762,31 +1767,26 @@ Func RunMsi($msi)
 	EndIf
 
 	Local $pMsi = Run($dir & $msi, $dir)
-	Local $hMsi = GetHandleWindowWait("CopTrax")
-	Local $rst = $hMsi And ControlClick($hMsi, "", "&Next>") And pause() And ControlClick($hMsi, "", "I &Agree") And pause()
-	$rst = $rst And ControlClick($hMsi, "", "&Next>") And pause() And ControlClick($hMsi, "", "&Next>") And pause() And ControlClick($hMsi, "", "&Next>")
-	If $rst Then
-		Sleep(5000)
-		If WinExists("CopTrax", "OK") Then
-			ControlClick("CopTrax", "OK", "OK")
-			LogUpload("Unable to install the app. The error messages are " & WinGetText("CopTrax", "OK"))
-			ProcessClose($pCopTrax)
-			Return False
-		EndIf
-
-		LogUpload("Complete the installation. The messages are " & WinGetText($hMsi))
-		ControlClick($hMsi, "", "&Close")
-
-		Return ProcessExists($pMsi)
-	Else
+	Local $hMsi = GetHandleWindowWait("CopTrax", "&Next")
+	If Not $hMsi Then
+		LogUpload("Unable to load " & $msi & ".")
 		ProcessClose($pMsi)
 		Return False
 	EndIf
-EndFunc
 
-Func pause()
-	sleep(200)
-	Return True
+	AutoItSetOption ( "SendKeyDelay", 1000 )
+	Send("nannnc")	; &Next, &Agree, &Next, &Next, &Next, &Close
+	AutoItSetOption ( "SendKeyDelay", 100 )
+	Sleep(2000)
+
+	If ProcessExists($pMsi) Then
+		LogUpload("Unable to install " & $msi & ". The error messages are " & WinGetText($hMsi))
+		ProcessClose($pMsi)
+		Return False
+	Else
+		LogUpload("Complete the installation of " & $msi & ". The messages are " & WinGetText($hMsi))
+		Return True
+	EndIf
 EndFunc
 
 Func EncodeToSystemTime($datetime)
@@ -1874,7 +1874,7 @@ Func HotKeyPressed()
 	Switch @HotKeyPressed ; The last hotkey pressed.
 		Case "{Esc}", "^q" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
 			$testEnd = True	;	Stop testing marker
-			LogUpload("quit Automation is interrupt by operator.")
+			LogUpload("quit Automation is interrupt by operator. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
 			MsgBox($MB_OK, $mMB, "Automation test is stopped.",2)
 			Exit
 
@@ -1895,7 +1895,7 @@ Func HotKeyPressed()
 			MsgBox($MB_OK, $mMB, "Starting the CopTrax",2)
 			Run("c:\Program Files (x86)\IncaX\CopTrax\IncaXPCApp.exe", "c:\Program Files (x86)\IncaX\CopTrax")
 
-		Case "!{SPACE}" ; Keystroke is the Alt-Space hotkey, to show the automation testing in-progress
+		Case "!{SPACE}", "^{SPACE}" ; Keystroke is the Alt-Space or Ctrl-Space hotkey, to show the automation testing in-progress
 			MsgBox($MB_OK, $mMB, "CopTrax Automation testing is in progress. " & $Socket ,2)
 
 	EndSwitch
@@ -1927,9 +1927,15 @@ Func ReportCPUMemory()
 EndFunc
 
 Func OnAutoItExit()
+	If StringInStr($EnableWelcomeScreen, "on") Then
+		Run("C:\CopTrax Support\Tools\CopTraxWelcome\EnableWelcomeScreen.exe", "C:\CopTrax Support\Tools\CopTraxWelcome", @SW_HIDE)	; Enable the welcome screen every time
+	EndIf
+
+	If StringInStr($EnableAutomation, "off") Then
+		Run(@comSpec & " /c schtasks /Delete /TN Automation /F")
+	EndIf
 	TCPShutdown() ; Close the TCP service.
-	Run("C:\CopTrax Support\Tools\CopTraxWelcome\EnableWelcomeScreen.exe", "C:\CopTrax Support\Tools\CopTraxWelcome", @SW_HIDE)	; Enable the welcome screen every time
- EndFunc   ;==>OnAutoItExit
+EndFunc   ;==>OnAutoItExit
 
 Func ReadConfig()
 	Local $file = FileOpen($configFile,0)	; for test case reading, readonly
@@ -1956,6 +1962,13 @@ Func ReadConfig()
 		If $aTxt Then $mapDir = $aTxt
 		$aTxt = GetParameter($aLine, "bwc")	; read the location to store the Body wore Camera
 		If $aTxt Then $bwcDir = $aTxt
+		$aTxt = GetParameter($aLine, "welcomescreen")	; read the location to store the Body wore Camera
+		If $aTxt And StringInStr($aTxt, "on") Then $EnableWelcomeScreen = "ON"
+		$aTxt = GetParameter($aLine, "automation")	; read the location to store the Body wore Camera
+		If $aTxt And StringInStr($aTxt, "on") Then
+			$EnableAutomation = "ON"
+			Run(@comSpec & " /c schtasks /Create /XML C:\CopTraxAutomation\autorun.xml /TN Automation")
+		EndIf
 	Until $eof
 
 	FileClose($file)
@@ -2331,3 +2344,21 @@ Func _ProcessUsageTracker_GetUsage(ByRef $aProcUsage)
 
 	Return $fUsage
 EndFunc
+
+Func _GetActiveSSID()
+    Local $SSID = ""
+    $objWMIService = ObjGet("winmgmts:{impersonationLevel=impersonate}!\\.\root\wmi")
+    If Not IsObj($objWMIService) Then Return $SSID
+
+    Local $objMSNdis_80211_ServiceSetIdentifierSet = $objWMIService.ExecQuery("Select * from MSNdis_80211_ServiceSetIdentifier Where active=true")
+    If Not IsObj($objMSNdis_80211_ServiceSetIdentifierSet) Then Return $SSID
+
+    For $objMSNdis_80211_ServiceSetIdentifier In $objMSNdis_80211_ServiceSetIdentifierSet
+        $ID = ""
+        For $i = 0 To $objMSNdis_80211_ServiceSetIdentifier.Ndis80211SsId(0)
+            $ID = $ID & Chr($objMSNdis_80211_ServiceSetIdentifier.Ndis80211SsId($i + 4))
+        Next
+        $SSID = $ID
+    Next
+    Return $SSID
+EndFunc  ;==>_GetActiveSSID
