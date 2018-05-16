@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.23)
+#pragma compile(FileVersion, 3.4.10.24)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -1107,7 +1107,7 @@ EndFunc
 
 Func LogUpload($s)
 	If $Socket < 0 Then
-		MsgBox($MB_OK, $mMB, $s, 5)
+		MsgBox($MB_OK, $mMB, $s, 2)
 		If $logFile Then _FileWriteLog($logFile, $s)
 		Return
 	EndIf
@@ -1123,6 +1123,10 @@ Func LogUpload($s)
 
 	If StringInStr($s, "FAILED", 1) = 1 Then
 		TakeScreenCapture("failure", $mCopTrax)
+	EndIf
+
+	If StringInStr($s, "error") Then
+		TCPSend($Socket, @CRLF)
 	Else
 		Sleep(1000)
 	EndIf
