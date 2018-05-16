@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.7
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.8
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -128,6 +128,7 @@ Global $testFailures[$maxConnections + 1]	; stores the number of failures in aut
 Global $boxID[$maxConnections + 1]	; stores the serial number of each UUT
 Global $boxIP[$maxConnections + 1]	; stores the IP address of each UUT during the automation test
 Global $batchWait[$maxConnections + 1]	; stores the batch mode of each test during the automation test. True means not to hold other box entering batch align mode
+Global $errorsFirmware[$maxConnections + 1]	; stores the errors of event logs during the automation test. If the errors exceeds 10,reboot
 Global $listFailed = ""	; the list of UUT's serial number that failed the automation test
 Global $listPassed = "" ; the list of UUT's serial number that passed the automation test
 Global $portDisplay = 0	; stores the index of UUT which log is displayed in the window
@@ -145,6 +146,7 @@ For $i = 0 To $maxConnections	; initialize the variables
 	$boxIP[$i] = ""
 	$logContent[$i] = $cheatSheet
 	$batchWait[$i] = True	; default value is true, not to hold other box entering batch align mode
+	$errorsFirmware[$i] = 0
 Next
 
 XPStyleToggle(1)	; force not in XP mode, necessary for color change in progress bar
@@ -1055,6 +1057,18 @@ Func ProcessReply($n)
 		Return True
 	EndIf
 
+	If StringInStr($reply, "error") Then
+		$errorsFirmware[$n] += 1
+		If $errorsFirmware[$n] > 10 Then
+			GUICtrlSetColor($pGUI[$n], $COLOR_RED)
+
+			PushCommand($n, "hold reboot")	; seems there exists mis-matching problems in the client box, reboot to fix it
+			LogWrite($automationLogPort, $boxID[$n] & " firmware reading errors exceed 10 times. Have to reboot the box.")
+			LogWrite($n, "Firmware reading errors exceeds 10. Cannot read valid data from firmware. Have to reboot the box.")
+			Return True
+		EndIf
+	EndIf
+
 	If StringInStr($reply, "quit") Then
 		If StringLen($commands[$n]) > 5 Then
 			LogWrite($automationLogPort, $boxID[$n] & " Tests was interrupted.")
@@ -1109,7 +1123,7 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 	GUICtrlSetData($tLog, " " & $boxID[$n])	; update the serial number on top the main log display
 
 	Local $nextCommand
-	If StringInStr($resume, "resume") Then
+	If StringInStr($resume, "resume") And $testFailures[$n] = 0 Then
 		Do
 			$nextCommand = PopCommand($n)
 		Until $nextCommand <> "hold"
@@ -1126,6 +1140,7 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 	$fileToBeSent[$n] = ""	; clear file need to be sent to client
 	$testFailures[$n] = 0	; initialize the result true until any failure
 	$batchWait[$n] = True	; Default is true, not to hold other boxes until was set by BatchTest mode=start
+	$errorsFirmware[$n] = 0 ; clear the errors counter for event log
 	If $logFiles[$n] <> 0 Then
 		FileClose($logFiles[$n])
 	EndIf

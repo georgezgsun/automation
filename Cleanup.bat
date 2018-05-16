@@ -9,6 +9,8 @@ Del /S /F /Q C:\CopTrax-Backup\*.*
 rmdir /S /Q C:\CoptraxAutomation\
 rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\coptrax\auto1\"
 rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\coptrax\auto2\"
+rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\coptrax\auto3\"
+rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\coptrax\auto4\"
 rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\IncaX_Limited\"
 mkdir "C:\Users\coptraxadmin\AppData\Local\IncaX_Limited\"
 Del /Q C:\ProgramData\*.*
