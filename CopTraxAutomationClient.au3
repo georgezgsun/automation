@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.24)
+#pragma compile(FileVersion, 3.4.10.25)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -515,13 +515,14 @@ Func CreateNewAccount($name, $password)
 	LogUpload("New profile has been created. CopTrax will restart. Automation will wait.")
 
 	$mCopTrax = 0
-	Local $i = 0
-	While WinExists($titleStatus) And ($i < 5)
+	Local $i = 5
+	While WinExists($titleStatus) And ($i > 0)
 		Sleep(1000)
-		$i += 1
+		$i -= 1
 	WEnd
-	If $i >= 5 Then
-		LogUpload("The accessories are not ready.")
+	If $i <= 0 Then
+		LogUpload("The accessories are not ready yet.")
+		TakeScreenCapture("Accessories not ready", WinActive($titleStatus))
 		Return False
 	EndIf
 
@@ -836,8 +837,14 @@ EndFunc
 Func ReadyForTest()
 	AutoItSetOption ("WinTitleMatchMode", 2)
 
-	If WinExists($titleStatus) Then
+	Local $i = 5
+	While WinExists($titleStatus) And ($i > 0)
+		Sleep(1000)
+		$i -= 1
+	WEnd
+	If $i <= 0 Then
 		LogUpload("The accessories are not ready.")
+		TakeScreenCapture("Accessories not ready", WinActive($titleStatus))
 		Return False
 	EndIf
 
@@ -1514,7 +1521,7 @@ Func ListenToNewCommand()
 				LogUpload("FAILED to trigger a record.")
 			EndIf
 
-		Case "upload"
+		Case "upload"	; upload the specified files to server, all, idle, now, wait have special meaning
 			MsgBox($MB_OK, $mMB, "Testing file upload function",2)
 			If $Recv[0] >= 2 Then
 				LogUpload("PASSED upload setting.")
@@ -1523,7 +1530,7 @@ Func ListenToNewCommand()
 				LogUpload("FAILED missing parameter to set the file upload.")
 			EndIf
 
-		Case "update"
+		Case "update"	; update the specified files on client with the one on server
 			MsgBox($MB_OK, $mMB, "Testing file update function",2)
 			If ($Recv[0] >=3) And UpdateFile($Recv[2], Int($Recv[3])) Then
 				LogUpload("Continue Got the update command. Ready for to receive.")
@@ -1531,7 +1538,7 @@ Func ListenToNewCommand()
 				LogUpload("FAILED to update " & $Recv[2])
 			EndIf
 
-		Case "synctime"
+		Case "synctime"	; sync the client's time and date with the server
 			If ($Recv[0] >= 2) And SyncDateTime($Recv[2]) Then
 				LogUpload("PASSED date and time syncing. The client is now " & @YEAR & "/" & @MON & "/" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC)
 			Else
@@ -1539,7 +1546,7 @@ Func ListenToNewCommand()
 			EndIf
 			MsgBox($MB_OK, $mMB, "Synchronizing client time to server",2)
 
-		Case "synctmz"
+		Case "synctmz"	; sync the client's time zone with the server
 			MsgBox($MB_OK, $mMB, "Synchronizing client timezone to server's",2)
 			If ($Recv[0] >= 2) And SyncTimeZone(StringMid($raw, 9)) Then
 				LogUpload("PASSED timezone synchronization.")
@@ -1547,7 +1554,7 @@ Func ListenToNewCommand()
 				LogUpload("FAILED to sync timezone to server's.")
 			EndIf
 
-		Case "checkrecord"
+		Case "checkrecord"	; checkthe recorded files
 			MsgBox($MB_OK, $mMB, "Checking the record files.",2)
 			If ($Recv[0] >= 2) And CheckRecordedFiles($Recv[2]) Then
 				LogUpload("PASSED the check on recorded files.")
@@ -1555,7 +1562,7 @@ Func ListenToNewCommand()
 				LogUpload("Continue Warning on the check of recorded files.")
 			EndIf
 
-		Case "eof", "cancel"
+		Case "eof", "cancel"	; tell the client the end of file sending in update
 			LogUpload("Continue End of file stransfer. " & $sentPattern)
 			If StringInStr($raw, "eof") Then
 				PopFile(True)	; pop the previous file out of the stack when receives eof
@@ -1563,7 +1570,7 @@ Func ListenToNewCommand()
 			EndIf
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
-		Case "configure"
+		Case "configure"	; configure the client
 			MsgBox($MB_OK, $mMB, "Configuring the client.",2)
 			If ($Recv[0] >= 2) And Configure($Recv[2]) Then
 				LogUpload("PASSED configuration of the client. The client is now of version " & $appVersion)
@@ -1571,7 +1578,7 @@ Func ListenToNewCommand()
 				LogUpload("FAILED configuration of the client. The client is now of version " & $appVersion)
 			EndIf
 
-		Case "send"
+		Case "send"	; let the client to send the file
 			$sentPattern = ""
 			$len = 1
 			While BinaryLen($fileContent) And $len;LarryDaLooza's idea to send in chunks to reduce stress on the application
@@ -1585,17 +1592,17 @@ Func ListenToNewCommand()
 			EndIf
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
-		Case "quit", "endtest", "quittest"
+		Case "quit", "endtest", "quittest"	; let the client to quit the current automation test
 			LogUpload("quit Got " & $raw & " command. The test client will stop. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
 			$testEnd = True	;	Stop testing marker
 			$restart = False
 
-		Case "restart", "restarttest"
+		Case "restart", "restarttest"	; let the client to restart the automation test
 			LogUpload("quit The test client will restart. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
 			$testEnd = True	;	Stop testing marker
 			$restart = True
 
-		Case "status", "heartbeat"
+		Case "status", "heartbeat"	; heartbeat and let the client to report its status
 			ReportCPUMemory()
 			If $uploadMode = "idle" Then
 				UploadFile("now")
@@ -1603,10 +1610,10 @@ Func ListenToNewCommand()
 			EndIf
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
-		Case "info"
+		Case "info"	; null command
 			LogUpload("Continue It is a null command at this moment.")
 
-		Case "about"
+		Case "about"	; let the client to report the about infomation
 			MsgBox($MB_OK, $mMB, "Checking CopTrax about infomation.",2)
 
 			If testAbout() Then
@@ -1615,7 +1622,7 @@ Func ListenToNewCommand()
 				LogUpload("FAILED CopTrax version check. The current CopTrax is of version " & $appVersion & " " & $releaseRead & ".")
 			EndIf
 
-		Case "checkfirmware"
+		Case "checkfirmware"	; check the firmware
 			MsgBox($MB_OK, $mMB, "Checking client firmware.",2)
 			If $firmwareVersion = "" Then
 				LogUpload("FAILED firmware version check. Run settings command before checking the firmware version.")
@@ -1625,7 +1632,7 @@ Func ListenToNewCommand()
 				LogUpload("FAILED firmware version check. The current firmware version is " & $firmwareVersion & ", not " & $Recv[2])
 			EndIf
 
-		Case "checkapp"
+		Case "checkapp"	; check the app version and the release
 			MsgBox($MB_OK, $mMB, "Checking CopTrax version and release.",2)
 
 			If $releaseSet = "Unset" Then $releaseSet = $releaseRead	; backward compatible
@@ -1636,7 +1643,7 @@ Func ListenToNewCommand()
 				LogUpload("FAILED CopTrax version check. The current CopTrax is of version " & $appVersion & " " & $releaseRead & ", not " & $Recv[2])
 			EndIf
 
-		Case "checklibrary"
+		Case "checklibrary"	; check the library version
 			MsgBox($MB_OK, $mMB, "Checking CopTrax library version.",2)
 
 			If ($Recv[0] >= 2) And ($libraryVersion = $Recv[2]) Then
@@ -1645,24 +1652,26 @@ Func ListenToNewCommand()
 				LogUpload("FAILED library version check. The current library version is " & $libraryVersion & ", not " & $Recv[2])
 			EndIf
 
-		Case "cleanup"
+		Case "cleanup"	; let the client cleanup
 			Local $filename = "C:\CopTrax Support\Tools\Automation.bat"
 			Local $file = FileOpen($filename, $FO_OVERWRITE );
 			FileWriteLine($file, "Echo Welcome to use CopTrax II")
 			FileClose($file)
 
-			ProcessClose($pCopTrax)
-			Run(@comSpec & " /c schtasks /Delete /TN Automation /F")
+			If Not QuitCopTrax() Then ProcessClose($pCopTrax)	; try to stop the CopTrax gracefully
 			$EnableAutomation = "OFF"
-			LogUpload("quit Box is going to be cleanup and shutdown. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
+			$EnableWelcomeScreen = "ON"
+			LogUpload("quit The box is going to be cleanup and shutdown. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
 			Run("C:\Coptrax Support\Tools\Cleanup.bat", "C:\Coptrax Support\Tools\", @SW_HIDE)
 			$testEnd = True
 			$restart = False
 			Exit
 
-		Case "reboot"
-			Run(@comSpec & " /c schtasks /Create /XML C:\CopTraxAutomation\autorun.xml /TN Automation", "", @SW_HIDE)
-			LogUpload("quit Going to reboot the box. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned ON.")
+		Case "reboot"	; let the client to reboot
+			Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')
+			Sleep(1000)
+			Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
+			LogUpload("quit Going to reboot the box. Welcome Screen is turned OFF. And the automation is turned ON.")
 			Shutdown(2+4)	; force the window to reboot
 			Exit
 
@@ -1719,12 +1728,12 @@ Func Configure($arg)
 
 	$bwc = GetParameter($arg, "bwc")	; configure the Evidence Viewer
 	If $bwc Then
-		Run('schtasks /Delete /TN "BWC Manager Startup" /F', "", @SW_HIDE)
 		LogUpload("Configuring Body Wore Camera to turn " & $bwc & ".")
 		If StringInStr($bwc, "on") Then
-			Run('schtasks /Create /XML C:\CopTraxAutomation\BWCManagerStartup.xml /TN "BWC Manager Startup" /F', "", @SW_HIDE)
+			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "BWC Manager Startup" /TR "C:\Program Files\Applied Concepts Inc\CopTrax Body Camera Manager\MobileCam.exe" /F')	; Enable the BWC next time
 			LogUpload("Body Wore Camera Manager is configured to startup.")
 		Else
+			Run(@ComSpec & ' /c schtasks /Delete /TN "BWC Manager Startup"')
 			LogUpload("Body Wore Camera Manager is configured not to startup.")
 		EndIf
 	EndIf
@@ -1931,12 +1940,20 @@ Func ReportCPUMemory()
 EndFunc
 
 Func OnAutoItExit()
-	If StringInStr($EnableWelcomeScreen, "on") Then
-		Run("C:\CopTrax Support\Tools\CopTraxWelcome\EnableWelcomeScreen.exe", "C:\CopTrax Support\Tools\CopTraxWelcome", @SW_HIDE)	; Enable the welcome screen every time
+	If StringInStr($EnableAutomation, "off") Then
+		Run(@ComSpec & " /c schtasks /Delete /TN Automation /F")
 	EndIf
 
-	If StringInStr($EnableAutomation, "off") Then
-		Run(@comSpec & " /c schtasks /Delete /TN Automation /F")
+	If StringInStr($EnableWelcomeScreen, "off") Then
+		Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')
+	EndIf
+
+	If StringInStr($EnableWelcomeScreen, "on") Then
+		Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
+	EndIf
+
+	If StringInStr($EnableAutomation, "on") Then
+		Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
 	EndIf
 	TCPShutdown() ; Close the TCP service.
 EndFunc   ;==>OnAutoItExit
@@ -1971,7 +1988,7 @@ Func ReadConfig()
 		$aTxt = GetParameter($aLine, "automation")	; read the location to store the Body wore Camera
 		If $aTxt And StringInStr($aTxt, "on") Then
 			$EnableAutomation = "ON"
-			Run(@comSpec & " /c schtasks /Create /XML C:\CopTraxAutomation\autorun.xml /TN Automation")
+			Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
 		EndIf
 	Until $eof
 
