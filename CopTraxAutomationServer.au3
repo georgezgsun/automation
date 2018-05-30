@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.8
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.15
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -35,7 +35,7 @@ _Singleton('Automation test server')
 HotKeySet("!{Esc}", "HotKeyPressed") ; Alt-Esc to stop testing
 
 TCPStartup() ; Start the TCP service.
-AutoItSetOption("TCPTimeout", 1)
+AutoItSetOption("TCPTimeout", 5)
 
 Global Const $maxConnections = 20	; define the max client numbers
 Global Const $maxListen = 100	; define the max client numbers
@@ -60,6 +60,7 @@ Local $piTimeout2 = 0
 Global $workDir = "C:\CopTraxTest\"
 Global $sentPattern = ""
 Global $config = "FactoryDefault"
+Global $InproperID = False	; Keep the record of inproper box ID
 Local $cheatSheet = ReadCheatSheet()
 
 OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when the script is closed.
@@ -207,7 +208,6 @@ GUICtrlSetData($cLog, $cheatSheet)
 
 Global $hTimer = TimerInit()	; global timer handle
 Global $testEnd = False
-Global $totalTestTime = 0
 Global $batchAligned = False
 Global $batchMode = False	; Not in batch mode until get a batch align command
 Local $commandsRemains
@@ -420,8 +420,6 @@ While Not $testEnd	; main loop that get input, display the resilts
 		GUICtrlSetData($cLoop, $tLoop)
 	EndIf
 WEnd
-
-;SendCommand(0, "q1") ; let RaspberryPi to close the socket
 
 OnAutoItExit()
 
@@ -735,6 +733,7 @@ Func ParseCommand($n)
 
 			If $arg = "stop" Then
 				LogWrite($n, "(Server) Enter stop batch test mode, disabled all other later boxes from achieving align mode.")
+				If $batchMode Then ContinueCase
 				SendCommand(0, "q1") ; let RaspberryPi to close the socket
 				LogWrite($automationLogPort, "(Server) Close the connection to Raspberry Pi simulator and send it q1 command to let it close the connection.")
 				LogWrite($piLogPort, "(Server) Close the connection to Raspberry Pi simulator and send it q1 command to let it close the connection.")
@@ -763,14 +762,16 @@ Func LogWrite($n,$s)
 	If $n < 0 Or $n > $maxConnections + 1 Then Return
 
 	_FileWriteLog($logFiles[$n],$s)
+	If StringInStr($s, "error event") Or ($n = 0) Then Return
+
 	$s = @HOUR & ":" & @MIN & ":" & @SEC & " " & $s & @CRLF	; show the log with time stamps
 
-	If $n = $maxConnections + 1 Then
+	If $n = $automationLogPort Then
 		GUICtrlSetData($aLog, $s, 1)
 		Return
 	EndIf
 
-	If ($n > 0) And ($n <= $maxConnections) And Not ( StringInStr($s, "heartbeat command") Or StringInStr($s, "; CPU #", 1))  Then
+	If Not ( StringInStr($s, "heartbeat command") Or StringInStr($s, "; CPU #", 1) )  Then
 		$logContent[$n] &= $s
 	EndIf
 
@@ -1013,9 +1014,27 @@ Func ProcessReply($n)
 
 	Local $newCommand
 	Local $msg = StringSplit($reply, " ")
+	Local $readTxt
 	LogWrite($n, "(Client) " & $reply)	; write the returned results into the log file
 
-	If ($msg[0] >=3) And ($msg[1] = "file") Then	; start to upload file from client
+	If ($msg[0] >= 5) And StringInStr($reply, "Identify ") Then	; the settings reply the identify ID
+		$readTxt =  StringRegExp($reply, "([a-zA-Z]{2}[0-9]{6})", $STR_REGEXPARRAYMATCH)
+		If IsArray($readTxt) And ($readTxt[0] <> $boxID[$n]) Then
+			$ID = $readTxt[0]
+			LogWrite($n, "(Server) Got the box serial number updated from " & $boxID[$n] & " to " & $readTxt[0] & ". Have to update the log file.")
+			$boxID[$n] = $readTxt[0]	; update the box ID
+			$portDisplay = $n	; update the main log display to current box
+			GUICtrlSetData($bGUI[$n], $boxID[$n])	; update the text on the button
+			GUICtrlSetData($tLog, " " & $boxID[$n])	; update the serial number on top the main log display
+
+			FileClose($logFiles[$n])
+			$logFiles[$n] = FileOpen($workDir & "log\" & $boxID[$n] & ".log", 1+8) ; open log file for append write in text mode
+			FileWrite($logFiles[$n], $logContent[$n])	; write the previouse log content into new log file
+			$InproperID = False	; clear the flag
+		EndIf
+	EndIf
+
+	If ($msg[0] >=3 ) And ($msg[1] = "file") Then	; start to upload file from client
 		Local $filename = $msg[2]
 		Local $len =  Int($msg[3])
 		Local $netFileName = StringSplit($filename, "\")
@@ -1057,12 +1076,12 @@ Func ProcessReply($n)
 		Return True
 	EndIf
 
-	If StringInStr($reply, "error") Then
+	If StringInStr($reply, "App error") And Not StringInStr($reply, "(15 ms)") Then
 		$errorsFirmware[$n] += 1
 		If $errorsFirmware[$n] > 10 Then
 			GUICtrlSetColor($pGUI[$n], $COLOR_RED)
-
-			PushCommand($n, "hold reboot")	; seems there exists mis-matching problems in the client box, reboot to fix it
+			PushCommand($n, "reboot")	; seems there exists mis-matching problems in the client box, reboot to fix it
+			SendCommand($n, "reboot")	; Send command reboot to client to force a reboot
 			LogWrite($automationLogPort, $boxID[$n] & " firmware reading errors exceed 10 times. Have to reboot the box.")
 			LogWrite($n, "Firmware reading errors exceeds 10. Cannot read valid data from firmware. Have to reboot the box.")
 			Return True
@@ -1072,9 +1091,15 @@ Func ProcessReply($n)
 	If StringInStr($reply, "quit") Then
 		If StringLen($commands[$n]) > 5 Then
 			LogWrite($automationLogPort, $boxID[$n] & " Tests was interrupted.")
-			LogWrite($n, " Tests was interrupted.")
+			LogWrite($n, "(Server) Tests was interrupted.")
 			GUICtrlSetData($nGUI[$n], "interrupt")
 		Else
+			If StringInStr($boxID[$n], "DK") Then
+				LogWrite($automationLogPort, $boxID[$n] & " is not a properly programmed serial number.")
+				LogWrite($n, "(Server) " & $boxID[$n] & " is not a properly programmed serial number. The box need to be re-programmed.")
+				$testFailures[$n] += 1	; initialize the result true until any failure
+			EndIf
+
 			If $testFailures[$n] = 0 Then
 				LogWrite($n, "All tests passed.")
 				LogWrite($automationLogPort, "All tests passed.")
@@ -1122,6 +1147,19 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 	GUICtrlSetData($bGUI[$n], $boxID[$n])	; update the text on the button
 	GUICtrlSetData($tLog, " " & $boxID[$n])	; update the serial number on top the main log display
 
+	If StringInStr($ID, "DK") Then
+		If $InproperID Then ; Got DK123456 again
+			$testFailures[$n] += 1
+			GUICtrlSetColor($pGUI[$n], $COLOR_RED)
+			GUICtrlSetData($pGUI[$n], 100)
+			$commands[$n] = "reboot "
+			LogWrite($automationLogPort, "Got inproper serial number " & $ID & " again. Let the box reboot now.")
+			Return
+		Else
+			$InproperID = True
+		EndIf
+	EndIf
+
 	Local $nextCommand
 	If StringInStr($resume, "resume") And $testFailures[$n] = 0 Then
 		Do
@@ -1162,7 +1200,7 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 	EndIf
 	Local $estimate = EstimateCommands($commands[$n])
 	Local $commandsNumber = Int(GetParameter($estimate, "count"))
-	$totalTestTime = Floor(Int(GetParameter($estimate, "time")) /60) + 1
+	Local $totalTestTime = toHMS(Int(GetParameter($estimate, "time")))
 
 	Local $splitChar = "==================================="
 	$splitChar &= $splitChar & $splitChar
@@ -1189,16 +1227,18 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 		LogWrite($automationLogPort, $boxID[$n] & " firmware error. Cannot read serial number. Reboot now.")
 		LogWrite($n, $boxID[$n] & " firmware error. Cannot read serial number. Reboot now.")
 	EndIf
+	GUICtrlSetData($pGUI[$n], 0)
+	GUICtrlSetData($nGUI[$n], $totalTestTime)
 	GUICtrlSetColor($nGUI[$n], $COLOR_BLACK)
 	GUICtrlSetColor($pGUI[$n], $COLOR_SKYBLUE)
 
 	LogWrite($n, " Test case is read from " & $filename)
 	LogWrite($n, " - " & $commands[$n])
-	LogWrite($n, " Number of test commands: " & $commandsNumber & ". Estimated test time in minutes: " & $totalTestTime & ".")
+	LogWrite($n, " Number of test commands: " & $commandsNumber & ". Estimated test time is " & $totalTestTime & ".")
 	LogWrite($n, $splitChar)
 
 	LogWrite($automationLogPort, "START AUTOMATION TEST for CopTrax DVR " & $boxID[$n])
-	LogWrite($automationLogPort, $boxID[$n] & " Number of test commands: " & $commandsNumber & ". Estimated test time in minutes: " & $totalTestTime & ".")
+	LogWrite($automationLogPort, $boxID[$n] & " Number of test commands: " & $commandsNumber & ". Estimated test time is " & $totalTestTime & ".")
 	$totalCommands[$n] = $commandsNumber
 EndFunc
 

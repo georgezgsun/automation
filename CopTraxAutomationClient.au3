@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.25)
+#pragma compile(FileVersion, 3.4.10.26)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -71,8 +71,6 @@ Global $releaseSet = "Unset"
 Global $title = "CopTrax II is not up yet"
 Global $userName = ""
 Global $sentPattern = ""
-Global $EnableWelcomeScreen = "OFF"
-Global $EnableAutomation = "OFF"
 
 Global $filesToBeSent = ""
 Global $uploadMode = "idle"
@@ -82,6 +80,8 @@ Global $workDir = @ScriptDir & "\"
 Global $configFile = $workDir & "client.cfg"
 Global $logFile = FileOpen( $workDir & "local.log", 1+8)
 ReadConfig()
+Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')	; Delete the scheduler task for Welcome Screen
+Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
 
 Global $fileToBeUpdate = $workDir & "tmp\" & @ScriptName
 Global $testEnd = FileExists($fileToBeUpdate) ? FileGetVersion(@AutoItExe) <> FileGetVersion($fileToBeUpdate) : False
@@ -788,9 +788,7 @@ Func TestSettingsFunction($arg)
 		EndIf
 
 		If StringInStr($txt, "Welcome", 1) Then	; Misc
-			If StringinStr($EnableWelcomeScreen, "on") Then
-				ClickCheckButton($hwnd,"Enable Welcome App")
-			EndIf
+			ClickCheckButton($hwnd,"Enable Welcome App")
 
 			If StringInStr($keyboard, "enable") Then	; compatible with both enable and enabled
 				ClickCheckButton($hwnd,"Enable on-screen keyboard")
@@ -1593,12 +1591,13 @@ Func ListenToNewCommand()
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "quit", "endtest", "quittest"	; let the client to quit the current automation test
-			LogUpload("quit Got " & $raw & " command. The test client will stop. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
+			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
+			LogUpload("quit Got " & $raw & " command. The test client will stop. The welcome screen is turned ON.")
 			$testEnd = True	;	Stop testing marker
 			$restart = False
 
 		Case "restart", "restarttest"	; let the client to restart the automation test
-			LogUpload("quit The test client will restart. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
+			LogUpload("quit The test client will restart.")
 			$testEnd = True	;	Stop testing marker
 			$restart = True
 
@@ -1659,22 +1658,21 @@ Func ListenToNewCommand()
 			FileClose($file)
 
 			If Not QuitCopTrax() Then ProcessClose($pCopTrax)	; try to stop the CopTrax gracefully
-			$EnableAutomation = "OFF"
-			$EnableWelcomeScreen = "ON"
-			LogUpload("quit The box is going to be cleanup and shutdown. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
+			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
+			Run(@ComSpec & " /c schtasks /Delete /TN Automation /F")	; Disable the automation
+			LogUpload("quit The box is going to be cleanup and shutdown. Welcome Screen is turned ON. And the automation is turned OFF.")
 			Run("C:\Coptrax Support\Tools\Cleanup.bat", "C:\Coptrax Support\Tools\", @SW_HIDE)
 			$testEnd = True
 			$restart = False
 			Exit
 
 		Case "reboot"	; let the client to reboot
-			Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')
-			Sleep(1000)
+			Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')	; Disable the welcome screen
 			Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
 			LogUpload("quit Going to reboot the box. Welcome Screen is turned OFF. And the automation is turned ON.")
+			TCPShutdown()
 			Shutdown(2+4)	; force the window to reboot
 			Exit
-
 	EndSwitch
 
 	Return True
@@ -1887,7 +1885,7 @@ Func HotKeyPressed()
 	Switch @HotKeyPressed ; The last hotkey pressed.
 		Case "{Esc}", "^q" ; KeyStroke is the {ESC} hotkey. to stop testing and quit
 			$testEnd = True	;	Stop testing marker
-			LogUpload("quit Automation is interrupt by operator. Welcome Screen is turned " & $EnableWelcomeScreen & ". And the automation is turned " & $EnableAutomation & ".")
+			LogUpload("quit Automation is interrupt by operator.")
 			MsgBox($MB_OK, $mMB, "Automation test is stopped.",2)
 			Exit
 
@@ -1940,21 +1938,6 @@ Func ReportCPUMemory()
 EndFunc
 
 Func OnAutoItExit()
-	If StringInStr($EnableAutomation, "off") Then
-		Run(@ComSpec & " /c schtasks /Delete /TN Automation /F")
-	EndIf
-
-	If StringInStr($EnableWelcomeScreen, "off") Then
-		Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')
-	EndIf
-
-	If StringInStr($EnableWelcomeScreen, "on") Then
-		Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
-	EndIf
-
-	If StringInStr($EnableAutomation, "on") Then
-		Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
-	EndIf
 	TCPShutdown() ; Close the TCP service.
 EndFunc   ;==>OnAutoItExit
 
@@ -1983,13 +1966,6 @@ Func ReadConfig()
 		If $aTxt Then $mapDir = $aTxt
 		$aTxt = GetParameter($aLine, "bwc")	; read the location to store the Body wore Camera
 		If $aTxt Then $bwcDir = $aTxt
-		$aTxt = GetParameter($aLine, "welcomescreen")	; read the location to store the Body wore Camera
-		If $aTxt And StringInStr($aTxt, "on") Then $EnableWelcomeScreen = "ON"
-		$aTxt = GetParameter($aLine, "automation")	; read the location to store the Body wore Camera
-		If $aTxt And StringInStr($aTxt, "on") Then
-			$EnableAutomation = "ON"
-			Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
-		EndIf
 	Until $eof
 
 	FileClose($file)
