@@ -1,8 +1,17 @@
 Echo Warning! This will cleanup the automation test trails
+:: wait 10 s
 ping localhost -n 10
+
+:: kill the CopTrax and clear the profile
 Taskkill /IM IncaXPCApp.exe /F
+rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\IncaX_Limited\"
+mkdir "C:\Users\coptraxadmin\AppData\Local\IncaX_Limited\"
+Del /Q C:\ProgramData\*coptrax*
+
+:: modify the autostart scheduler tasks, delete the automation and create the welcome screen. Allready achieved in automation.
 schtasks /Delete /TN Automation /F
-schtasks /Create /SC ONLOGON /TN "Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST
+
+:: delete the file trailers
 Del /S /F /Q F:\*.mp4
 Del /S /F /Q G:\*.mp4
 Del /S /F /Q H:\*.mp4
@@ -13,12 +22,12 @@ rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\coptrax\auto1\"
 rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\coptrax\auto2\"
 rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\coptrax\auto3\"
 rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\coptrax\auto4\"
-rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\IncaX_Limited\"
-mkdir "C:\Users\coptraxadmin\AppData\Local\IncaX_Limited\"
-Del /Q C:\ProgramData\*coptrax*
+
+:: delete the Wi-Fi profiles
 netsh wlan delete profile name="ACI-CopTrax1"
 netsh wlan delete profile name="ACI-CopTrax2"
-regedit.exe /s "C:\CopTrax Support\Tools\SetupAutoEndTasks.reg"
+
+:: start the welcome screen
 cd "C:\CopTrax Support\Tools\CopTraxWelcome
 Start CopTraxWelcome.exe
 Exit

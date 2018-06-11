@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.15
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.17
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -619,6 +619,8 @@ Func ParseCommand($n)
 
 		Case "onfailure"
 			$arg = PopCommand($n)
+			LogWrite($n, "")
+			LogWrite($n, "(Server) Checking for any failures so far.")
 			If $testFailures[$n] > 0 Then
 				If StringInStr($arg, "start") Then
 					SendCommand($n, "restart")
@@ -733,8 +735,10 @@ Func ParseCommand($n)
 
 			If $arg = "stop" Then
 				LogWrite($n, "(Server) Enter stop batch test mode, disabled all other later boxes from achieving align mode.")
-				If $batchMode Then ContinueCase
-				SendCommand(0, "q1") ; let RaspberryPi to close the socket
+				$batchWait[$n] = False
+				If Not $batchMode Then Return $nextCommandFlag
+
+				SendCommand($piLogPort, "q1") ; let RaspberryPi to close the socket
 				LogWrite($automationLogPort, "(Server) Close the connection to Raspberry Pi simulator and send it q1 command to let it close the connection.")
 				LogWrite($piLogPort, "(Server) Close the connection to Raspberry Pi simulator and send it q1 command to let it close the connection.")
 				If $socketRaspberryPi1 Then
@@ -743,9 +747,9 @@ Func ParseCommand($n)
 				If $socketRaspberryPi2 Then
 					TCPCloseSocket($socketRaspberryPi2)
 				EndIf
+
 				$socketRaspberryPi1 = -1
 				$socketRaspberryPi2 = -1
-				$batchWait[$n] = False
 				$batchAligned = False
 				$batchMode = False
 			EndIf
