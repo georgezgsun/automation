@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.19
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.20
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -605,6 +605,7 @@ Func ParseCommand($n)
 			SendCommand(0, $piCommand)  ; send pi its command
 			SendCommand($n, $aCommand)    ; send new test command to client
 			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " " & $arg & " command.")
 			LogWrite($n, "(Server) Sent " & $aCommand & " command to client. Sent " & $piCommand & " command to Raspberry Pi.")
 			$commandTimers[$n] +=  ($duration * 60)* 1000    ; add $duration mins
 			PushCommand($n, "hold")	; hold any new command from executing only after get a passed/continue response from the client
@@ -631,6 +632,7 @@ Func ParseCommand($n)
 			LogWrite($n, "(Server) Read " & $newCommand & " " & $arg & " command. Checking for any failures so far.")
 			If $testFailures[$n] > 0 Then
 				$commands[$n] = ""
+
 				If StringInStr($arg, "upload all start") Then
 					PushCommand($n, "restart")
 					LogWrite($n, "(Server) Change the rest test commands to 'upload all restart' because there are " & $testFailures[$n] & " failures in this test.")
@@ -644,7 +646,7 @@ Func ParseCommand($n)
 
 				If StringInStr($arg, "boot") Then
 					PushCommand($n, "upload all reboot")
-					LogWrite($n, "(Server) Send reboot command to client because there are " & $testFailures[$n] & " failures in this test.")
+					LogWrite($n, "(Server) Change the rest test commands to 'upload all reboot' because there are " & $testFailures[$n] & " failures in this test.")
 				EndIf
 			Else
 				LogWrite($n, "(Server) No command was sent to client because there is no failure in the test so far.")
@@ -1256,6 +1258,7 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 	LogWrite($automationLogPort, "START AUTOMATION TEST for CopTrax DVR " & $boxID[$n])
 	LogWrite($automationLogPort, $boxID[$n] & " Number of test commands: " & $commandsNumber & ". Estimated test time is " & $totalTestTime & ".")
 	$totalCommands[$n] = $commandsNumber
+	$commandTimers[$n] = $time0 + 5*1000	; wait 5 seconds before the first command can be read
 EndFunc
 
 Func OnAutoItExit()
