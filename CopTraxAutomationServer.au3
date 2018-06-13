@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.17
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.19
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -529,6 +529,8 @@ Func ParseCommand($n)
 	Switch $newCommand	; process the new command
 		Case "record"
 			$arg = PopCommand($n)
+			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " " & $arg & " command. Modify the record test commands.")
 			$duration = CorrectRange(Int(GetParameter($arg, "duration")), 1, 999)
 			$repeat = CorrectRange(Int(GetParameter($arg, "repeat")), 1, 99)
 			$interval = Int(GetParameter($arg, "interval"))
@@ -546,6 +548,7 @@ Func ParseCommand($n)
 			PushCommand($n, "hold")
 			$commandTimers[$n] += ($duration * 60) * 1000	; set the next command timer xx minutes later
 			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " " & $arg & " command.")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client. The stop record command will be sent in " & $duration & " mins.")
 
 		Case "endrecord"
@@ -555,6 +558,7 @@ Func ParseCommand($n)
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			$commandTimers[$n] +=  ($interval * 60 - 10)* 1000	; set the next command timer interval mins later, adjust 10 s
 			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " " & $arg & " command.")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client. Pause for " & $interval & " mins till next command.")
 
 		Case "settings", "createprofile", "upload", "configure"
@@ -562,6 +566,7 @@ Func ParseCommand($n)
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " " & $arg & " command.")
 			LogWrite($n, "(Server) Sent " & $newCommand & " " & $arg & " command to client.")
 			$commandTimers[$n] += 20*1000	; add 20 more seconds
 
@@ -570,12 +575,14 @@ Func ParseCommand($n)
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " " & $arg & " command.")
 			LogWrite($n, "(Server) Sent " & $newCommand & " " & $arg & " command to client.")
 
 		Case "pause"
 			$arg = PopCommand($n)
 			$commandTimers[$n] = $time0 + CorrectRange(Int($arg), 0, 9999)* 1000	; set the next command timer $arg secs later
 			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " " & $arg & " command.")
 			LogWrite($n, "(Server) Pause for " & $arg & " seconds.")
 
 		Case "siren", "lightbar", "aux4", "aux5", "aux6", "lightswitch", "mic1trigger", "mic2trigger"
@@ -615,26 +622,28 @@ Func ParseCommand($n)
 		Case "quit", "reboot", "endtest", "quittest", "restart", "restarttest", "cleanup"
 			SendCommand($n, $newCommand)	; send new test command to client
 			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " command.")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
 
 		Case "onfailure"
 			$arg = PopCommand($n)
 			LogWrite($n, "")
-			LogWrite($n, "(Server) Checking for any failures so far.")
+			LogWrite($n, "(Server) Read " & $newCommand & " " & $arg & " command. Checking for any failures so far.")
 			If $testFailures[$n] > 0 Then
-				If StringInStr($arg, "start") Then
-					SendCommand($n, "restart")
-					LogWrite($n, "(Server) Send restart command to client because there are " & $testFailures[$n] & " failures in this test.")
+				$commands[$n] = ""
+				If StringInStr($arg, "upload all start") Then
+					PushCommand($n, "restart")
+					LogWrite($n, "(Server) Change the rest test commands to 'upload all restart' because there are " & $testFailures[$n] & " failures in this test.")
 				EndIf
 
 				If StringInStr($arg, "quit") Then
-					SendCommand($n, "quit")
-					LogWrite($n, "(Server) Send quit command to client because there are " & $testFailures[$n] & " failures in this test.")
+					PushCommand($n, "upload all quit")
+					LogWrite($n, "(Server) Change the rest test commands to 'upload all quit'  because there are " & $testFailures[$n] & " failures in this test.")
 					$commands[$n] = ""	; end of the test, show failed
 				EndIf
 
 				If StringInStr($arg, "boot") Then
-					SendCommand($n, "reboot")
+					PushCommand($n, "upload all reboot")
 					LogWrite($n, "(Server) Send reboot command to client because there are " & $testFailures[$n] & " failures in this test.")
 				EndIf
 			Else
@@ -646,6 +655,7 @@ Func ParseCommand($n)
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " command.")
 			LogWrite($n, "(Server) Sent " & $newCommand & " " & $arg & " command to client.")
 
 		Case "synctmz"
@@ -654,6 +664,7 @@ Func ParseCommand($n)
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
 			PushCommand($n, "hold")	; hold any new command from executing only after get a continue response from the client
 			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " command.")
 			LogWrite($n, "(Server) Sent " & $newCommand & " " & $arg & " command to client.")
 
 		Case "update", "upgrade"
@@ -679,6 +690,7 @@ Func ParseCommand($n)
 			$newCommand = "update " & $fileName & " " & $fLen
 			SendCommand($n, $newCommand)	; send new test command to client
 			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " " & $fileName & " command.")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
 			LogWrite($n, "(Server) Sending " & $sourceFileName & " in server to update " & $fileName & " in client.")
 			PushCommand($n, "hold send hold")	; hold any new command from executing only after get a continue response from the client
@@ -705,9 +717,9 @@ Func ParseCommand($n)
 		Case "batchtest"
 			$arg = StringLower(PopCommand($n))
 			LogWrite($n, "")
-			LogWrite($n, "(Server) Got batchtest " & $arg & " command.")
+			LogWrite($n, "(Server) Read batchtest " & $arg & " command.")
 
-			$IP = TCPNameToIP($arg)
+			$IP =  StringInStr($arg, "10.0.") ? TCPNameToIP($arg) : ""
 			If $IP Then
 				LogWrite($n, "(Server) Select the Raspberry Pi simulator at " & $IP & " to do the triggers test.")
 				LogWrite($automationLogPort, "(Server) Select the Raspberry Pi simulator at " & $IP & " to do the triggers test.")
@@ -1305,6 +1317,7 @@ Func AcceptConnection ()
 	$commandTimers[$port] = $time0 + 5*1000	; Set command timer to be 5s later
 	$connectionTimers[$port] = $time0 + 2000*60	; Set connection lost timer to be 2mins later
 	$boxIP[$port] = $IP
+	$logContent[$port] = ""	; when connect, the logContent shall be cleared
 	PushCommand($port, "hold")
 EndFunc
 
