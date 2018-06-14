@@ -631,17 +631,16 @@ Func ParseCommand($n)
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Read " & $newCommand & " " & $arg & " command. Checking for any failures so far.")
 			If $testFailures[$n] > 0 Then
-				$commands[$n] = ""
+				$commands[$n] = ""	; clear the command queue when there are failures
 
 				If StringInStr($arg, "upload all start") Then
-					PushCommand($n, "restart")
+					PushCommand($n, "upload all restart")
 					LogWrite($n, "(Server) Change the rest test commands to 'upload all restart' because there are " & $testFailures[$n] & " failures in this test.")
 				EndIf
 
 				If StringInStr($arg, "quit") Then
 					PushCommand($n, "upload all quit")
 					LogWrite($n, "(Server) Change the rest test commands to 'upload all quit'  because there are " & $testFailures[$n] & " failures in this test.")
-					$commands[$n] = ""	; end of the test, show failed
 				EndIf
 
 				If StringInStr($arg, "boot") Then
