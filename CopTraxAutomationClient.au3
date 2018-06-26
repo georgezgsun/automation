@@ -1,11 +1,11 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.26)
+#pragma compile(FileVersion, 3.4.10.27)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
 #pragma compile(CompanyName, 'Stalker')
-#pragma compile(Icon, automation.ico)
+#pragma compile(Icon, ../automation.ico)
 ;
 ; Test client for CopTrax Version: 3.2
 ; Language:       AutoIt
@@ -1561,7 +1561,7 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "eof", "cancel"	; tell the client the end of file sending in update
-			LogUpload("Continue End of file stransfer. " & $sentPattern)
+			LogUpload("Continue End of file transfer. " & $sentPattern)
 			If StringInStr($raw, "eof") Then
 				PopFile(True)	; pop the previous file out of the stack when receives eof
 				If $uploadMode = "all" Then UploadFile("all")
@@ -1726,13 +1726,13 @@ Func Configure($arg)
 
 	$bwc = GetParameter($arg, "bwc")	; configure the Evidence Viewer
 	If $bwc Then
-		LogUpload("Configuring Body Wore Camera to turn " & $bwc & ".")
+		LogUpload("Configuring Body Worn Camera to turn " & $bwc & ".")
 		If StringInStr($bwc, "on") Then
 			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "BWC Manager Startup" /TR "C:\Program Files\Applied Concepts Inc\CopTrax Body Camera Manager\MobileCam.exe" /F')	; Enable the BWC next time
-			LogUpload("Body Wore Camera Manager is configured to startup.")
+			LogUpload("Body Worn Camera Manager is configured to startup.")
 		Else
-			Run(@ComSpec & ' /c schtasks /Delete /TN "BWC Manager Startup"')
-			LogUpload("Body Wore Camera Manager is configured not to startup.")
+			Run(@ComSpec & ' /c schtasks /Delete /TN "BWC Manager Startup" /F')	; delete the BWC scheduled task next time
+			LogUpload("Body Worn Camera Manager is configured not to startup.")
 		EndIf
 	EndIf
 
@@ -1964,7 +1964,7 @@ Func ReadConfig()
 		If $aTxt Then $configDir = $aTxt
 		$aTxt = GetParameter($aLine, "map")	; read the location to store the map
 		If $aTxt Then $mapDir = $aTxt
-		$aTxt = GetParameter($aLine, "bwc")	; read the location to store the Body wore Camera
+		$aTxt = GetParameter($aLine, "bwc")	; read the location to store the Body worn Camera
 		If $aTxt Then $bwcDir = $aTxt
 	Until $eof
 

@@ -1,10 +1,10 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.20
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.21
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
-#pragma compile(Icon, clouds.ico)
+#pragma compile(Icon, ..\clouds.ico)
 ;
 ; Test Server for CopTrax
 ; Version: 1.0
@@ -568,7 +568,17 @@ Func ParseCommand($n)
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Read " & $newCommand & " " & $arg & " command.")
 			LogWrite($n, "(Server) Sent " & $newCommand & " " & $arg & " command to client.")
-			$commandTimers[$n] += 20*1000	; add 20 more seconds
+			If StringInStr($newCommand, "config") Then
+				Local $filename = $boxID[$n] & ".txt"
+				Local $file = FileOpen($workdir & "latest\" & $filename, 2)
+				_FileWriteLog($file, "This box is configured according to " & $currentTestCaseFile & ", where the configuration is " & $arg )
+				FileClose($file)
+
+				PushCommand($n, "update C:\Users\coptraxadmin\Desktop\Utilities\" & $filename )
+				$commandTimers[$n] += 10*1000	; add 20 more seconds
+			Else
+				$commandTimers[$n] += 20*1000	; add 20 more seconds
+			EndIf
 
 		Case "checkfirmware", "checkapp", "checklibrary", "checkrecord"
 			$arg = PopCommand($n)
@@ -673,6 +683,9 @@ Func ParseCommand($n)
 			Local $file
 			Local $netFileName
 			Local $sourceFileName
+			LogWrite($n, "")
+			LogWrite($n, "(Server) Read " & $newCommand & " " & $fileName & " command.")
+
 			If StringInStr($filename, "\") Then
 				$netFileName = StringSplit($fileName, "\")
 				$sourceFileName = $workDir & "latest\" & $netFileName[$netFileName[0]]    ; all file need to be update shall sit in \latest folder
@@ -690,8 +703,6 @@ Func ParseCommand($n)
 			EndIf
 			$newCommand = "update " & $fileName & " " & $fLen
 			SendCommand($n, $newCommand)	; send new test command to client
-			LogWrite($n, "")
-			LogWrite($n, "(Server) Read " & $newCommand & " " & $fileName & " command.")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
 			LogWrite($n, "(Server) Sending " & $sourceFileName & " in server to update " & $fileName & " in client.")
 			PushCommand($n, "hold send hold")	; hold any new command from executing only after get a continue response from the client
