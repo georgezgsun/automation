@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.21
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.25
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -40,7 +40,6 @@ AutoItSetOption("TCPTimeout", 5)
 Global Const $maxConnections = 20	; define the max client numbers
 Global Const $maxListen = 100	; define the max client numbers
 Global Const $automationLogPort = $maxConnections + 1 ;define the automation log port
-Global Const $piLogPort = 0 ;define the automation log port
 Global Const $maxSendLength = 100000	; set maximum legth of bytes that a TCPsend command may send
 Global Const $maxLoopTime = 1000; set the max time in miliseconds every loop may take
 Global $totalConnection = 0
@@ -55,8 +54,6 @@ Global $socketRaspberryPi2 = -1
 Global $piCommandHold = False
 Global $piHeartbeatTime = 0
 Global $piHeartbeatInterval = 30 * 1000
-Local $piTimeout1 = 0
-Local $piTimeout2 = 0
 Global $workDir = "C:\CopTraxTest\"
 Global $sentPattern = ""
 Global $config = "FactoryDefault"
@@ -199,8 +196,7 @@ GUICtrlSetColor($hListFailed, $COLOR_RED)
 GUISetState(@SW_SHOW)
 
 ; the window $automationLogPort will display the main test result
-$logFiles[$automationLogPort] =FileOpen($workDir & "log\automationtest.log", 1+8) 	; Clear the client name for future updating from the client
-$logFiles[$piLogPort] =FileOpen($workDir & "log\RaspberryPi.log", 1+8) 	; Clear the client name for future updating from the client
+$logFiles[$automationLogPort] =FileOpen($workDir & "log\automationtest.log", 1+8) 	; the automation log file
 LogWrite($automationLogPort, "")
 LogWrite($automationLogPort, "A new batch of automation test starts.")
 LogWrite($automationLogPort, "Current setting of configuration for burn-in is " & $config & ".")
@@ -229,57 +225,26 @@ While Not $testEnd	; main loop that get input, display the resilts
 	AcceptConnection()	; accept new client's connection requist
 
 	If $batchMode Then
-		If ($socketRaspberryPi1 <= 0) And $batchAligned Then
-			$socketRaspberryPi1 = TCPConnect($ipRaspberryPi1, $portRaspberryPi)	; When RSP1 not connected, try to connect it
-			If $socketRaspberryPi1 > 0 Then
-				LogWrite($automationLogPort, "(Server) Raspberry Pi simulator 1 connected.")
-				LogWrite($piLogPort, "(Server) Raspberry Pi simulator 1 connected.")
-				$piTimeout1 = $time0 + 2 * 60 * 1000
-				$piHeartbeatTime = $time0 + $piHeartbeatInterval
-			EndIf
-		EndIf
-
-		If ($socketRaspberryPi2 <= 0) And $batchAligned Then
-			$socketRaspberryPi2 = TCPConnect($ipRaspberryPi2, $portRaspberryPi)	; When RSP2 not connected, try to connect it
-			If $socketRaspberryPi2 > 0 Then
-				LogWrite($automationLogPort, "(Server) Raspberry Pi simulator 2 connected.")
-				LogWrite($piLogPort, "(Server) Raspberry Pi simulator 2 connected.")
-				$piTimeout2 = $time0 + 2 * 60 * 1000
-				$piHeartbeatTime = $time0 + $piHeartbeatInterval
-			EndIf
-		EndIf
-
 		If $socketRaspberryPi1 > 0 Then
 			$Recv = TCPRecv($socketRaspberryPi1, 100)	; when connected, try to receive message
 			If $Recv <> "" Then
-				LogWrite($piLogPort, "(Raspberry Pi1) Replied " & $Recv )
-				$piTimeout1 = $time0 + 2 * 60 * 1000
+				LogWrite($automationLogPort, "(Raspberry Pi1) Replied " & $Recv )
+				TCPCloseSocket($socketRaspberryPi1)
+				$socketRaspberryPi1 = -1
 			EndIf
 		EndIf
+
 		If $socketRaspberryPi2 > 0 Then
 			$Recv = TCPRecv($socketRaspberryPi2,100)	; when connected, try to receive message
 			If $Recv <> "" Then
-				LogWrite($piLogPort, "(Raspberry Pi2) Replied " & $Recv )
-				$piTimeout2 = $time0 + 2 * 60 * 1000
+				LogWrite($automationLogPort, "(Raspberry Pi2) Replied " & $Recv )
+				TCPCloseSocket($socketRaspberryPi2)
+				$socketRaspberryPi2 = -1
 			EndIf
 		EndIf
 
-		If (($socketRaspberryPi1 > 0 ) Or ($socketRaspberryPi2 > 0)) And ($time0 > $piHeartbeatTime) Then
-			SendCommand(0, "h0")
-			$piHeartbeatTime = $time0 + $piHeartbeatInterval;
-			LogWrite($piLogPort, "(Server) Sent Raspberry Pi simulators heartbeat command.")
-		EndIf
-
-		If ($socketRaspberryPi1 > 0 ) And ($time0 > $piTimeout1) Then
-			LogWrite($piLogPort, "(Server) Raspberry Pi simulator1 connection lost.")
-			LogWrite($automationLogPort, "(Server) Raspberry Pi simulator1 connection lost.")
-			$socketRaspberryPi1 = -1
-		EndIf
-
-		If ($socketRaspberryPi2 > 0 ) And ($time0 > $piTimeout2) Then
-			LogWrite($piLogPort, "(Server) Raspberry Pi simulator2 connection lost.")
-			LogWrite($automationLogPort, "(Server) Raspberry Pi simulator2 connection lost.")
-			$socketRaspberryPi2 = -1
+		If $time0 > $piHeartbeatTime Then
+			$piCommandHold = False
 		EndIf
 	EndIf
 
@@ -324,7 +289,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 
 		If $time0 > $heartBeatTimers[$i] Then ; check the heart-beat timer
 			If PopCommand($i, False) = "hold" Then	; in case the next command is hold
-				LogWrite($i, "(Server) Get inproper reply from the client for last command. Have to skip it.")
+				LogWrite($i, "(Server) Last command sent to client was not accomplished in one minutes. Have to skip it.")
 				If $filesReceived[$i] Then
 					FileClose($filesReceived[$i])	; get and save the file
 					$filesReceived[$i] = 0	;clear the flag when file transfer ends
@@ -383,8 +348,6 @@ While Not $testEnd	; main loop that get input, display the resilts
 		If $msg = $GUI_EVENT_CLOSE Then
 			LogWrite($automationLogPort, "Automation test end by operator.")
 			LogWrite($automationLogPort, "")
-			LogWrite($piLogPort, "Automation test end by operator.")
-			LogWrite($piLogPort, "")
 			$testEnd = true
 			ExitLoop
 		EndIf
@@ -508,6 +471,7 @@ EndFunc
 Func ParseCommand($n)
 	If $filesReceived[$n] Then	; This indicates there exists file uploading, do not send new command until it ends
 		$testEndTime[$n] += 5
+		$commandTimers[$n] +=  5*1000 ; add 5 seconds for next command to be executed
 		Return False
 	EndIf
 
@@ -761,16 +725,6 @@ Func ParseCommand($n)
 				LogWrite($n, "(Server) Enter stop batch test mode, disabled all other later boxes from achieving align mode.")
 				$batchWait[$n] = False
 				If Not $batchMode Then Return $nextCommandFlag
-
-				SendCommand($piLogPort, "q1") ; let RaspberryPi to close the socket
-				LogWrite($automationLogPort, "(Server) Close the connection to Raspberry Pi simulator and send it q1 command to let it close the connection.")
-				LogWrite($piLogPort, "(Server) Close the connection to Raspberry Pi simulator and send it q1 command to let it close the connection.")
-				If $socketRaspberryPi1 Then
-					TCPCloseSocket($socketRaspberryPi1)
-				EndIf
-				If $socketRaspberryPi2 Then
-					TCPCloseSocket($socketRaspberryPi2)
-				EndIf
 
 				$socketRaspberryPi1 = -1
 				$socketRaspberryPi2 = -1
@@ -1145,6 +1099,7 @@ Func ProcessReply($n)
 			$testEndTime[$n] = 0
 			$remainTestTime[$n] = 0
 		EndIf
+		$batchWait[$n] = False	; donot let other box wait for it any more
 		GUICtrlSetState($nGui[$n], $GUI_SHOW)
 		CloseConnection($n)
 		Return True
@@ -1299,7 +1254,9 @@ Func AcceptConnection ()
 	Local $port0 = 0
 	For $i = $maxConnections To 1 Step -1
 		If $boxIP[$i] = $IP Then
+			LogWrite($automationLogPort, "Resumed connection at " & $IP & "on channel " & $i & ".")
 			If $sockets[$i] > 0 Then
+				LogWrite($automationLogPort, "Clear the current socket first.")
 				TCPCloseSocket($sockets[$i])
 				$sockets[$i] = -1
 			EndIf
@@ -1317,9 +1274,7 @@ Func AcceptConnection ()
 	Next
 	$port = ($port0 > $port) ? $port0 : $port
 
-	If $boxIP[$port] = $IP Then
-		LogWrite($automationLogPort, "A resumed box reconnected at " & $IP & " on channel " & $port)
-	Else
+	If $boxIP[$port] <> $IP Then
 		LogWrite($automationLogPort, " A new box connected at " & $IP & " on channel " & $port)
 		GUICtrlSetData($bGUI[$port], "new box")	; update the text on the button
 		$commands[$port] = ""
@@ -1367,11 +1322,6 @@ Func SendCommand($n, $command)
 
 		$heartBeatTimers[$n] = TimerDiff($hTimer) + 60 * 1000
 	Else	; send the command to raspberry pi simulators
-		If ($socketRaspberryPi1 < 0) And ($socketRaspberryPi2 < 0) Then
-			LogWrite($automationLogPort, "(Server) No Raspberry Pi is connected yet. " & $command & " was not sent.")
-			Return
-		EndIf
-
 		$piHeartbeatTime = TimerDiff($hTimer) + $piHeartbeatInterval;
 
 		If ($command = "h0") Or ($command = "q0") Then
@@ -1379,7 +1329,22 @@ Func SendCommand($n, $command)
 		EndIf
 
 		If $piCommandHold Then
-			LogWrite($piLogPort, "(Server) Raspberry Pi hold the duplicated " & $command & ".")
+			LogWrite($n, "(Server) Raspberry Pi hold the duplicated " & $command & ".")
+			Return
+		EndIf
+		$piCommandHold = True	; release the pi command hold
+
+		If $socketRaspberryPi1 <= 0 Then
+			$socketRaspberryPi1 = TCPConnect($ipRaspberryPi1, $portRaspberryPi)	; When RSP1 not connected, try to connect it
+		EndIf
+
+		If $socketRaspberryPi2 <= 0 Then
+			$socketRaspberryPi2 = TCPConnect($ipRaspberryPi2, $portRaspberryPi)	; When RSP2 not connected, try to connect it
+		EndIf
+
+		If ($socketRaspberryPi1 < 0) And ($socketRaspberryPi2 < 0) Then
+			LogWrite($automationLogPort, "(Server) No Raspberry Pi is connected yet. " & $command & " was not sent.")
+			$piCommandHold = False
 			Return
 		EndIf
 
@@ -1387,21 +1352,19 @@ Func SendCommand($n, $command)
 		If $commandID > 9 Then $commandID = 0
 		If ($socketRaspberryPi1 > 0) Then
 			If TCPSend($socketRaspberryPi1, $command & $commandID & " ") = 0 Then
-				LogWrite($piLogPort, "(Server) Connection to Raspberry Pi 1 was lost.")
-				$socketRaspberryPi1 = 0
+				LogWrite($automationLogPort, "(Server) Connection to Raspberry Pi 1 was lost.")
+				$socketRaspberryPi1 = -1
 			Else
-				LogWrite($piLogPort, "(Server) Sent " & $command & " to Raspberry Pi 1.")
-				$piCommandHold = ($command <> "h0")
+				LogWrite($automationLogPort, "(Server) Sent " & $command & " to Raspberry Pi 1.")
 			EndIf
 		EndIf
 
 		If ($socketRaspberryPi2 > 0) Then
 			If TCPSend($socketRaspberryPi2, $command & $commandID & " ") = 0 Then
-				LogWrite($piLogPort, "(Server) Connection to Raspberry Pi 2 was lost.")
-				$socketRaspberryPi2 = 0
+				LogWrite($automationLogPort, "(Server) Connection to Raspberry Pi 2 was lost.")
+				$socketRaspberryPi2 = -1
 			Else
-				LogWrite($piLogPort, "(Server) Sent " & $command & " to Raspberry Pi 2.")
-				$piCommandHold = ($command <> "h0")
+				LogWrite($automationLogPort, "(Server) Sent " & $command & " to Raspberry Pi 2.")
 			EndIf
 		EndIf
 	EndIf

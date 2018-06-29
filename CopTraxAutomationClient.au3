@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.27)
+#pragma compile(FileVersion, 3.4.10.28)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -127,8 +127,6 @@ Do	; Try to confirm the running of CopTrax App and the network connection to ser
 	EndIf
 Until ProcessExists($pCopTrax) And $Socket > 0
 MsgBox($MB_OK, $mMB, "Found CopTrax App running. Connected to server at " & $ip & ". Starting automation test." & @CRLF & "Esc to quit.", 5)
-FileClose($logFile)
-$logFile = 0
 
 If WinExists($titleAccount) Then
 	MsgBox($MB_OK, $mMB, "First time run. Try to create a temporal acount.", 2)
@@ -195,21 +193,14 @@ While Not $testEnd
 		$Socket = TCPConnect($ip, $port)
 		$err = @error
 		If $Socket > 0 Then
-			If $logFile Then
-				FileClose($logFile)	; close local log
-				$logFile = 0;
-			EndIf
-
 			LogUpload("name " & $boxID & " resume " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)
 			MsgBox($MB_OK, $mMB, "Connected to server.",2)
 			$timeout = $currentTime + 1000*$TIMEOUTINSECEND
 		Else
 	  		If  $currentTime > $timeout Then
-				MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server." & @CRLF &"Error code " & $err, 5)
+				MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server." & @CRLF &"Error code " & $err, 2)
 				$timeout = $currentTime + 1000*10	; check the networks connection every 10s.
-				TCPCloseSocket($Socket)
 				$Socket = -1
-				$logFile = FileOpen( $workDir & "local.log", 1+8)
 			EndIf
 		EndIf
    Else
@@ -218,11 +209,25 @@ While Not $testEnd
 	  EndIf
 
 	  If  $currentTime > $timeout Then
-		$Socket = -1
+		LogUpload("Got no command in last minutes. Connection may have lost.")
+		If $Socket > 0 Then
+			TCPCloseSocket($Socket)
+			$Socket = -1
+		EndIf
+
+		If $logFile Then
+			_FileWriteLog($logFile, "Got no command in last minutes. Connection may have lost.")
+		EndIf
 	  EndIf
    EndIf
    Sleep(100)
 WEnd
+
+FileClose($logFile)
+
+_EventLog__Close($hEventLogSystem)
+_EventLog__Close($hEventLogApp)
+_EventLog__Close($hEventLogCopTrax)
 
 If $restart Then
 	If IsRecording() Then
@@ -239,10 +244,6 @@ EndIf
 If $fileToBeUpdate Then
 	FileClose($fileToBeUpdate)
 EndIf
-
-_EventLog__Close($hEventLogSystem)
-_EventLog__Close($hEventLogApp)
-_EventLog__Close($hEventLogCopTrax)
 
 Exit
 
@@ -1112,16 +1113,26 @@ EndFunc
 
 Func LogUpload($s)
 	If $Socket < 0 Then
-		MsgBox($MB_OK, $mMB, $s, 2)
 		If $logFile Then _FileWriteLog($logFile, $s)
+		MsgBox($MB_OK, $mMB, $s, 2)
 		Return
 	EndIf
 
-	If Not TCPSend($Socket, $s & " ") Then
+	Local $rst
+	Local $count = 5	; trying to send at most 5 times
+	Do
+		$rst = TCPSend($Socket, $s & " ")
+		If $rst <= 0 Then
+			$count -= 1
+			Sleep(1000)
+		EndIf
+	Until $rst > 0 Or $count < 0
+
+	If $count < 0 Then	; if not able to send in 5 seconds
 		TCPCloseSocket($Socket)
 		$Socket = -1
 		If $logFile Then
-			_FileWriteLog($logFile, "Cannot Send the message " & $s & " to server. Connection lost.")
+			_FileWriteLog($logFile, "Cannot Send the message " & $s & " to server after trial for 5 times. Connection lost.")
 		EndIf
 		Return
 	EndIf
