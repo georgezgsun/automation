@@ -1119,12 +1119,18 @@ Func LogUpload($s)
 	EndIf
 
 	Local $rst
+	Local $err = 0
 	Local $count = 5	; trying to send at most 5 times
+	$s &= " "
 	Do
-		$rst = TCPSend($Socket, $s & " ")
-		If $rst <= 0 Then
-			$count -= 1
+		$rst = TCPSend($Socket, $s)
+		$err = @error
+		If $err <> 0 Then
+			TCPCloseSocket($Socket)
 			Sleep(1000)
+			$count -= 1
+			$Socket = TCPConnect($ip, $port)
+			$s &= "resumed from error " & $err
 		EndIf
 	Until $rst > 0 Or $count < 0
 

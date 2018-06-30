@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.25
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.26
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -313,8 +313,6 @@ While Not $testEnd	; main loop that get input, display the resilts
 			LogWrite($i, "(Server) No reply from the client. Connection to client may have lost.")
 			$connectionTimers[$i] += 10*1000;	; add 10s to connection timer
 			CloseConnection($i)
-			$testFailures[$i] += 1	; test failure counter +1
-			GUICtrlSetColor($pGUI[$i], $COLOR_RED)	; turn the progress bar in red
 			GUICtrlSetData($nGUI[$i], "LOST")	; show interrupt message
 			$testEndTime[$i] = 0	; test ends
 			$remainTestTime[$i] = 0	; test ends
@@ -328,6 +326,9 @@ While Not $testEnd	; main loop that get input, display the resilts
 			$lastEndTime = $timeRemains
 		Endif
 	Next
+
+	If $socketRaspberryPi1 > 0 Then $tempPattern &= "-"
+	If $socketRaspberryPi2 > 0 Then $tempPattern &= "="
 
 	If $connectionPattern <> $tempPattern Then
 		$connectionPattern = $tempPattern
@@ -456,10 +457,6 @@ Func UpdateLists($passed, $failed)
 EndFunc
 
 Func CloseConnection($n)
-	Local $s = "==================================="
-	$s &= $s & $s
-	LogWrite($n, $s)
-	LogWrite($n, " ")
 	TCPCloseSocket($sockets[$n])	; Close the TCP connection to the client
 	$sockets[$n] = -1	; clear the soket index
 	If $filesReceived[$n] Then
@@ -560,6 +557,14 @@ Func ParseCommand($n)
 			LogWrite($n, "(Server) Pause for " & $arg & " seconds.")
 
 		Case "siren", "lightbar", "aux4", "aux5", "aux6", "lightswitch", "mic1trigger", "mic2trigger"
+			If $socketRaspberryPi1 <= 0 Then
+				$socketRaspberryPi1 = TCPConnect($ipRaspberryPi1, $portRaspberryPi)	; When RSP1 not connected, try to connect it
+			EndIf
+
+			If $socketRaspberryPi2 <= 0 Then
+				$socketRaspberryPi2 = TCPConnect($ipRaspberryPi2, $portRaspberryPi)	; When RSP2 not connected, try to connect it
+			EndIf
+
 			$arg = PopCommand($n)
 			local $duration = CorrectRange(Int($arg), 1, 60)
 			Local $aCommand = "trigger"
@@ -1102,6 +1107,10 @@ Func ProcessReply($n)
 		$batchWait[$n] = False	; donot let other box wait for it any more
 		GUICtrlSetState($nGui[$n], $GUI_SHOW)
 		CloseConnection($n)
+		Local $s = "==================================="
+		$s &= $s & $s
+		LogWrite($n, $s)
+		LogWrite($n, " ")
 		Return True
 	EndIf
 
@@ -1144,15 +1153,14 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 	EndIf
 
 	Local $nextCommand
-	If StringInStr($resume, "resume") And $testFailures[$n] = 0 Then
+	If StringInStr($resume, "resume") Then
 		Do
 			$nextCommand = PopCommand($n)
 		Until $nextCommand <> "hold"
 
 		If $nextCommand Then
 			PushCommand($n, "hold " & $nextCommand)
-			LogWrite($n, " ")
-			LogWrite($n, "(Server) Test resumed. Next command is " & $nextCommand)
+			LogWrite($n, "(Server) Test resumed. Next command is " & $nextCommand & " in " & toHMS(CorrectRange ( $commandTimers[$n] - $time0, 0, 999999) / 1000 ))
 			Return
 		EndIf
 	EndIf
@@ -1254,7 +1262,7 @@ Func AcceptConnection ()
 	Local $port0 = 0
 	For $i = $maxConnections To 1 Step -1
 		If $boxIP[$i] = $IP Then
-			LogWrite($automationLogPort, "Resumed connection at " & $IP & "on channel " & $i & ".")
+			LogWrite($automationLogPort, "Resumed connection at " & $IP & " on channel " & $i & ".")
 			If $sockets[$i] > 0 Then
 				LogWrite($automationLogPort, "Clear the current socket first.")
 				TCPCloseSocket($sockets[$i])
@@ -1278,11 +1286,11 @@ Func AcceptConnection ()
 		LogWrite($automationLogPort, " A new box connected at " & $IP & " on channel " & $port)
 		GUICtrlSetData($bGUI[$port], "new box")	; update the text on the button
 		$commands[$port] = ""
+		$commandTimers[$port] = $time0 + 5*1000	; Set command timer to be 5s later
 	EndIf
 
 	$sockets[$port] = $newSocket	;assigns that socket the incomming connection.
 	$heartBeatTimers[$port] = $time0 + 1000*60
-	$commandTimers[$port] = $time0 + 5*1000	; Set command timer to be 5s later
 	$connectionTimers[$port] = $time0 + 2000*60	; Set connection lost timer to be 2mins later
 	$boxIP[$port] = $IP
 	$logContent[$port] = ""	; when connect, the logContent shall be cleared
@@ -1343,7 +1351,7 @@ Func SendCommand($n, $command)
 		EndIf
 
 		If ($socketRaspberryPi1 < 0) And ($socketRaspberryPi2 < 0) Then
-			LogWrite($automationLogPort, "(Server) No Raspberry Pi is connected yet. " & $command & " was not sent.")
+			LogWrite($automationLogPort, "(Server) Cannot connect to any Raspberry Pi Stimulator. " & $command & " was not sent.")
 			$piCommandHold = False
 			Return
 		EndIf

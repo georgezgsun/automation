@@ -110,6 +110,7 @@ int main()
 		command = (receiveBuff[0]-97) * 8 + receiveBuff[1] - 48;
 		id = receiveBuff[2];
 		read_size = 0;
+		write_size = 6;
 		reply = "NO";
 		switch (command)
 		{
@@ -124,6 +125,7 @@ int main()
 				usleep(1000*1000);
 				gpio->Disable_Trigger_2();
 				reply = "Light bar";
+				write_size = 10;
 				break;
 			case 156 :  // "t4"=(116-97)*8+4=156
 				gpio->Enable_Trigger_3();
@@ -148,6 +150,7 @@ int main()
 				usleep(1000*1000);
 				gpio->Disable_Trigger_6();
 				reply = "Light switch";
+				write_size = 13;
 				break;
 			case 97 : // "m1"=(109-97)*8+1=97
 				gpio->Enable_Mic_Trigger_1();
@@ -168,6 +171,7 @@ int main()
 				//gpioreading = gpio->Read_Inputs();
 				//gpio->Disable_Mic_Trigger_2();
 				reply = "Heartbeat";
+				write_size = 10;
 				break;
 			case 128 : // "q0"=(113-97)*8+0=128
 				testEnd = true;
@@ -180,7 +184,7 @@ int main()
 			printf("Trigger %s signal was executed.\n", receiveBuff);
 			reply = reply + receiveBuff[2];
 			std::copy(reply.begin(), reply.end(), sendBuff);
-			write_size = write(connfd, sendBuff, 3);
+			write_size = write(connfd, sendBuff, write_size);
 			printf("Reply %s was sent.\n", sendBuff);
 		}
 		else
@@ -189,7 +193,7 @@ int main()
 			printf("Unknown command %s.\n", receiveBuff);
 		}
 
-		sleep(5000);
+		sleep(1);
 		close(connfd);
 		printf("Close current connection @%d, waiting for future connection.\n", connfd);
 		
