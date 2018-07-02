@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.26
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.29
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -274,7 +274,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 			$commandsRemains = Int(GetParameter($estimate, "count"))
 			$timeRemains = Round(($commandTimers[$i] - $time0) / 1000) + Int(GetParameter($estimate, "time"))	; next (command time- current time) in seconds plus the remain test time
 			$testEndTime[$i] = $timeRemains + Round($time0/1000)
-			LogWrite($i, "(Server) " & $commandsRemains & " test commands remains. Next command in " & Int(($commandTimers[$i] - $time0) / 1000) & " seconds. Test remains " & $timeRemains & " seconds.")
+			LogWrite($i, "(Server) " & $commandsRemains & " test commands remains. Next command in " & toHMS(($commandTimers[$i] - $time0) / 1000) & ". Test remains " & toHMS($timeRemains) & ".")
 			$progressPercentage = CorrectRange(100 * (1-$commandsRemains/$totalCommands[$i]), 0, 100)
 			GUICtrlSetData($pGUI[$i], $progressPercentage)
 		Else
@@ -1106,11 +1106,24 @@ Func ProcessReply($n)
 		EndIf
 		$batchWait[$n] = False	; donot let other box wait for it any more
 		GUICtrlSetState($nGui[$n], $GUI_SHOW)
-		CloseConnection($n)
 		Local $s = "==================================="
 		$s &= $s & $s
 		LogWrite($n, $s)
 		LogWrite($n, " ")
+
+		CloseConnection($n)
+		$filesReceived[$n] = 0	; clear the upload files
+		$fileToBeSent[$n] = ""	; clear file need to be sent to client
+		$testFailures[$n] = 0	; initialize the result true until any failure
+		$batchWait[$n] = True	; Default is true, not to hold other boxes until was set by BatchTest mode=start
+		$errorsFirmware[$n] = 0 ; clear the errors counter for event log
+		$logFiles[$n] = 0 ; clear log file for append write in text mode
+		$commands[$n] = ""
+		$sockets[$n] = -1	; Stores the sockets for each client
+		$connectionTimers[$n] = 0
+		$commandTimers[$n] = 0
+		$heartBeatTimers[$n] = 0
+		$remainTestTime[$n] = 0
 		Return True
 	EndIf
 
@@ -1263,10 +1276,9 @@ Func AcceptConnection ()
 	For $i = $maxConnections To 1 Step -1
 		If $boxIP[$i] = $IP Then
 			LogWrite($automationLogPort, "Resumed connection at " & $IP & " on channel " & $i & ".")
-			If $sockets[$i] > 0 Then
-				LogWrite($automationLogPort, "Clear the current socket first.")
+			If $sockets[$i] <> $newSocket Then
+				LogWrite($automationLogPort, "Clear the current socket " & $sockets[$i] & " and replace it with " & $newSocket & ".")
 				TCPCloseSocket($sockets[$i])
-				$sockets[$i] = -1
 			EndIf
 
 			$port = $i
@@ -1287,14 +1299,15 @@ Func AcceptConnection ()
 		GUICtrlSetData($bGUI[$port], "new box")	; update the text on the button
 		$commands[$port] = ""
 		$commandTimers[$port] = $time0 + 5*1000	; Set command timer to be 5s later
+		$logContent[$port] = ""	; when first connect, the logContent shall be cleared
+		PushCommand($port, "hold")
+
 	EndIf
 
 	$sockets[$port] = $newSocket	;assigns that socket the incomming connection.
 	$heartBeatTimers[$port] = $time0 + 1000*60
 	$connectionTimers[$port] = $time0 + 2000*60	; Set connection lost timer to be 2mins later
 	$boxIP[$port] = $IP
-	$logContent[$port] = ""	; when connect, the logContent shall be cleared
-	PushCommand($port, "hold")
 EndFunc
 
 Func PopCommand($n, $pop = True)

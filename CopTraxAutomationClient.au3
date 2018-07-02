@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.28)
+#pragma compile(FileVersion, 3.4.10.31)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -116,24 +116,26 @@ EndIf
 
 $Socket = TCPConnect($ip, $port)
 Do	; Try to confirm the running of CopTrax App and the network connection to server before running automation
-	If Not ProcessExists($pCopTrax) Then
-		RunCopTrax()
-		MsgBox($MB_OK, $mMB, "Waiting for CopTrax App to run..", 2)
-	EndIf
-
 	If $Socket < 0 Then
 		MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server.", 2)
 		$Socket = TCPConnect($ip, $port)
+	EndIf
+
+	If Not ProcessExists($pCopTrax) Then
+		RunCopTrax()
+		LogUpload("CopTrax II is not up yet. Try to start it.")
 	EndIf
 Until ProcessExists($pCopTrax) And $Socket > 0
 MsgBox($MB_OK, $mMB, "Found CopTrax App running. Connected to server at " & $ip & ". Starting automation test." & @CRLF & "Esc to quit.", 5)
 
 If WinExists($titleAccount) Then
 	MsgBox($MB_OK, $mMB, "First time run. Try to create a temporal acount.", 2)
+	LogUpload("First time run. Try to create a temporal acount profile.")
 	WinActivate($titleAccount)
 
 	If Not CreateNewAccount("auto1", "coptrax") Then
 		MsgBox($MB_OK, $mMB, "Something wrong! Have to reboot the box now.", 5)
+		LogUpload("Something wrong! Have to reboot the box now.")
 		Shutdown(2+4)	; force the window to reboot
 		Exit
 	EndIf
@@ -151,10 +153,13 @@ While $mCopTrax = 0
 	If $mCopTrax Then
 		$userName = GetUserName()
 		If IsRecording() Then
+			LogUpload("Find a record in process, try to stop it.")
 			EndRecording(True)	; stop any recording in progress before automation test
 		EndIf
 	Else
 		MsgBox($MB_OK, $mMB, "CopTrax II is not up yet.", 2)
+		LogUpload("CopTrax II is not running yet. Try to start it")
+		RunCopTrax()
 	EndIf
 WEnd
 
@@ -1111,6 +1116,24 @@ Func TestReviewFunction()
 	Return True
 EndFunc
 
+Func ResumeConnection()
+	Local $count = 5	; trying to resume at most 5 times
+	TCPCloseSocket($Socket)
+	Do
+		Sleep(1000)
+		$count -= 1
+		$Socket = TCPConnect($ip, $port)
+	Until ($Socket > 0) Or ($count <= 0)
+
+	If $Socket <= 0 Then
+		_FileWriteLog($logFile, "Cannot resume the connection to server in 5 seconds.")
+		Return False
+	Else
+		_FileWriteLog($logFile, "The connection to server is resumed in " & $count + 1 & " seconds.")
+		Return True
+	EndIf
+EndFunc
+
 Func LogUpload($s)
 	If $Socket < 0 Then
 		If $logFile Then _FileWriteLog($logFile, $s)
@@ -1119,24 +1142,19 @@ Func LogUpload($s)
 	EndIf
 
 	Local $rst
-	Local $err = 0
-	Local $count = 5	; trying to send at most 5 times
+	Local $err
 	$s &= " "
 	Do
 		$rst = TCPSend($Socket, $s)
 		$err = @error
-		If $err <> 0 Then
+		If $err Then
 			TCPCloseSocket($Socket)
-			Sleep(1000)
-			$count -= 1
-			$Socket = TCPConnect($ip, $port)
-			$s &= "resumed from error " & $err
+			$err = Not ResumeConnection()
+			$s &= " resumed from connection lost " & $err
 		EndIf
-	Until $rst > 0 Or $count < 0
+	Until $rst > 0 Or $err
 
-	If $count < 0 Then	; if not able to send in 5 seconds
-		TCPCloseSocket($Socket)
-		$Socket = -1
+	If $err Then	; if not able to send in 5 seconds
 		If $logFile Then
 			_FileWriteLog($logFile, "Cannot Send the message " & $s & " to server after trial for 5 times. Connection lost.")
 		EndIf
@@ -1400,10 +1418,8 @@ Func ListenToNewCommand()
 	If $fileToBeUpdate Then
 		$raw = TCPRecv($Socket, 1000000, 1)	; In case there is file to be updated, receives in binary mode with long length
 		$err = @error
-		If $err <> 0 Then	; In case there is error, the connection has lost, restart the automation test
-			FileClose($fileToBeUpdate)
-			$fileToBeUpdate = 0
-			CloseConnection($err)
+		If $err Then	; In case there is error, the connection has lost, restart the automation test
+			ResumeConnection()
 			Return False
 		EndIf
 
@@ -1423,13 +1439,14 @@ Func ListenToNewCommand()
 
 	$raw = TCPRecv($Socket, 1000)	; In listen to command mode, receives in text mode with shorter length
 	$err = @error
-	If $err <> 0 Then	; In case there is error, the connection has lost, restart the automation test
-		CloseConnection($err)
+	If $err Then	; In case there is error, the connection has lost, restart the automation test
+		ResumeConnection()
 		Return False
 	EndIf
 	If $raw = "" Then Return False
 
 	Local $Recv = StringSplit($raw, " ")
+	Local $count = 5
 	Switch StringLower($Recv[1])
 		Case "runapp" ; get a stop command, going to stop testing and quit
 			MsgBox($MB_OK, $mMB, "Re-starting the CopTrax",2)
@@ -1596,16 +1613,25 @@ Func ListenToNewCommand()
 		Case "send"	; let the client to send the file
 			$sentPattern = ""
 			$len = 1
+			$count = 5
 			While BinaryLen($fileContent) And $len;LarryDaLooza's idea to send in chunks to reduce stress on the application
 				$len = TCPSend($Socket,BinaryMid($fileContent, 1, $maxSendLength))
 				$err = @error
-				$fileContent = BinaryMid($fileContent,$len+1,BinaryLen($fileContent)-$len)
-				$sentPattern &= $len & " "
+				If $err Then
+					If Not ResumeConnection() Then
+						LogUpload("Cannot resume the connection to server. The file transfer is broken.")
+						$len = 0
+					EndIf
+				Else
+					$fileContent = BinaryMid($fileContent,$len+1,BinaryLen($fileContent)-$len)
+					$sentPattern &= $len & " "
+				EndIf
 			WEnd
-			If $err <> 0 Then
-				CloseConnection($err)
+			If BinaryLen($fileContent) Then
+				MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server. The connection lost",2)
+			Else
+				MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server. File transfer is done.",2)
 			EndIf
-			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "quit", "endtest", "quittest"	; let the client to quit the current automation test
 			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
