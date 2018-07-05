@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.31)
+#pragma compile(FileVersion, 3.4.10.30)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 2.4)
@@ -116,14 +116,15 @@ EndIf
 
 $Socket = TCPConnect($ip, $port)
 Do	; Try to confirm the running of CopTrax App and the network connection to server before running automation
+	If Not ProcessExists($pCopTrax) Then
+		RunCopTrax()
+		MsgBox($MB_OK, $mMB, "Waiting for CopTrax App to run..", 2)
+		LogUpload("CopTrax II is not up yet. Try to start it")
+	EndIf
+
 	If $Socket < 0 Then
 		MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server.", 2)
 		$Socket = TCPConnect($ip, $port)
-	EndIf
-
-	If Not ProcessExists($pCopTrax) Then
-		RunCopTrax()
-		LogUpload("CopTrax II is not up yet. Try to start it.")
 	EndIf
 Until ProcessExists($pCopTrax) And $Socket > 0
 MsgBox($MB_OK, $mMB, "Found CopTrax App running. Connected to server at " & $ip & ". Starting automation test." & @CRLF & "Esc to quit.", 5)
@@ -1116,49 +1117,34 @@ Func TestReviewFunction()
 	Return True
 EndFunc
 
-Func ResumeConnection()
-	Local $count = 5	; trying to resume at most 5 times
-	TCPCloseSocket($Socket)
-	Do
-		Sleep(1000)
-		$count -= 1
-		$Socket = TCPConnect($ip, $port)
-	Until ($Socket > 0) Or ($count <= 0)
-
-	If $Socket <= 0 Then
-		_FileWriteLog($logFile, "Cannot resume the connection to server in 5 seconds.")
-		Return False
-	Else
-		_FileWriteLog($logFile, "The connection to server is resumed in " & $count + 1 & " seconds.")
-		Return True
-	EndIf
-EndFunc
-
 Func LogUpload($s)
-	If $Socket < 0 Then
-		If $logFile Then _FileWriteLog($logFile, $s)
-		MsgBox($MB_OK, $mMB, $s, 2)
-		Return
-	EndIf
-
 	Local $rst
-	Local $err
+	Local $err = 0
+	Local $count = 5	; trying to send at most 5 times
 	$s &= " "
 	Do
-		$rst = TCPSend($Socket, $s)
-		$err = @error
-		If $err Then
-			TCPCloseSocket($Socket)
-			$err = Not ResumeConnection()
-			$s &= " resumed from connection lost " & $err
+		If $Socket > 0 Then
+			$rst = TCPSend($Socket, $s)
+			$err = @error
+		Else
+			$Socket = TCPConnect($ip, $port)
+			$err = @error
+			$count -= 1
+			If $Socket <= 0 Then
+				Sleep(1000)
+				$s &= "resumed from connection lost " & $err
+			EndIf
 		EndIf
-	Until $rst > 0 Or $err
+	Until $rst > 0 Or $count < 0
 
-	If $err Then	; if not able to send in 5 seconds
+	If $count < 0 Then	; if not able to send in 5 seconds
+		$Connection = False
 		If $logFile Then
 			_FileWriteLog($logFile, "Cannot Send the message " & $s & " to server after trial for 5 times. Connection lost.")
 		EndIf
 		Return
+	Else
+		$Connection = True
 	EndIf
 
 	If StringInStr($s, "FAILED", 1) = 1 Then
@@ -1404,22 +1390,21 @@ Func CalculateTimeDiff($time1,$time2)
    Return $t2 - $t1 + $t0
 EndFunc
 
-Func CloseConnection($err)
-	TCPCloseSocket($Socket)
-	$Socket = -1
-	LogUpload("Connection lost with error " & $err)
-EndFunc
-
 Func ListenToNewCommand()
 	Local $raw
 	Local $len
 	Local $err
 
+	If $socket <= 0 Then Return False
+
 	If $fileToBeUpdate Then
 		$raw = TCPRecv($Socket, 1000000, 1)	; In case there is file to be updated, receives in binary mode with long length
 		$err = @error
-		If $err Then	; In case there is error, the connection has lost, restart the automation test
-			ResumeConnection()
+		If $err <> 0 Then	; In case there is error, the connection has lost, restart the automation test
+			FileSetPos($fileToBeUpdate, 0, 0)
+			TCPCloseSocket($Socket)
+			$Socket = -1
+			LogUpload("send")	; let the server resend
 			Return False
 		EndIf
 
@@ -1439,14 +1424,19 @@ Func ListenToNewCommand()
 
 	$raw = TCPRecv($Socket, 1000)	; In listen to command mode, receives in text mode with shorter length
 	$err = @error
-	If $err Then	; In case there is error, the connection has lost, restart the automation test
-		ResumeConnection()
+	If $err <> 0 Then	; In case there is error, the connection has lost, restart the automation test
+		TCPCloseSocket($Socket)
+		$Socket = -1
 		Return False
 	EndIf
-	If $raw = "" Then Return False
+	If $raw Then
+		TCPCloseSocket($Socket)
+		$Socket = -1
+	Else
+		Return False
+	EndIf
 
 	Local $Recv = StringSplit($raw, " ")
-	Local $count = 5
 	Switch StringLower($Recv[1])
 		Case "runapp" ; get a stop command, going to stop testing and quit
 			MsgBox($MB_OK, $mMB, "Re-starting the CopTrax",2)
@@ -1461,42 +1451,6 @@ Func ListenToNewCommand()
 				LogUpload("FAILED to stop CopTrax II app.")
 			EndIf
 
-		Case "startrecord", "record" ; Get a record command. going to test the record function
-			If StartRecord(True) Then
-				LogUpload("PASSED the test on start record function.")
-			Else
-				LogUpload("FAILED to start a record.")
-			EndIf
-
-		Case "startstop", "lightswitch" ; Get a startstop trigger command
-			LogUpload("Got the lightswitch command. Takes seconds to determine what to do next.")
-			For $i = 1 To 10
-				If WinExists($titleEndRecord, "") Then	ExitLoop; check if an endrecord window pops
-				sleep(1000)
-			Next
-			If WinExists($titleEndRecord, "") Then	; check if an endrecord window pops
-				If EndRecording(False) Then
-					LogUpload("PASSED the test to end the record by trigger Light switch button.")
-				Else
-					LogUpload("FAILED to end the record by trigger Light switch button.")
-				EndIf
-			Else
-				MsgBox($MB_OK, $mMB, "Testing the Light switch button trigger a record function",2)
-				If StartRecord(False) Then
-					LogUpload("PASSED the test to start a record by trigger Light switch button.")
-				Else
-					LogUpload("FAILED to start a record by trigger Light switch button.")
-				EndIf
-			EndIf
-
-		Case "endrecord" ; Get a stop record command, going to end the record function
-			MsgBox($MB_OK, $mMB, "Testing the end record function",2)
-			If EndRecording(True) Then
-				LogUpload("PASSED the test on end record function.")
-			Else
-				LogUpload("FAILED to end record.")
-			EndIf
-
 		Case "settings" ; Get a stop setting command, going to test the settings function
 			MsgBox($MB_OK, $mMB, "Testing the settings function",2)
 			If ($Recv[0] >= 2) And TestSettingsFunction($Recv[2]) Then
@@ -1505,7 +1459,7 @@ Func ListenToNewCommand()
 				LogUpload("FAILED the test on new settings. " & $Recv[0] & " " & $raw)
 			EndIf
 
-		Case "login", "createprofile" ; Get a stop setting command, going to test the settings function
+		Case "createprofile" ; Get a stop setting command, going to test the settings function
 			MsgBox($MB_OK, $mMB, "Testing the user switch function",2)
 			If ($Recv[0] >= 2) And TestUserSwitchFunction($Recv[2]) Then
 				LogUpload("PASSED the test on user switch function.")
@@ -1543,14 +1497,6 @@ Func ListenToNewCommand()
 				LogUpload("PASSED on the test of show radar function.")
 			Else
 				LogUpload("FAILED to trigger radar.")
-			EndIf
-
-		Case "trigger" ; Get a trigger command, going to test the trigger record function
-			MsgBox($MB_OK, $mMB, "Testing the trigger function",2)
-			If StartRecord(False) Then
-				LogUpload("PASSED the test on trigger a record function.")
-			Else
-				LogUpload("FAILED to trigger a record.")
 			EndIf
 
 		Case "upload"	; upload the specified files to server, all, idle, now, wait have special meaning
@@ -1594,8 +1540,8 @@ Func ListenToNewCommand()
 				LogUpload("Continue Warning on the check of recorded files.")
 			EndIf
 
-		Case "eof", "cancel"	; tell the client the end of file sending in update
-			LogUpload("Continue End of file transfer. " & $sentPattern)
+		Case "eof"	; tell the client the end of file sending in update
+			LogUpload("PASSED End of file transfer. " & $sentPattern)
 			If StringInStr($raw, "eof") Then
 				PopFile(True)	; pop the previous file out of the stack when receives eof
 				If $uploadMode = "all" Then UploadFile("all")
@@ -1613,25 +1559,16 @@ Func ListenToNewCommand()
 		Case "send"	; let the client to send the file
 			$sentPattern = ""
 			$len = 1
-			$count = 5
 			While BinaryLen($fileContent) And $len;LarryDaLooza's idea to send in chunks to reduce stress on the application
 				$len = TCPSend($Socket,BinaryMid($fileContent, 1, $maxSendLength))
 				$err = @error
-				If $err Then
-					If Not ResumeConnection() Then
-						LogUpload("Cannot resume the connection to server. The file transfer is broken.")
-						$len = 0
-					EndIf
-				Else
-					$fileContent = BinaryMid($fileContent,$len+1,BinaryLen($fileContent)-$len)
-					$sentPattern &= $len & " "
-				EndIf
+				$fileContent = BinaryMid($fileContent,$len+1,BinaryLen($fileContent)-$len)
+				$sentPattern &= $len & " "
 			WEnd
-			If BinaryLen($fileContent) Then
-				MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server. The connection lost",2)
-			Else
-				MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server. File transfer is done.",2)
+			If $err <> 0 Then
+				CloseConnection($err)
 			EndIf
+			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "quit", "endtest", "quittest"	; let the client to quit the current automation test
 			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
@@ -1719,6 +1656,59 @@ Func ListenToNewCommand()
 	EndSwitch
 
 	Return True
+EndFunc
+
+Func ExecuteCommand()
+	Local $command = PopCommand()
+	MsgBox($MB_OK, $mMB, "Read " & $command & ". Execute it now.",2)
+	Local $request = " Request for new command."
+	Switch StringLower($$command)
+		Case "startrecord" ; get a stop command, going to stop testing and quit
+			LogUpload("Read " & $command & ". Execute it now.")
+			If StartRecord(True) Then
+				LogUpload("PASSED the test on start record function." & $request)
+			Else
+				LogUpload("FAILED to start a record." & $request)
+			EndIf
+
+		Case "trigger" ; get a trigger command, going to test the trigger
+			LogUpload("Read " & $command & ". Execute it now.")
+			If StartRecord(True) Then
+				LogUpload("PASSED the test on trigger a record function." & $request)
+			Else
+				LogUpload("FAILED to trigger a record." & $request)
+			EndIf
+
+		Case "lightswitch" ; Get a startstop trigger command
+			LogUpload("Got the lightswitch command. Takes seconds to determine what to do next.")
+			For $i = 1 To 10
+				If WinExists($titleEndRecord, "") Then	ExitLoop; check if an endrecord window pops
+				sleep(1000)
+			Next
+			If WinExists($titleEndRecord, "") Then	; check if an endrecord window pops
+				If EndRecording(False) Then
+					LogUpload("PASSED the test to end the record by trigger Light switch button." & $request)
+				Else
+					LogUpload("FAILED to end the record by trigger Light switch button." & $request)
+				EndIf
+			Else
+				If StartRecord(False) Then
+					LogUpload("PASSED the test to start a record by trigger Light switch button." & $request)
+				Else
+					LogUpload("FAILED to start a record by trigger Light switch button." & $request)
+				EndIf
+			EndIf
+
+		Case "endrecord" ; Get a stop record command, going to end the record function
+			If EndRecording(True) Then
+				LogUpload("PASSED the test on end record function." & $request)
+			Else
+				LogUpload("FAILED to end record." & $request)
+			EndIf
+
+		Case "pause"
+			LogUpload($request)
+	EndSwitch
 EndFunc
 
 Func RunCopTrax()
