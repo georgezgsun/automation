@@ -1,9 +1,9 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.4.10.31)
+#pragma compile(FileVersion, 3.5.0.2)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
-#pragma compile(ProductVersion, 2.4)
+#pragma compile(ProductVersion, 3.5)
 #pragma compile(CompanyName, 'Stalker')
 #pragma compile(Icon, ../automation.ico)
 ;
@@ -29,7 +29,6 @@
 #include <Misc.au3>
 #include <StringConstants.au3>
 #include <EventLog.au3>
-
 _Singleton('Automation test client')
 
 HotKeySet("{Esc}", "HotKeyPressed") ; Esc to stop testing
@@ -51,11 +50,14 @@ Global Const $titleSettings = "Setup" ; "CopTrax II Setup"
 Global Const $titleStatus = "CopTrax Status" ; "CopTrax Status"
 Global Const $titleEndRecord = "Report Taken" ; "Report Taken"
 Global Const $titlePhoto = "Information" ; Photo
-Global Const $TIMEOUTINSECEND = 150
+Global Const $HEARTBEATINSECONDS = 60
 Global Const $maxSendLength = 100000	; set maximum legth of bytes that a TCPsend command may send
+Global $commandRequest = "Request for new command."
+Global Const $mMB = "CopTrax GUI Automation Test"
 
 TCPStartup()
-Global $ip =  TCPNameToIP("10.0.5.211")
+;Global $ip =  TCPNameToIP("ENGR-CX456K2")	; This is the hostname of the server
+Global $ip =  TCPNameToIP("ENGCOPTRAX-GVGPSJ2")	; This is the hostname of the server
 Global $port = 16869
 Global $Socket = -1
 Global $boxID = "Unknown"
@@ -84,15 +86,14 @@ Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')	; Delete the
 Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
 
 Global $fileToBeUpdate = $workDir & "tmp\" & @ScriptName
-Global $testEnd = FileExists($fileToBeUpdate) ? FileGetVersion(@AutoItExe) <> FileGetVersion($fileToBeUpdate) : False
+Global $testEnd = FileExists($fileToBeUpdate) ? _VersionCompare( FileGetVersion(@AutoItExe), FileGetVersion($fileToBeUpdate) ) < 0 : False
 If FileGetSize($fileToBeUpdate) < 1000000 Then $testEnd = False	; update the client file only when it was completetly downloaded
 $fileToBeUpdate = 0
 Global $restart = $testEnd
-Global Const $mMB = "CopTrax GUI Automation Test"
 
 If $testEnd Then
 	MsgBox($MB_OK, $mMB, "Automation test finds new update." & @CRLF & "Restarting now to complete the update.", 2)
-	RestartAutomation()
+	;RestartAutomation()
 	Exit
 EndIf
 
@@ -111,22 +112,24 @@ AutoItSetOption ("WinTitleMatchMode", 2)
 AutoItSetOption("SendKeyDelay", 100)
 
 If WinExists("", "Open CopTrax") Then	; In case there running the welcome screen, exit
+	MsgBox($MB_OK, $mMB, "Automation phase III.", 2)
 	Exit
 EndIf
 
 $Socket = TCPConnect($ip, $port)
 Do	; Try to confirm the running of CopTrax App and the network connection to server before running automation
+	If Not ProcessExists($pCopTrax) Then
+		LogUpload("CopTrax II is not up yet. Try to start it")
+		RunCopTrax()
+		MsgBox($MB_OK, $mMB, "Waiting for CopTrax App to run..", 2)
+	EndIf
+
 	If $Socket < 0 Then
 		MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server.", 2)
 		$Socket = TCPConnect($ip, $port)
 	EndIf
-
-	If Not ProcessExists($pCopTrax) Then
-		RunCopTrax()
-		LogUpload("CopTrax II is not up yet. Try to start it.")
-	EndIf
 Until ProcessExists($pCopTrax) And $Socket > 0
-MsgBox($MB_OK, $mMB, "Found CopTrax App running. Connected to server at " & $ip & ". Starting automation test." & @CRLF & "Esc to quit.", 5)
+MsgBox($MB_OK, $mMB, "Found CopTrax App running. Connected to server at " & $ip & ". Starting automation test." & @CRLF & "Esc to quit.", 2)
 
 If WinExists($titleAccount) Then
 	MsgBox($MB_OK, $mMB, "First time run. Try to create a temporal acount.", 2)
@@ -140,6 +143,11 @@ If WinExists($titleAccount) Then
 		Exit
 	EndIf
 EndIf
+
+Global $currentTime = 2000
+Global $hTimer = TimerInit()	; Begin the timer and store the handler
+Global $heartbeatTimer = 1000 * $HEARTBEATINSECONDS	; Set the first time out
+Global $commandTimer = 2 * 1000	; request the first command in 2s
 
 While $mCopTrax = 0
 	$mCopTrax = WinActivate($titleCopTraxMain)
@@ -157,8 +165,8 @@ While $mCopTrax = 0
 			EndRecording(True)	; stop any recording in progress before automation test
 		EndIf
 	Else
-		MsgBox($MB_OK, $mMB, "CopTrax II is not up yet.", 2)
 		LogUpload("CopTrax II is not running yet. Try to start it")
+		MsgBox($MB_OK, $mMB, "CopTrax II is not up yet.", 2)
 		RunCopTrax()
 	EndIf
 WEnd
@@ -179,12 +187,17 @@ Local $path1 = GetVideoFilePath()
 Local $path2 = $path1 & "\cam2"
 Global $videoFilesCam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4")
 Global $videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi")
-Global $hTimer = TimerInit()	; Begin the timer and store the handler
-Global $timeout = 20*1000	; Set the first time out to be 20s later
 
+Global $currentTime = 2000
+Global $hTimer = TimerInit()	; Begin the timer and store the handler
+Global $heartbeatTimer = 1000 * $HEARTBEATINSECONDS	; Set the first time out
+Global $commandTimer = 2 * 1000	; request the first command in 2s
 LogUpload("name " & $boxID & " new " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)	; new start of automation test
 
-Local $currentTime
+$currentTime = TimerDiff($hTimer)
+$heartbeatTimer += $currentTime	; Set the first time out
+$commandTimer += $currentTime	; request the first command in 2s
+
 While Not $testEnd
 	$currentTime = TimerDiff($hTimer)
 	If $mCopTrax = 0 Then
@@ -194,38 +207,28 @@ While Not $testEnd
 		EndIf
 	EndIf
 
-	If $Socket < 0 Then
-		$Socket = TCPConnect($ip, $port)
-		$err = @error
-		If $Socket > 0 Then
-			LogUpload("name " & $boxID & " resume " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)
-			MsgBox($MB_OK, $mMB, "Connected to server.",2)
-			$timeout = $currentTime + 1000*$TIMEOUTINSECEND
-		Else
-	  		If  $currentTime > $timeout Then
-				MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server." & @CRLF &"Error code " & $err, 2)
-				$timeout = $currentTime + 1000*10	; check the networks connection every 10s.
-				$Socket = -1
-			EndIf
+	If $currentTime > $heartbeatTimer Then
+		ReportCPUMemory(True)	; send heartbeat to server
+		MsgBox($MB_OK, $mMB, "Send heartbeat to server.",2)
+		If ($uploadMode = "idle") And ($currentTime + 50*1000 < $commandTimer) Then
+			UploadFile("now")
+			$uploadMode = "idle"
 		EndIf
-   Else
-	  If ListenToNewCommand() Then
-		$timeout = $currentTime + 1000 * $TIMEOUTINSECEND
-	  EndIf
+	EndIf
 
-	  If  $currentTime > $timeout Then
-		LogUpload("Got no command in last minutes. Connection may have lost.")
-		If $Socket > 0 Then
-			TCPCloseSocket($Socket)
-			$Socket = -1
+	If $currentTime > $commandTimer Then
+		If $fileToBeUpdate Then
+			FileClose($fileToBeUpdate)
+			$fileToBeUpdate = 0
+			LogUpload("FAILED file update. " & $bytesCounter & " bytes unreceived.")	; let the server resend
 		EndIf
+		LogUpload($commandRequest)
+		$commandTimer = $currentTime + 10 * 1000	; send another new request 10s later if not get new command
+		$heartbeatTimer = $currentTime + 1000 * $HEARTBEATINSECONDS
+	EndIf
 
-		If $logFile Then
-			_FileWriteLog($logFile, "Got no command in last minutes. Connection may have lost.")
-		EndIf
-	  EndIf
-   EndIf
-   Sleep(100)
+	ListenToNewCommand()
+	Sleep(100)
 WEnd
 
 FileClose($logFile)
@@ -293,10 +296,13 @@ Func RestartAutomation()
 		FileWriteLine($file,"copy /Y " & $sourceFile & " " & @AutoItExe)
 	EndIf
 	FileWriteLine($file,"del " & $sourceFile)
-	FileWriteLine($file, "start  /d " & $workDir & " " & @AutoItExe)
+	FileWriteLine($file, "start  /d " & $workDir & " " & "Automation.bat")	; run the batch file to re-setup the wifi connection
 	FileClose($file)
 
+	If $Socket > 0 Then TCPCloseSocket($Socket)
+	TCPShutdown()
 	Run($filename)	; restart the automation test client
+	Exit
 EndFunc
 
 Func GetUserName()
@@ -395,7 +401,7 @@ Func TestAbout()
 		$releaseRead = $releaseTemp[0]
 	EndIf
 
-	TakeScreenCapture("About info of CopTrax II", $hWnd)
+	LogUpload("Captured About screen file " & TakeScreenCapture($hWnd) & ". It is now on the way sending to server.")
 	Send("{Enter}")
 
 	Return True
@@ -521,14 +527,26 @@ Func CreateNewAccount($name, $password)
 	LogUpload("New profile has been created. CopTrax will restart. Automation will wait.")
 
 	$mCopTrax = 0
-	Local $i = 5
-	While WinExists($titleStatus) And ($i > 0)
+	Local $count = 5
+	While WinExists($titleStatus) And ($count > 0)
 		Sleep(1000)
-		$i -= 1
+		$count -= 1
 	WEnd
-	If $i <= 0 Then
+	If $count <= 0 Then
 		LogUpload("The accessories are not ready yet.")
-		TakeScreenCapture("Accessories not ready", WinActive($titleStatus))
+		LogUpload("Captured Accessories screen file " & TakeScreenCapture($titleStatus) & ". It is now on the way sending to server.")
+		Return False
+	EndIf
+
+	$count = 5	; adding the check for display malfunction, trying 5 times
+	While Not IsDisplayCorrect() And ($count > 0)
+		ProcessClose($pCopTrax)
+		Sleep(1000)
+		RunCopTrax()
+		$count -= 1
+	WEnd
+	If $count <=0 Then
+		LogUpload("CopTrax display in-correct after trying for 5 times.")
 		Return False
 	EndIf
 
@@ -848,7 +866,7 @@ Func ReadyForTest()
 	WEnd
 	If $i <= 0 Then
 		LogUpload("The accessories are not ready.")
-		TakeScreenCapture("Accessories not ready", WinActive($titleStatus))
+		LogUpload("Captured Accessories screen file " & TakeScreenCapture($titleStatus) & ". It is now on the way sending to server.")
 		Return False
 	EndIf
 
@@ -891,6 +909,7 @@ Func ReadyForTest()
 
 	$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
 	If $mCopTrax Then
+		Send("{Tab}")	; send a Tab key to get rid of soft keyboard
 		Return True
 	EndIf
 
@@ -955,19 +974,22 @@ Func TestCameraSwitchFunction()
 	Local $blue = 0x090071
 
 	LogUpload("Begin Camera switch function testing.")
-	$file1 = TakeScreenCapture("Main Cam1", $mCopTrax)
+	$file1 = TakeScreenCapture($mCopTrax)
+	LogUpload("Captured Main camera screen file " & $file1 & ". It is now on the way sending to server.")
 	$blue1 = PixelGetColor(550, 320, $mCopTrax)
 	$rst = ($file1 < $picSize) And ($blue1 <> $blue)
 
 	MouseClick("",960,170)	; click to rear camera2
 	Sleep(2000)
-	$file2 = TakeScreenCapture("Rear Cam2", $mCopTrax)
+	$file2 = TakeScreenCapture($mCopTrax)
+	LogUpload("Captured the Rear Cam2 screen file " & $file2 & ". It is now on the way sending to server.")
 	$blue2 = PixelGetColor(550, 320, $mCopTrax)
 	$rst = $rst And ($file2 < $picSize) And ($blue2 <> $blue)
 
 	MouseClick("", 200,170)	; click to switch rear camera
 	Sleep(2000)
-	$file3 = TakeScreenCapture("Rear Cam3", $mCopTrax)
+	$file3 = TakeScreenCapture($mCopTrax)
+	LogUpload("Captured the Rear Cam3 screen file " & $file3 & ". It is now on the way sending to server.")
 	$blue3 = PixelGetColor(550, 320, $mCopTrax)
 	$rst = $rst And ($file3 < $picSize) And ($blue3 <> $blue)
 
@@ -1004,17 +1026,15 @@ Func GetNewFilename()
 	Return $boxID & $Char1 & $Char2 & $Char3
 EndFunc
 
-Func TakeScreenCapture($comment, $hWnd)
+Func TakeScreenCapture($hWnd)
 	Local $filename = GetNewFilename() & ".jpg"
 	Local $screenFile = $workDir & "tmp\" & $filename
 	If _ScreenCapture_CaptureWnd($screenFile, $hWnd) Then
-		LogUpload("Captured " & $comment & " screen file " & $filename & ". It is now on the way sending to server.")
 		PushFile($screenFile)
-		Return FileGetSize($screenFile)
 	Else
-		LogUpload("Unable to capture " & $comment & " screen file " & $screenFile & " for window " & $hWnd)
-		Return 0
+		$filename = ""
 	EndIf
+	Return $filename
 EndFunc
 
 Func TestPhotoFunction()
@@ -1071,7 +1091,7 @@ Func TestRadarFunction()
 	Local $hRadar
 	If WinExists($titleRadar) Then
 		$hRadar = GetHandleWindowWait($titleRadar)
-		TakeScreenCapture("RADAR On", $hRadar)
+		LogUpload("Captured RADAR screen file " & TakeScreenCapture($hRadar) & ". It is now on the way sending to server.")
 		$testResult = True
 	EndIf
 
@@ -1080,7 +1100,7 @@ Func TestRadarFunction()
 
 	If WinExists($titleRadar) Then
 		$hRadar = GetHandleWindowWait($titleRadar)
-		TakeScreenCapture("RADAR On", $hRadar)
+		LogUpload("Captured RADAR screen file " & TakeScreenCapture($hRadar) & ". It is now on the way sending to server.")
 		$testResult = True
 	EndIf
 
@@ -1102,7 +1122,7 @@ Func TestReviewFunction()
 		LogUpload("Unable to test the review function by click on the review button.")
 		Return False
 	EndIf
-	TakeScreenCapture("Playback from CT2", $hWnd)
+	LogUpload("Captured Playback screen file " & TakeScreenCapture($hWnd) & ". It is now on the way sending to server.")
 
 	Sleep(5000)
 	WinClose($hWnd)
@@ -1116,59 +1136,39 @@ Func TestReviewFunction()
 	Return True
 EndFunc
 
-Func ResumeConnection()
-	Local $count = 5	; trying to resume at most 5 times
-	TCPCloseSocket($Socket)
-	Do
-		Sleep(1000)
-		$count -= 1
-		$Socket = TCPConnect($ip, $port)
-	Until ($Socket > 0) Or ($count <= 0)
-
-	If $Socket <= 0 Then
-		_FileWriteLog($logFile, "Cannot resume the connection to server in 5 seconds.")
-		Return False
-	Else
-		_FileWriteLog($logFile, "The connection to server is resumed in " & $count + 1 & " seconds.")
-		Return True
-	EndIf
-EndFunc
-
 Func LogUpload($s)
-	If $Socket < 0 Then
-		If $logFile Then _FileWriteLog($logFile, $s)
-		MsgBox($MB_OK, $mMB, $s, 2)
-		Return
+	Local $rst
+	Local $err = 0
+	Local $count = 5	; trying to send at most 5 times
+	$s &= @CRLF	; add CR and LF at the end of each reply
+	If StringInStr($s, "FAILED", 1) = 1 Then
+		$s &= "Captured failure screen file " & TakeScreenCapture($mCopTrax) & ". It is now on the way sending to server." & @CRLF
 	EndIf
 
-	Local $rst
-	Local $err
-	$s &= " "
 	Do
-		$rst = TCPSend($Socket, $s)
-		$err = @error
+		If $Socket <= 0 Then
+			$Socket = TCPConnect($ip, $port)
+			$err = @error
+		Endif
+
+		If $socket > 0 Then
+			$rst = TCPSend($Socket, $s)
+			$err = @error
+		Endif
+
 		If $err Then
-			TCPCloseSocket($Socket)
-			$err = Not ResumeConnection()
-			$s &= " resumed from connection lost " & $err
+			$Socket = -1
+			Sleep(1000)
+			$count -= 1
 		EndIf
-	Until $rst > 0 Or $err
+	Until $rst Or $count <= 0
 
 	If $err Then	; if not able to send in 5 seconds
-		If $logFile Then
-			_FileWriteLog($logFile, "Cannot Send the message " & $s & " to server after trial for 5 times. Connection lost.")
-		EndIf
+		MsgBox($MB_OK, $mMB, "Connection to server is lost when sending " & $s & " with error "  & $err & @CRLF & "Restart the automation test now.", 5)
+		RestartAutomation()
 		Return
-	EndIf
-
-	If StringInStr($s, "FAILED", 1) = 1 Then
-		TakeScreenCapture("failure", $mCopTrax)
-	EndIf
-
-	If StringInStr($s, "error") Then
-		TCPSend($Socket, @CRLF)
 	Else
-		Sleep(1000)
+		$heartbeatTimer = $currentTime + 1000 * $HEARTBEATINSECONDS	; reset the timeout timer
 	EndIf
 EndFunc
 
@@ -1404,27 +1404,26 @@ Func CalculateTimeDiff($time1,$time2)
    Return $t2 - $t1 + $t0
 EndFunc
 
-Func CloseConnection($err)
-	TCPCloseSocket($Socket)
-	$Socket = -1
-	LogUpload("Connection lost with error " & $err)
-EndFunc
-
 Func ListenToNewCommand()
 	Local $raw
 	Local $len
 	Local $err
+	Local $t0 = $currentTime
+
+	If $socket <= 0 Then Return False
 
 	If $fileToBeUpdate Then
 		$raw = TCPRecv($Socket, 1000000, 1)	; In case there is file to be updated, receives in binary mode with long length
 		$err = @error
-		If $err Then	; In case there is error, the connection has lost, restart the automation test
-			ResumeConnection()
+		If $err <> 0 Then	; In case there is error, the connection has lost, restart the automation test
+			FileClose($fileToBeUpdate)
+			$fileToBeUpdate = 0
+			LogUpload("FAILED file update. " & $bytesCounter & " bytes unreceived.")	; let the server resend
 			Return False
 		EndIf
 
 		$len = BinaryLen($raw)
-		If $len = 0 Then Return False
+		If Not $len Then Return False
 
 		FileWrite($fileToBeUpdate, $raw)
 		$bytesCounter -= $len
@@ -1432,44 +1431,47 @@ Func ListenToNewCommand()
 		If $bytesCounter < 5 Then
 			FileClose($fileToBeUpdate)
 			$fileToBeUpdate = 0
-			LogUpload("Continue End of file update in client.")
+			LogUpload("PASSED End of file update in client.")
+			$commandTimer = $currentTime
 		EndIf
 		Return True
 	EndIf
 
 	$raw = TCPRecv($Socket, 1000)	; In listen to command mode, receives in text mode with shorter length
 	$err = @error
-	If $err Then	; In case there is error, the connection has lost, restart the automation test
-		ResumeConnection()
+	If $err <> 0 Then	; In case there is error, close the socket
+		TCPCloseSocket($Socket)
+		$Socket = -1
 		Return False
 	EndIf
-	If $raw = "" Then Return False
+	If Not $raw Then
+		Return False	; reading nothing
+	EndIf
 
 	Local $Recv = StringSplit($raw, " ")
-	Local $count = 5
+	If $Recv[0] > 1 Then
+		$commandTimer = Int ($Recv[2]) * 1000 + $currentTime
+	EndIf
 	Switch StringLower($Recv[1])
-		Case "runapp" ; get a stop command, going to stop testing and quit
-			MsgBox($MB_OK, $mMB, "Re-starting the CopTrax",2)
-			RunCopTrax()
-			LogUpload("PASSED to start the CopTrax II app.")
-
-		Case "stopapp" ; get a stop command, going to stop testing and quit
-			MsgBox($MB_OK, $mMB, "Try to stop CopTrax App.",2)
-			If QuitCopTrax() Then
-				LogUpload("PASSED to stop CopTrax II app.")
-			Else
-				LogUpload("FAILED to stop CopTrax II app.")
-			EndIf
-
-		Case "startrecord", "record" ; Get a record command. going to test the record function
+		Case "startrecord" ; get a stop command, going to stop testing and quit
+			MsgBox($MB_OK, $mMB, "Testing start a record function.",2)
 			If StartRecord(True) Then
 				LogUpload("PASSED the test on start record function.")
 			Else
 				LogUpload("FAILED to start a record.")
 			EndIf
 
-		Case "startstop", "lightswitch" ; Get a startstop trigger command
+		Case "trigger" ; get a trigger command, going to test the trigger
+			MsgBox($MB_OK, $mMB, "Testing start a record by trigger function.",2)
+			If StartRecord(True) Then
+				LogUpload("PASSED the test on trigger a record function.")
+			Else
+				LogUpload("FAILED to trigger a record.")
+			EndIf
+
+		Case "lightswitch" ; Get a startstop trigger command
 			LogUpload("Got the lightswitch command. Takes seconds to determine what to do next.")
+			MsgBox($MB_OK, $mMB, "Testing lightswitch function.",2)
 			For $i = 1 To 10
 				If WinExists($titleEndRecord, "") Then	ExitLoop; check if an endrecord window pops
 				sleep(1000)
@@ -1481,7 +1483,6 @@ Func ListenToNewCommand()
 					LogUpload("FAILED to end the record by trigger Light switch button.")
 				EndIf
 			Else
-				MsgBox($MB_OK, $mMB, "Testing the Light switch button trigger a record function",2)
 				If StartRecord(False) Then
 					LogUpload("PASSED the test to start a record by trigger Light switch button.")
 				Else
@@ -1490,22 +1491,43 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "endrecord" ; Get a stop record command, going to end the record function
-			MsgBox($MB_OK, $mMB, "Testing the end record function",2)
+			MsgBox($MB_OK, $mMB, "Testing stop the record function.",2)
 			If EndRecording(True) Then
 				LogUpload("PASSED the test on end record function.")
 			Else
 				LogUpload("FAILED to end record.")
 			EndIf
 
+		Case "pause"
+			MsgBox($MB_OK, $mMB, "Testing pause for a while function.",2)
+			LogUpload("PASSED next command in " & $Recv[2] & "s.")
+
+		Case "runapp" ; get a stop command, going to stop testing and quit
+			MsgBox($MB_OK, $mMB, "Re-starting the CopTrax",2)
+			LogUpload("Test to start the CopTrax II app.")
+			RunCopTrax()
+			LogUpload("PASSED to start the CopTrax II app.")
+
+		Case "stopapp" ; get a stop command, going to stop testing and quit
+			MsgBox($MB_OK, $mMB, "Try to stop CopTrax App.",2)
+			LogUpload("Test to stop the CopTrax II app.")
+			If QuitCopTrax() Then
+				LogUpload("PASSED the test to stop CopTrax II app.")
+			Else
+				LogUpload("FAILED the test to stop CopTrax II app.")
+			EndIf
+
 		Case "settings" ; Get a stop setting command, going to test the settings function
+			LogUpload("Test the settings function.")
 			MsgBox($MB_OK, $mMB, "Testing the settings function",2)
 			If ($Recv[0] >= 2) And TestSettingsFunction($Recv[2]) Then
-				LogUpload("PASSED the test on new settings.")
+				LogUpload("PASSED the test on new settings " & $Recv[2] & ".")
 			Else
 				LogUpload("FAILED the test on new settings. " & $Recv[0] & " " & $raw)
 			EndIf
 
-		Case "login", "createprofile" ; Get a stop setting command, going to test the settings function
+		Case "createprofile" ; Get a stop setting command, going to test the settings function
+			LogUpload("Test to create/switch a new user profile function.")
 			MsgBox($MB_OK, $mMB, "Testing the user switch function",2)
 			If ($Recv[0] >= 2) And TestUserSwitchFunction($Recv[2]) Then
 				LogUpload("PASSED the test on user switch function.")
@@ -1514,6 +1536,7 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "camera" ; Get a stop camera command, going to test the camera switch function
+			LogUpload("Test the camera switch function.")
 			MsgBox($MB_OK, $mMB, "Testing the camera switch function",2)
 			If TestCameraSwitchFunction() Then
 				LogUpload("PASSED the test on camera switch function.")
@@ -1522,6 +1545,7 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "photo" ; Get a stop photo command, going to test the photo function
+			LogUpload("Test the taking photo function.")
 			MsgBox($MB_OK, $mMB, "Testing the photo function",2)
 			If TestPhotoFunction() Then
 				LogUpload("PASSED the test to take a photo.")
@@ -1530,6 +1554,7 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "review" ; Get a stop review command, going to test the review function
+			LogUpload("Test the review function.")
 			MsgBox($MB_OK, $mMB, "Testing the review function",2)
 			If TestReviewFunction() Then
 				LogUpload("PASSED on the test on review function.")
@@ -1538,6 +1563,7 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "radar" ; Get a stop review command, going to test the review function
+			LogUpload("Test the Radrar function.")
 			MsgBox($MB_OK, $mMB, "Testing the radar function",2)
 			If TestRadarFunction() Then
 				LogUpload("PASSED on the test of show radar function.")
@@ -1545,30 +1571,25 @@ Func ListenToNewCommand()
 				LogUpload("FAILED to trigger radar.")
 			EndIf
 
-		Case "trigger" ; Get a trigger command, going to test the trigger record function
-			MsgBox($MB_OK, $mMB, "Testing the trigger function",2)
-			If StartRecord(False) Then
-				LogUpload("PASSED the test on trigger a record function.")
-			Else
-				LogUpload("FAILED to trigger a record.")
-			EndIf
-
 		Case "upload"	; upload the specified files to server, all, idle, now, wait have special meaning
+			LogUpload("Test the file upload function.")
 			MsgBox($MB_OK, $mMB, "Testing file upload function",2)
 			If $Recv[0] >= 2 Then
-				LogUpload("PASSED upload setting.")
+				LogUpload("PASSED " & $Recv[2] & " is put into the upload queue.")
 				UploadFile($Recv[2])
 			Else
 				LogUpload("FAILED missing parameter to set the file upload.")
 			EndIf
 
 		Case "update"	; update the specified files on client with the one on server
+			LogUpload("Test the file " & $raw & " function.")
 			MsgBox($MB_OK, $mMB, "Testing file update function",2)
-			If ($Recv[0] >=3) And UpdateFile($Recv[2], Int($Recv[3])) Then
-				LogUpload("Continue Got the update command. Ready for to receive.")
+			If ($Recv[0] >= 3) And UpdateFile($Recv[2], Int($Recv[3])) Then
+				LogUpload("Got the update command. Ready for to receive. send file now.")
 			Else
-				LogUpload("FAILED to update " & $Recv[2])
+				LogUpload("FAILED to update file.")
 			EndIf
+			$commandTimer = $currentTime + 60 * 1000	; give 60s before request for new command
 
 		Case "synctime"	; sync the client's time and date with the server
 			If ($Recv[0] >= 2) And SyncDateTime($Recv[2]) Then
@@ -1577,16 +1598,27 @@ Func ListenToNewCommand()
 				LogUpload("FAILED to sync date and time.")
 			EndIf
 			MsgBox($MB_OK, $mMB, "Synchronizing client time to server",2)
+			LogUpload("Before date and time sync, t0=" & $currentTime & ", t1=" & $commandTimer & ", t2=" & $heartbeatTimer)
+			$hTimer = TimerInit()
+			$commandTimer -= $currentTime
+			$heartbeatTimer -= $currentTime
+			$currentTime = 0
+			LogUpload("After date and time sync, t0=" & $currentTime & ", t1=" & $commandTimer & ", t2=" & $heartbeatTimer)
 
 		Case "synctmz"	; sync the client's time zone with the server
-			MsgBox($MB_OK, $mMB, "Synchronizing client timezone to server's",2)
+			MsgBox($MB_OK, $mMB, "Client timezone is synchronized to server's",2)
 			If ($Recv[0] >= 2) And SyncTimeZone(StringMid($raw, 9)) Then
 				LogUpload("PASSED timezone synchronization.")
 			Else
 				LogUpload("FAILED to sync timezone to server's.")
 			EndIf
+			$hTimer = TimerInit()
+			$commandTimer -= $currentTime
+			$heartbeatTimer -= $currentTime
+			$currentTime = 0
 
 		Case "checkrecord"	; checkthe recorded files
+			LogUpload("Checking the records function.")
 			MsgBox($MB_OK, $mMB, "Checking the record files.",2)
 			If ($Recv[0] >= 2) And CheckRecordedFiles($Recv[2]) Then
 				LogUpload("PASSED the check on recorded files.")
@@ -1594,48 +1626,41 @@ Func ListenToNewCommand()
 				LogUpload("Continue Warning on the check of recorded files.")
 			EndIf
 
-		Case "eof", "cancel"	; tell the client the end of file sending in update
-			LogUpload("Continue End of file transfer. " & $sentPattern)
-			If StringInStr($raw, "eof") Then
-				PopFile(True)	; pop the previous file out of the stack when receives eof
-				If $uploadMode = "all" Then UploadFile("all")
-			EndIf
+		Case "eof"	; tell the client the end of file sending in update
+			LogUpload("PASSED End of file transfer. " & $sentPattern)
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
+			PopFile(True)	; pop the previous file out of the stack when receives eof
+			If $uploadMode = "all" Then
+				UploadFile("all")
+			EndIf
 
 		Case "configure"	; configure the client
+			LogUpload("Configuring the client box...")
 			MsgBox($MB_OK, $mMB, "Configuring the client.",2)
 			If ($Recv[0] >= 2) And Configure($Recv[2]) Then
-				LogUpload("PASSED configuration of the client. The client is now of version " & $appVersion)
+				LogUpload("PASSED The client is now configured to version " & $appVersion & ".")
 			Else
-				LogUpload("FAILED configuration of the client. The client is now of version " & $appVersion)
+				LogUpload("FAILED The client is now configured to version " & $appVersion & ".")
 			EndIf
 
 		Case "send"	; let the client to send the file
 			$sentPattern = ""
 			$len = 1
-			$count = 5
 			While BinaryLen($fileContent) And $len;LarryDaLooza's idea to send in chunks to reduce stress on the application
 				$len = TCPSend($Socket,BinaryMid($fileContent, 1, $maxSendLength))
 				$err = @error
-				If $err Then
-					If Not ResumeConnection() Then
-						LogUpload("Cannot resume the connection to server. The file transfer is broken.")
-						$len = 0
-					EndIf
-				Else
-					$fileContent = BinaryMid($fileContent,$len+1,BinaryLen($fileContent)-$len)
-					$sentPattern &= $len & " "
-				EndIf
+				$fileContent = BinaryMid($fileContent,$len+1,BinaryLen($fileContent)-$len)
+				$sentPattern &= $len & " "
 			WEnd
-			If BinaryLen($fileContent) Then
-				MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server. The connection lost",2)
-			Else
-				MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server. File transfer is done.",2)
+			If $err <> 0 Then
+				TCPCloseSocket($Socket)
+				$socket = -1
+				LogUpload("FAILED to send the file." )
 			EndIf
+			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "quit", "endtest", "quittest"	; let the client to quit the current automation test
-			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
-			LogUpload("quit Got " & $raw & " command. The test client will stop. The welcome screen is turned ON.")
+			LogUpload("quit Got " & $raw & " command. The test will stop.")
 			$testEnd = True	;	Stop testing marker
 			$restart = False
 
@@ -1644,20 +1669,16 @@ Func ListenToNewCommand()
 			$testEnd = True	;	Stop testing marker
 			$restart = True
 
-		Case "status", "heartbeat"	; heartbeat and let the client to report its status
-			ReportCPUMemory()
-			If $uploadMode = "idle" Then
-				UploadFile("now")
-				$uploadMode = "idle"
-			EndIf
+		Case "status"	; heartbeat and let the client to report its status
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
+			ReportCPUMemory()
 
-		Case "info"	; null command
-			LogUpload("Continue It is a null command at this moment.")
+		Case "info", "continue", "heartbeat"	; null command
+			MsgBox($MB_OK, $mMB, "Got " & $raw & " command. Reply nothing.",2)
 
 		Case "about"	; let the client to report the about infomation
+			LogUpload("Checking the about information.")
 			MsgBox($MB_OK, $mMB, "Checking CopTrax about infomation.",2)
-
 			If testAbout() Then
 				LogUpload("PASSED CopTrax About Info check. The CopTrax is of version " & $appVersion & " " & $releaseRead & ".")
 			Else
@@ -1669,9 +1690,9 @@ Func ListenToNewCommand()
 			If $firmwareVersion = "" Then
 				LogUpload("FAILED firmware version check. Run settings command before checking the firmware version.")
 			ElseIf ($Recv[0] >= 2) And ($firmwareVersion = $Recv[2]) Then
-				LogUpload("PASSED firmware version check. The firmware version is " & $firmwareVersion)
+				LogUpload("PASSED firmware version check. The firmware version is " & $firmwareVersion & ".")
 			Else
-				LogUpload("FAILED firmware version check. The current firmware version is " & $firmwareVersion & ", not " & $Recv[2])
+				LogUpload("FAILED firmware version check. The current firmware version is " & $firmwareVersion & ", not " & $Recv[2] & ".")
 			EndIf
 
 		Case "checkapp"	; check the app version and the release
@@ -1682,32 +1703,20 @@ Func ListenToNewCommand()
 			If ($Recv[0] >= 2) And ($appVersion = $Recv[2]) And ($releaseRead = $releaseSet) Then
 				LogUpload("PASSED CopTrax version check. The CopTrax is of version " & $appVersion & " " & $releaseRead & ".")
 			Else
-				LogUpload("FAILED CopTrax version check. The current CopTrax is of version " & $appVersion & " " & $releaseRead & ", not " & $Recv[2])
+				LogUpload("FAILED CopTrax version check. The current CopTrax is of version " & $appVersion & " " & $releaseRead & ", not " & $Recv[2] & ".")
 			EndIf
 
 		Case "checklibrary"	; check the library version
 			MsgBox($MB_OK, $mMB, "Checking CopTrax library version.",2)
 
 			If ($Recv[0] >= 2) And ($libraryVersion = $Recv[2]) Then
-				LogUpload("PASSED library version check. The library version is " & $libraryVersion)
+				LogUpload("PASSED library version check. The library version is " & $libraryVersion & ".")
 			Else
-				LogUpload("FAILED library version check. The current library version is " & $libraryVersion & ", not " & $Recv[2])
+				LogUpload("FAILED library version check. The current library version is " & $libraryVersion & ", not " & $Recv[2] & ".")
 			EndIf
 
 		Case "cleanup"	; let the client cleanup
-			Local $filename = "C:\CopTrax Support\Tools\Automation.bat"
-			Local $file = FileOpen($filename, $FO_OVERWRITE );
-			FileWriteLine($file, "Echo Welcome to use CopTrax II")
-			FileClose($file)
-
-			If Not QuitCopTrax() Then ProcessClose($pCopTrax)	; try to stop the CopTrax gracefully
-			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
-			Run(@ComSpec & " /c schtasks /Delete /TN Automation /F")	; Disable the automation
-			LogUpload("quit The box is going to be cleanup and shutdown. Welcome Screen is turned ON. And the automation is turned OFF.")
-			Run("C:\Coptrax Support\Tools\Cleanup.bat", "C:\Coptrax Support\Tools\", @SW_HIDE)
-			$testEnd = True
-			$restart = False
-			Exit
+			Cleanup()
 
 		Case "reboot"	; let the client to reboot
 			Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')	; Disable the welcome screen
@@ -1719,6 +1728,88 @@ Func ListenToNewCommand()
 	EndSwitch
 
 	Return True
+EndFunc
+
+Func Cleanup()
+	Local $filename = "C:\CopTrax Support\Tools\Automation.bat"
+	Local $file = FileOpen($filename, $FO_OVERWRITE );
+	FileWriteLine($file, "Echo Welcome to use CopTrax II")
+	FileClose($file)
+
+	If Not QuitCopTrax() Then ProcessClose($pCopTrax)	; try to stop the CopTrax gracefully
+
+	Local $dArray = DriveGetDrive(  $DT_REMOVABLE )
+	Local $i
+	Local $path0 = StringRegExpReplace(GetVideoFilePath(), "(auto[0-9])", "auto1")
+	Local $path = $path0
+	LogUpload("auto1: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	$path = $path0 & "\cam2"
+	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	$path = $path0 & "\photo"
+	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt." & GetVideoFileNum($path, "*.photo") & "photo, " & GetVideoFileNum($path, "*.trax") & "trax.")
+
+	$path0 = StringReplace($path0, "auto1", "auto2")
+	$path = $path0
+	LogUpload("auto2: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	$path = $path0 & "\cam2"
+	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	$path = $path0 & "\photo"
+	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt." & GetVideoFileNum($path, "*.photo") & "photo, " & GetVideoFileNum($path, "*.trax") & "trax.")
+
+	For $i = 1 To $dArray[0]
+		If FileExists( $dArray[$i] & "\zzCopTrax24Key.txt") Then
+			$filename = StringUpper($dArray[$i])
+			LogUpload("SD card:        " & GetVideoFileNum($filename, "*.mp4") & " mp4")
+			ExitLoop
+		EndIf
+	Next
+
+	$path = "C:\Users\coptraxadmin\Documents\CopTrax24"
+	$numVideo = GetVideoFileNum($path, "*.mp4") + GetVideoFileNum($path, "*.avi") + GetVideoFileNum($path, "*.wmv")
+	LogUpload ($path & " = " & $numVideo )
+	If $numVideo Then
+		LogUpload("FAILED The box may suffered SD card defects, for " & $path & " is not empty. Not to clean up at this moment.")
+		Return True
+	EndIf
+
+	$path = "C:\CopTrax-Backup"
+	$numVideo = GetVideoFileNum($path, "*.mp4") + GetVideoFileNum($path, "*.avi") + GetVideoFileNum($path, "*.wmv")
+	LogUpload ($path & " = " & $numVideo )
+	If $numVideo Then
+		LogUpload("FAILED The box may suffered video file encoding problems, for " & $path & " is not empty. Not to cleanup at this moment.")
+		Return True
+	EndIf
+
+	LogUpload("Now clean up ...")
+
+	$path0 = StringReplace($path0, "auto2", "auto1")
+	$path = $path0
+	DirRemove($path, 1)
+	LogUpload("auto1: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	$path = $path0 & "\cam2"
+	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	$path = $path0 & "\photo"
+	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt.")
+
+	$path0 = StringReplace($path0, "auto1", "auto2")
+	$path = $path0
+	DirRemove($path, 1)
+	LogUpload("auto2: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	$path = $path0 & "\cam2"
+	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	$path = $path0 & "\photo"
+	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt.")
+
+	FileDelete ($filename & "*.mp4")
+	LogUpload("SD card:        " & GetVideoFileNum($filename, "*.mp4") & " mp4")
+
+	Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
+	Run(@ComSpec & " /c schtasks /Delete /TN Automation /F")	; Disable the automation
+	LogUpload("quit The box is cleaned up and going to be shutdown. Welcome Screen is turned ON. And the automation is turned OFF.")
+	Run("C:\Coptrax Support\Tools\Cleanup.bat", "C:\Coptrax Support\Tools\", @SW_HIDE)
+	$testEnd = True
+	$restart = False
+	Exit
 EndFunc
 
 Func RunCopTrax()
@@ -1739,6 +1830,7 @@ Func Configure($arg)
 	Local $bwc
 	Local $rst = True
 	Local $file
+	Local $count = 5
 
 	$ct = GetParameter($arg, "ct")	; configure the CopTrax App
 	$release = GetParameter($arg, "release")	; configure the Evidence Viewer
@@ -1762,9 +1854,18 @@ Func Configure($arg)
 			EndIf
 		EndIf
 
-		If Not RunCopTrax() Then
-			$rst = False
-		EndIf
+		Do
+			RunCopTrax()	; restart CopTrax App
+			If IsDisplayCorrect() Then 	; checking if the display is correct
+				$count = -10	; display correct, quit the loop
+			Else
+				ProcessClose($pCopTrax)	; display is incorrect, close the CopTrax App
+				Sleep(1000)
+				$count -= 1
+			EndIf
+		Until $count <= 0
+
+		If $count = 0 Then $rst = False
 	EndIf
 
 	$bwc = GetParameter($arg, "bwc")	; configure the Evidence Viewer
@@ -1887,7 +1988,10 @@ Func UploadFile($arg)
 	EndIf
 
 	Local $filename = PopFile(False)	; not pop the file until it is received by server
-	If $filename = "" Then Return False
+	If $filename = "" Then
+		LogUpload($commandRequest)
+		Return False
+	EndIf
 
 	$filename = StringReplace($filename, "\_", " ")	; change \_ back to space
 	Local $file = FileOpen($filename,16)
@@ -1955,7 +2059,7 @@ Func HotKeyPressed()
 	EndSwitch
 EndFunc   ;==>HotKeyPressed
 
-Func ReportCPUMemory()
+Func ReportCPUMemory($heartbeat = False)
 	Local $aProcUsage = _ProcessUsageTracker_Create($pCopTrax)
 	Local $aMem = MemGetStats()
 	Local $logLine = "Memory usage " & $aMem[0] & "%; "
@@ -1971,7 +2075,11 @@ Func ReportCPUMemory()
 	$logLine &= $pCopTrax & " CPU usage: " & $fUsage & "%."
 
 	If CheckEventLog() Then
-		$logLine = "Continue " & $logLine
+		If $heartbeat Then
+			$logLine = "Heartbeat " & $logLine
+		Else
+			$logLine = "PASSED " & $logLine
+		EndIf
 	Else
 		$logLine = "FAILED " & $logLine
 	EndIf
@@ -1989,6 +2097,8 @@ Func ReadConfig()
 	Local $aLine
 	Local $aTxt
 	Local $eof = False
+	If $file < 0 Then Return
+
 	Do
 		$aLine = FileReadLine($file)
 		If @error < 0 Then ExitLoop
