@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.29
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.31
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -246,6 +246,16 @@ While Not $testEnd	; main loop that get input, display the resilts
 		If $time0 > $piHeartbeatTime Then
 			$piCommandHold = False
 		EndIf
+	Else
+		If $socketRaspberryPi1 Then
+			TCPCloseSocket($socketRaspberryPi1)
+			$socketRaspberryPi1 = -1
+		EndIf
+
+		If $socketRaspberryPi2 Then
+			TCPCloseSocket($socketRaspberryPi2)
+			$socketRaspberryPi2 = -1
+		EndIf
 	EndIf
 
 	$batchCheck = ($totalConnection > 0)
@@ -327,8 +337,15 @@ While Not $testEnd	; main loop that get input, display the resilts
 		Endif
 	Next
 
-	If $socketRaspberryPi1 > 0 Then $tempPattern &= "-"
-	If $socketRaspberryPi2 > 0 Then $tempPattern &= "="
+	If $socketRaspberryPi1  Then $tempPattern &= "1"
+	If $socketRaspberryPi2 Then $tempPattern &= "2"
+	If $socketRaspberryPi1 Or $socketRaspberryPi2 Then
+		If $piCommandHold Then
+			$tempPattern &= "#"
+		Else
+			$tempPattern &= "="
+		EndIf
+	EndIf
 
 	If $connectionPattern <> $tempPattern Then
 		$connectionPattern = $tempPattern
@@ -336,7 +353,11 @@ While Not $testEnd	; main loop that get input, display the resilts
 		GUICtrlSetData( $cID, $connectionPattern )
 	EndIf
 
-	$batchAligned = $batchCheck And $totalConnection	; Aligned only when there are UUT connected
+	If $batchCheck Then
+		$batchAligned = $batchCheck
+		SendCommand(0, "h0")	; try to connect to Raspberry pi
+	EndIf
+
 	If $tempTime <> $lastEndTime Then
 		GUICtrlSetData($nGUI[0], toHMS($lastEndTime))
 		$tempTime = $lastEndTime
@@ -557,11 +578,11 @@ Func ParseCommand($n)
 			LogWrite($n, "(Server) Pause for " & $arg & " seconds.")
 
 		Case "siren", "lightbar", "aux4", "aux5", "aux6", "lightswitch", "mic1trigger", "mic2trigger"
-			If $socketRaspberryPi1 <= 0 Then
+			If Not $piCommandHold And $socketRaspberryPi1 <= 0 Then
 				$socketRaspberryPi1 = TCPConnect($ipRaspberryPi1, $portRaspberryPi)	; When RSP1 not connected, try to connect it
 			EndIf
 
-			If $socketRaspberryPi2 <= 0 Then
+			If Not $piCommandHold And $socketRaspberryPi2 <= 0 Then
 				$socketRaspberryPi2 = TCPConnect($ipRaspberryPi2, $portRaspberryPi)	; When RSP2 not connected, try to connect it
 			EndIf
 
@@ -730,9 +751,9 @@ Func ParseCommand($n)
 				LogWrite($n, "(Server) Enter stop batch test mode, disabled all other later boxes from achieving align mode.")
 				$batchWait[$n] = False
 				If Not $batchMode Then Return $nextCommandFlag
+				SendCommand(0, "h0")
+				LogWrite($automationLogPort, "(Server) Send Raspberry Pi simulator handshake command." )
 
-				$socketRaspberryPi1 = -1
-				$socketRaspberryPi2 = -1
 				$batchAligned = False
 				$batchMode = False
 			EndIf
@@ -1341,13 +1362,12 @@ Func SendCommand($n, $command)
 			$command = ""
 		EndIf
 
-		$heartBeatTimers[$n] = TimerDiff($hTimer) + 60 * 1000
+		$heartBeatTimers[$n] = $time0 + 60 * 1000
 	Else	; send the command to raspberry pi simulators
-		$piHeartbeatTime = TimerDiff($hTimer) + $piHeartbeatInterval;
-
 		If ($command = "h0") Or ($command = "q0") Then
 			$piCommandHold = False
 		EndIf
+		$piHeartbeatTime = $time0 + $piHeartbeatInterval;
 
 		If $piCommandHold Then
 			LogWrite($n, "(Server) Raspberry Pi hold the duplicated " & $command & ".")
