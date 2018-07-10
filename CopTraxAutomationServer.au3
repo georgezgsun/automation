@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.31
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.36
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -224,40 +224,6 @@ While Not $testEnd	; main loop that get input, display the resilts
 	$time0 = Int(TimerDiff($hTimer))	; get current timer elaspe
 	AcceptConnection()	; accept new client's connection requist
 
-	If $batchMode Then
-		If $socketRaspberryPi1 > 0 Then
-			$Recv = TCPRecv($socketRaspberryPi1, 100)	; when connected, try to receive message
-			If $Recv <> "" Then
-				LogWrite($automationLogPort, "(Raspberry Pi1) Replied " & $Recv )
-				TCPCloseSocket($socketRaspberryPi1)
-				$socketRaspberryPi1 = -1
-			EndIf
-		EndIf
-
-		If $socketRaspberryPi2 > 0 Then
-			$Recv = TCPRecv($socketRaspberryPi2,100)	; when connected, try to receive message
-			If $Recv <> "" Then
-				LogWrite($automationLogPort, "(Raspberry Pi2) Replied " & $Recv )
-				TCPCloseSocket($socketRaspberryPi2)
-				$socketRaspberryPi2 = -1
-			EndIf
-		EndIf
-
-		If $time0 > $piHeartbeatTime Then
-			$piCommandHold = False
-		EndIf
-	Else
-		If $socketRaspberryPi1 Then
-			TCPCloseSocket($socketRaspberryPi1)
-			$socketRaspberryPi1 = -1
-		EndIf
-
-		If $socketRaspberryPi2 Then
-			TCPCloseSocket($socketRaspberryPi2)
-			$socketRaspberryPi2 = -1
-		EndIf
-	EndIf
-
 	$batchCheck = ($totalConnection > 0)
 	$totalConnection = 0
 	$tempPattern = ""
@@ -270,9 +236,10 @@ While Not $testEnd	; main loop that get input, display the resilts
 
 		$totalConnection += 1
 		If $batchWait[$i] Then
-			$tempPattern &= "+"
+			$tempPattern &= "+"	; this one aligned
 		Else
-			$tempPattern &= "x"
+			$tempPattern &= "x"	; this one not aligned
+			$batchCheck = False	; there is one not aligned
 		EndIf
 
 		If ProcessReply($i) Then
@@ -328,18 +295,46 @@ While Not $testEnd	; main loop that get input, display the resilts
 			$remainTestTime[$i] = 0	; test ends
 		EndIf
 
-		If Not $batchWait[$i] Then	; If there is one not aligned
-			$batchCheck = False
-		EndIf
-
 		If $timeRemains > $lastEndTime Then
 			$lastEndTime = $timeRemains
 		Endif
 	Next
 
-	If $socketRaspberryPi1  Then $tempPattern &= "1"
-	If $socketRaspberryPi2 Then $tempPattern &= "2"
-	If $socketRaspberryPi1 Or $socketRaspberryPi2 Then
+	If $socketRaspberryPi1 > 0 Then
+		$tempPattern &= "1"
+		$Recv = TCPRecv($socketRaspberryPi1, 100)	; when connected, try to receive message
+		If $Recv Then
+			LogWrite($automationLogPort, "(Raspberry Pi1) Replied " & $Recv )
+			TCPCloseSocket($socketRaspberryPi1)
+			$socketRaspberryPi1 = -1
+		EndIf
+	EndIf
+
+	If $socketRaspberryPi2 > 0 Then
+		$tempPattern &= "2"
+		$Recv = TCPRecv($socketRaspberryPi2,100)	; when connected, try to receive message
+		If $Recv Then
+			LogWrite($automationLogPort, "(Raspberry Pi2) Replied " & $Recv )
+			TCPCloseSocket($socketRaspberryPi2)
+			$socketRaspberryPi2 = -1
+		EndIf
+	EndIf
+
+	If $time0 > $piHeartbeatTime Then
+		$piCommandHold = False
+		If $socketRaspberryPi1 > 0 Then
+			TCPCloseSocket($socketRaspberryPi1)
+			$socketRaspberryPi1 = -1
+		EndIf
+		If $socketRaspberryPi2 > 0 Then
+			TCPCloseSocket($socketRaspberryPi2)
+			$socketRaspberryPi2 = -1
+		EndIf
+	EndIf
+
+	$batchAligned = $batchCheck
+
+	If StringLen($tempPattern) > $maxConnections Then ; If there was a raspberry pi connected
 		If $piCommandHold Then
 			$tempPattern &= "#"
 		Else
@@ -351,11 +346,6 @@ While Not $testEnd	; main loop that get input, display the resilts
 		$connectionPattern = $tempPattern
 		LogWrite($automationLogPort, $connectionPattern)
 		GUICtrlSetData( $cID, $connectionPattern )
-	EndIf
-
-	If $batchCheck Then
-		$batchAligned = $batchCheck
-		SendCommand(0, "h0")	; try to connect to Raspberry pi
 	EndIf
 
 	If $tempTime <> $lastEndTime Then
@@ -709,7 +699,6 @@ Func ParseCommand($n)
 		Case "batchhold"
 			If $batchAligned Then
 				LogWrite($n, "(Server) All clients aligned.")
-				$piCommandHold = False
 			Else
 				PushCommand($n, "batchhold")	; the batchhold command can only be cleared by all active clients entering batch wait mode
 			EndIf
@@ -750,12 +739,13 @@ Func ParseCommand($n)
 			If $arg = "stop" Then
 				LogWrite($n, "(Server) Enter stop batch test mode, disabled all other later boxes from achieving align mode.")
 				$batchWait[$n] = False
-				If Not $batchMode Then Return $nextCommandFlag
-				SendCommand(0, "h0")
-				LogWrite($automationLogPort, "(Server) Send Raspberry Pi simulator handshake command." )
-
 				$batchAligned = False
-				$batchMode = False
+
+				If $batchMode Then
+					SendCommand(0, "h0")
+					LogWrite($automationLogPort, "(Server) Send Raspberry Pi simulator handshake command." )
+					$batchMode = False
+				EndIf
 			EndIf
 
 		Case Else
@@ -1125,7 +1115,6 @@ Func ProcessReply($n)
 			$testEndTime[$n] = 0
 			$remainTestTime[$n] = 0
 		EndIf
-		$batchWait[$n] = False	; donot let other box wait for it any more
 		GUICtrlSetState($nGui[$n], $GUI_SHOW)
 		Local $s = "==================================="
 		$s &= $s & $s
@@ -1269,17 +1258,17 @@ Func StartNewTest($n, $ID, $resume, $clientVersion)
 EndFunc
 
 Func OnAutoItExit()
-	If $socketRaspberryPi1 Then
+	If $socketRaspberryPi1 > 0 Then
 		TCPCloseSocket($socketRaspberryPi1)
 	EndIf
-	If $socketRaspberryPi2 Then
+	If $socketRaspberryPi2 > 0 Then
 		TCPCloseSocket($socketRaspberryPi2)
 	EndIf
 
    TCPShutdown() ; Close the TCP service.
    Local $i
    For $i = 0 To $maxConnections
-	  If $logFiles[$i] <> 0 Then
+	  If $logFiles[$i] Then
 		 FileClose($logFiles[$i])
 	  EndIf
    Next
@@ -1364,15 +1353,12 @@ Func SendCommand($n, $command)
 
 		$heartBeatTimers[$n] = $time0 + 60 * 1000
 	Else	; send the command to raspberry pi simulators
-		If ($command = "h0") Or ($command = "q0") Then
-			$piCommandHold = False
-		EndIf
-		$piHeartbeatTime = $time0 + $piHeartbeatInterval;
-
 		If $piCommandHold Then
 			LogWrite($n, "(Server) Raspberry Pi hold the duplicated " & $command & ".")
 			Return
 		EndIf
+
+		$piHeartbeatTime = $time0 + $piHeartbeatInterval;
 		$piCommandHold = True	; release the pi command hold
 
 		If $socketRaspberryPi1 <= 0 Then
