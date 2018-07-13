@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.4.10.36
+#AutoIt3Wrapper_Res_Fileversion=2.4.10.39
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -243,6 +243,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 		EndIf
 
 		If ProcessReply($i) Then
+			If Not $connectionTimers[$i] Then ContinueLoop
 			$connectionTimers[$i] = $time0 + 2000*60 ; renew the connection check timer
 		EndIf
 
@@ -615,6 +616,7 @@ Func ParseCommand($n)
 			LogWrite($n, "")
 			LogWrite($n, "(Server) Read " & $newCommand & " command.")
 			LogWrite($n, "(Server) Sent " & $newCommand & " command to client.")
+			$commands[$n] = ""
 
 		Case "onfailure"
 			$arg = PopCommand($n)
@@ -629,8 +631,8 @@ Func ParseCommand($n)
 				EndIf
 
 				If StringInStr($arg, "quit") Then
-					PushCommand($n, "upload all quit")
-					LogWrite($n, "(Server) Change the rest test commands to 'upload all quit'  because there are " & $testFailures[$n] & " failures in this test.")
+					PushCommand($n, "upload all quittest")
+					LogWrite($n, "(Server) Change the rest test commands to 'upload all quittest'  because there are " & $testFailures[$n] & " failures in this test.")
 				EndIf
 
 				If StringInStr($arg, "boot") Then
@@ -1087,7 +1089,7 @@ Func ProcessReply($n)
 	EndIf
 
 	If StringInStr($reply, "quit") Then
-		If StringLen($commands[$n]) > 5 Then
+		If PopCommand($n) Then
 			LogWrite($automationLogPort, $boxID[$n] & " Tests was interrupted.")
 			LogWrite($n, "(Server) Tests was interrupted.")
 			GUICtrlSetData($nGUI[$n], "interrupt")
