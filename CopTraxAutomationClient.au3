@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.5.0.2)
+#pragma compile(FileVersion, 3.5.0.9)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -192,7 +192,7 @@ Global $currentTime = 2000
 Global $hTimer = TimerInit()	; Begin the timer and store the handler
 Global $heartbeatTimer = 1000 * $HEARTBEATINSECONDS	; Set the first time out
 Global $commandTimer = 2 * 1000	; request the first command in 2s
-LogUpload("name " & $boxID & " new " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)	; new start of automation test
+LogUpload("name " & $boxID & " " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)	; new start of automation test
 
 $currentTime = TimerDiff($hTimer)
 $heartbeatTimer += $currentTime	; Set the first time out
@@ -210,24 +210,34 @@ While Not $testEnd
 	If $currentTime > $heartbeatTimer Then
 		ReportCPUMemory(True)	; send heartbeat to server
 		MsgBox($MB_OK, $mMB, "Send heartbeat to server.",2)
-		If ($uploadMode = "idle") And ($currentTime + 50*1000 < $commandTimer) Then
-			UploadFile("now")
-			$uploadMode = "idle"
-		EndIf
 	EndIf
 
 	If $currentTime > $commandTimer Then
-		If $fileToBeUpdate Then
+		If $fileToBeUpdate Then	; receiving not completed in given time
 			FileClose($fileToBeUpdate)
 			$fileToBeUpdate = 0
 			LogUpload("FAILED file update. " & $bytesCounter & " bytes unreceived.")	; let the server resend
 		EndIf
+
+		If $fileContent Then	; file uploading not completed in given time
+			$fileContent = ""
+			TCPCloseSocket($Socket)
+			$Socket = -1
+			LogUpload("FAILED file upload. " & $bytesCounter & " bytes unreceived.")	; let the server resend
+		EndIf
+
 		LogUpload($commandRequest)
 		$commandTimer = $currentTime + 10 * 1000	; send another new request 10s later if not get new command
 		$heartbeatTimer = $currentTime + 1000 * $HEARTBEATINSECONDS
 	EndIf
 
 	ListenToNewCommand()
+
+	If ($currentTime + 50 * 1000 < $commandTimer) And ($uploadMode = "idle") And Not $fileContent Then
+		UploadFile("now")
+		$uploadMode = "idle"
+	EndIf
+
 	Sleep(100)
 WEnd
 
@@ -969,39 +979,49 @@ Func TestCameraSwitchFunction()
 	Local $blue1
 	Local $blue2
 	Local $blue3
-	Local $rst
+	Local $rst = True
 	Local $picSize = 100000
 	Local $blue = 0x090071
 
 	LogUpload("Begin Camera switch function testing.")
 	$file1 = TakeScreenCapture($mCopTrax)
 	LogUpload("Captured Main camera screen file " & $file1 & ". It is now on the way sending to server.")
-	$blue1 = PixelGetColor(550, 320, $mCopTrax)
-	$rst = ($file1 < $picSize) And ($blue1 <> $blue)
+	$blue1 = PixelGetColor(250, 120, $mCopTrax)
+	$blue2 = PixelGetColor(550, 320, $mCopTrax)
+	$blue3 = PixelGetColor(750, 420, $mCopTrax)
+	If ($blue1 = $blue2) And ($blue1 = $blue3) And ($blue1 > 0x080000) And ($blue1 < 0x0400) Then
+		$rst = False
+		LogUpload("Main camera has blank screen.")
+	EndIf
 
 	MouseClick("",960,170)	; click to rear camera2
 	Sleep(2000)
 	$file2 = TakeScreenCapture($mCopTrax)
 	LogUpload("Captured the Rear Cam2 screen file " & $file2 & ". It is now on the way sending to server.")
+	$blue1 = PixelGetColor(250, 120, $mCopTrax)
 	$blue2 = PixelGetColor(550, 320, $mCopTrax)
-	$rst = $rst And ($file2 < $picSize) And ($blue2 <> $blue)
+	$blue3 = PixelGetColor(750, 420, $mCopTrax)
+	If ($blue1 = $blue2) And ($blue1 = $blue3) And ($blue1 > 0x080000) And ($blue1 < 0x0400) Then
+		$rst = False
+		LogUpload("Blank screen encountered.")
+	EndIf
 
 	MouseClick("", 200,170)	; click to switch rear camera
 	Sleep(2000)
 	$file3 = TakeScreenCapture($mCopTrax)
 	LogUpload("Captured the Rear Cam3 screen file " & $file3 & ". It is now on the way sending to server.")
-	$blue3 = PixelGetColor(550, 320, $mCopTrax)
-	$rst = $rst And ($file3 < $picSize) And ($blue3 <> $blue)
+	$blue1 = PixelGetColor(250, 120, $mCopTrax)
+	$blue2 = PixelGetColor(550, 320, $mCopTrax)
+	$blue3 = PixelGetColor(750, 420, $mCopTrax)
+	If ($blue1 = $blue2) And ($blue1 = $blue3) And ($blue1 > 0x080000) And ($blue1 < 0x0400) Then
+		$rst = False
+		LogUpload("Blank screen encountered.")
+	EndIf
 
 	MouseClick("", 960,170)	; click back to main camera
 	Sleep(1000)
 
-	If $rst Then
-		LogUpload("Blank screen encountered.")
-		Return False
-	EndIf
-
-	Return True
+	Return $rst
 EndFunc
 
 Func GetNewFilename()
@@ -1432,8 +1452,8 @@ Func ListenToNewCommand()
 			FileClose($fileToBeUpdate)
 			$fileToBeUpdate = 0
 			LogUpload("PASSED End of file update in client.")
-			$commandTimer = $currentTime
 		EndIf
+		$commandTimer = 0	; To allow next command immediately
 		Return True
 	EndIf
 
@@ -1449,22 +1469,21 @@ Func ListenToNewCommand()
 	EndIf
 
 	Local $Recv = StringSplit($raw, " ")
-	If $Recv[0] > 1 Then
-		$commandTimer = Int ($Recv[2]) * 1000 + $currentTime
-	EndIf
 	Switch StringLower($Recv[1])
 		Case "startrecord" ; get a stop command, going to stop testing and quit
 			MsgBox($MB_OK, $mMB, "Testing start a record function.",2)
-			If StartRecord(True) Then
+			If ($Recv[0] > 1) And StartRecord(True) Then
 				LogUpload("PASSED the test on start record function.")
+				$commandTimer = Int ($Recv[2]) * 1000 + $currentTime
 			Else
 				LogUpload("FAILED to start a record.")
 			EndIf
 
 		Case "trigger" ; get a trigger command, going to test the trigger
 			MsgBox($MB_OK, $mMB, "Testing start a record by trigger function.",2)
-			If StartRecord(True) Then
+			If ($Recv[0] > 1) And StartRecord(False) Then
 				LogUpload("PASSED the test on trigger a record function.")
+				$commandTimer = Int ($Recv[2]) * 1000 + $currentTime
 			Else
 				LogUpload("FAILED to trigger a record.")
 			EndIf
@@ -1489,18 +1508,25 @@ Func ListenToNewCommand()
 					LogUpload("FAILED to start a record by trigger Light switch button.")
 				EndIf
 			EndIf
+			If $Recv[0] > 1 Then $commandTimer = Int ($Recv[2]) * 1000 + $currentTime
 
 		Case "endrecord" ; Get a stop record command, going to end the record function
 			MsgBox($MB_OK, $mMB, "Testing stop the record function.",2)
-			If EndRecording(True) Then
+			If ($Recv[0] > 1) And EndRecording(True) Then
 				LogUpload("PASSED the test on end record function.")
+				$commandTimer = Int ($Recv[2]) * 1000 + $currentTime
 			Else
 				LogUpload("FAILED to end record.")
 			EndIf
 
 		Case "pause"
 			MsgBox($MB_OK, $mMB, "Testing pause for a while function.",2)
-			LogUpload("PASSED next command in " & $Recv[2] & "s.")
+			If $Recv[0] > 1 Then
+				$commandTimer = Int ($Recv[2]) * 1000 + $currentTime
+				LogUpload("PASSED next command in " & $Recv[2] & "s.")
+			Else
+				LogUpload("FAILED no timer is specified in command.")
+			EndIf
 
 		Case "runapp" ; get a stop command, going to stop testing and quit
 			MsgBox($MB_OK, $mMB, "Re-starting the CopTrax",2)
@@ -1585,7 +1611,7 @@ Func ListenToNewCommand()
 			LogUpload("Test the file " & $raw & " function.")
 			MsgBox($MB_OK, $mMB, "Testing file update function",2)
 			If ($Recv[0] >= 3) And UpdateFile($Recv[2], Int($Recv[3])) Then
-				LogUpload("Got the update command. Ready for to receive. send file now.")
+				LogUpload("Got the update command. Ready for to receive. Send file now.")
 			Else
 				LogUpload("FAILED to update file.")
 			EndIf
@@ -1598,12 +1624,8 @@ Func ListenToNewCommand()
 				LogUpload("FAILED to sync date and time.")
 			EndIf
 			MsgBox($MB_OK, $mMB, "Synchronizing client time to server",2)
-			LogUpload("Before date and time sync, t0=" & $currentTime & ", t1=" & $commandTimer & ", t2=" & $heartbeatTimer)
 			$hTimer = TimerInit()
-			$commandTimer -= $currentTime
-			$heartbeatTimer -= $currentTime
-			$currentTime = 0
-			LogUpload("After date and time sync, t0=" & $currentTime & ", t1=" & $commandTimer & ", t2=" & $heartbeatTimer)
+			$commandTimer = 0
 
 		Case "synctmz"	; sync the client's time zone with the server
 			MsgBox($MB_OK, $mMB, "Client timezone is synchronized to server's",2)
@@ -1613,9 +1635,7 @@ Func ListenToNewCommand()
 				LogUpload("FAILED to sync timezone to server's.")
 			EndIf
 			$hTimer = TimerInit()
-			$commandTimer -= $currentTime
-			$heartbeatTimer -= $currentTime
-			$currentTime = 0
+			$commandTimer = 0
 
 		Case "checkrecord"	; checkthe recorded files
 			LogUpload("Checking the records function.")
@@ -1627,11 +1647,12 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "eof"	; tell the client the end of file sending in update
-			LogUpload("PASSED End of file transfer. " & $sentPattern)
+			LogUpload("PASSED End of file transfer of " & PopFile(True) & " in pattern " & $sentPattern) ; pop the previous file out of the stack when receives eof
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
-			PopFile(True)	; pop the previous file out of the stack when receives eof
 			If $uploadMode = "all" Then
-				UploadFile("all")
+				UploadFile("all")	; prepare for the next file update
+			Else
+				$fileContent = ""	; clear the flag
 			EndIf
 
 		Case "configure"	; configure the client
@@ -1656,6 +1677,9 @@ Func ListenToNewCommand()
 				TCPCloseSocket($Socket)
 				$socket = -1
 				LogUpload("FAILED to send the file." )
+				$fileContent = ""	; clear the flag
+			Else
+				$fileContent = "x"	; set the flag, the flag will be cleared when got 'eof' command
 			EndIf
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
@@ -1725,6 +1749,9 @@ Func ListenToNewCommand()
 			TCPShutdown()
 			Shutdown(2+4)	; force the window to reboot
 			Exit
+
+		Case Else
+			LogUpload("Unkown command '" & $raw & "' or '" & $Recv[1] & "'.")
 	EndSwitch
 
 	Return True
@@ -1969,10 +1996,10 @@ Func SyncTimeZone($tmz)
 EndFunc
 
 Func UploadFile($arg)
-	If $arg = "" Then Return False
 	Switch StringLower($arg)
 		Case "all"
 			$uploadMode = "all"
+			$commandTimer = $currentTime + 60 * 1000 ; give 60s uploading time
 		Case "idle"
 			$uploadMode = "idle"
 		Case "wait"
@@ -1980,23 +2007,28 @@ Func UploadFile($arg)
 		Case "now"
 			$uploadMode = "now"
 		Case Else
-			PushFile(StringReplace($arg, "\!", "|"))	; change \! back to !
+			PushFile(StringReplace($arg, "\!", "|"))	; change \! back to |
 	EndSwitch
+	$fileContent = ""	; clear the flag of uploading
 
 	If $uploadMode = "wait" Or $uploadMode = "idle" Then
 		Return False
 	EndIf
 
 	Local $filename = PopFile(False)	; not pop the file until it is received by server
-	If $filename = "" Then
-		LogUpload($commandRequest)
+	If $filename = "" Then	; in case there is no file in the file queue
+		If $uploadMode = "all" Then	; in case the upload is all,
+			$uploadMode = "idle"	; change the upload mode to idle
+			$commandTimer = 0	;  allow the request command immediately
+		EndIf
 		Return False
 	EndIf
 
 	$filename = StringReplace($filename, "\_", " ")	; change \_ back to space
 	Local $file = FileOpen($filename,16)
 	If $file = -1 Then
-		LogUpload("Cannot find " & $filename & ".")
+		LogUpload("Cannot find " & $filename & ", so get rid of it.")
+		PopFile(True)	; pop the file from the queue
 		Return False
 	EndIf
 
