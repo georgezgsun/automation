@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.5.0.9)
+#pragma compile(FileVersion, 3.5.0.10)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -36,6 +36,7 @@ HotKeySet("^q", "HotKeyPressed") ; Esc to stop testing
 HotKeySet("+!t", "HotKeyPressed") ; Shift-Alt-t to stop CopTrax
 HotKeySet("+!s", "HotKeyPressed") ; Shift-Alt-s, to start CopTrax
 HotKeySet("+!r", "HotKeyPressed") ; Shift-Alt-r, to restart the automation test client
+HotKeySet("+!n", "HotKeyPressed") ; Shift-Alt-n, to quick skip to next test command
 HotKeySet("!{SPACE}", "HotKeyPressed") ; Alt-Space show the running CopTraxAutomation
 HotKeySet("^{SPACE}", "HotKeyPressed") ; Ctrl-Space show the running CopTraxAutomation
 
@@ -56,11 +57,10 @@ Global $commandRequest = "Request for new command."
 Global Const $mMB = "CopTrax GUI Automation Test"
 
 TCPStartup()
-;Global $ip =  TCPNameToIP("ENGR-CX456K2")	; This is the hostname of the server
-Global $ip =  TCPNameToIP("ENGCOPTRAX-GVGPSJ2")	; This is the hostname of the server
+Global $ip =  TCPNameToIP("ENGR-CX456K2")	; This is the hostname of the server
 Global $port = 16869
 Global $Socket = -1
-Global $boxID = "Unknown"
+Global $boxID = "DK123456"
 Global $CopTraxAppDir = "C:\Program Files (x86)\IncaX\CopTrax\"
 Global $configDir = $CopTraxAppDir
 Global $mapDir = @LocalAppDataDir & "\CopTraxEvidenceViewer\"
@@ -93,7 +93,7 @@ Global $restart = $testEnd
 
 If $testEnd Then
 	MsgBox($MB_OK, $mMB, "Automation test finds new update." & @CRLF & "Restarting now to complete the update.", 2)
-	;RestartAutomation()
+	RestartAutomation()
 	Exit
 EndIf
 
@@ -815,6 +815,8 @@ Func TestSettingsFunction($arg)
 			If $chunk Then
 				$chunkTime = CorrectRange(Int($chunk), 0, 60)
 				Send("{TAB}{BS 4}" & $chunkTime & "{TAB}")
+			Else
+				Send("{TAB}{TAB}")	; trying to get rid of the soft keyboard
 			EndIf
 
 			ClickCheckButton($hwnd,"Enable auto upload", False)
@@ -1428,7 +1430,6 @@ Func ListenToNewCommand()
 	Local $raw
 	Local $len
 	Local $err
-	Local $t0 = $currentTime
 
 	If $socket <= 0 Then Return False
 
@@ -1438,7 +1439,7 @@ Func ListenToNewCommand()
 		If $err <> 0 Then	; In case there is error, the connection has lost, restart the automation test
 			FileClose($fileToBeUpdate)
 			$fileToBeUpdate = 0
-			LogUpload("FAILED file update. " & $bytesCounter & " bytes unreceived.")	; let the server resend
+			LogUpload("FAILED file update. " & $bytesCounter & " bytes unreceived. End of file update in client.")	; let the server resend
 			Return False
 		EndIf
 
@@ -1451,7 +1452,7 @@ Func ListenToNewCommand()
 		If $bytesCounter < 5 Then
 			FileClose($fileToBeUpdate)
 			$fileToBeUpdate = 0
-			LogUpload("PASSED End of file update in client.")
+			LogUpload("PASSED file update. End of file update in client.")
 		EndIf
 		$commandTimer = 0	; To allow next command immediately
 		Return True
@@ -1886,6 +1887,7 @@ Func Configure($arg)
 			If IsDisplayCorrect() Then 	; checking if the display is correct
 				$count = -10	; display correct, quit the loop
 			Else
+				LogUpload("The CopTrax App is not shutdown gracefully. The process is killed instead.")
 				ProcessClose($pCopTrax)	; display is incorrect, close the CopTrax App
 				Sleep(1000)
 				$count -= 1
@@ -2084,6 +2086,10 @@ Func HotKeyPressed()
 		Case "+!s" ; Keystroke is the Shift-Alt-s hotkey, to start the CopTrax
 			MsgBox($MB_OK, $mMB, "Starting the CopTrax",2)
 			Run("c:\Program Files (x86)\IncaX\CopTrax\IncaXPCApp.exe", "c:\Program Files (x86)\IncaX\CopTrax")
+
+		Case "+!n" ; Keystroke is the Shift-Alt-n hotkey, to skip to next command quickly
+			MsgBox($MB_OK, $mMB, "Skip to next command quickly.",2)
+			$commandTimer = 0
 
 		Case "!{SPACE}", "^{SPACE}" ; Keystroke is the Alt-Space or Ctrl-Space hotkey, to show the automation testing in-progress
 			MsgBox($MB_OK, $mMB, "CopTrax Automation testing is in progress. " & $Socket ,2)

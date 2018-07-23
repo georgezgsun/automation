@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=3.5.0.65
+#AutoIt3Wrapper_Res_Fileversion=3.5.0.67
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -126,6 +126,7 @@ Global $boxID[$maxConnections + 1]	; stores the serial number of each UUT
 Global $boxIP[$maxConnections + 1]	; stores the IP address of each UUT during the automation test
 Global $batchWait[$maxConnections + 1]	; stores the batch mode of each test during the automation test. True means not to hold other box entering batch align mode
 Global $errorsFirmware[$maxConnections + 1]	; stores the errors of event logs during the automation test. If the errors exceeds 10,reboot
+Global $flagOldClient[$maxConnections + 1] ; stores the flag of old version client
 Local $timeRemains[$maxConnections + 1]	; stores the remain time estimation in seconds for each UUT
 Local $timerConnections[$maxConnections + 1]	; the TCP connection timer for each UUT;  when reaches, TCP connection to that UUT may have lost
 Local $timerSockets[$maxConnections + 1]	; timer of heartbeat for each UUT; when reaches, the server need to send a heartbeat command to that UUT
@@ -149,6 +150,7 @@ For $i = 0 To $maxConnections	; initialize the variables
 	$boxIP[$i] = ""
 	$logContent[$i] = $cheatSheet
 	$batchWait[$i] = True	; default value is true, not to hold other box entering batch align mode
+	$flagOldClient[$i] = False
 	$errorsFirmware[$i] = 0
 Next
 
@@ -214,7 +216,6 @@ Global $hTimer = TimerInit()	; global timer handle
 Global $testEnd = False
 Global $batchAligned = False
 Global $batchMode = False	; Not in batch mode until get a batch align command
-Global $flagOldClient = False
 Local $commandLeft
 Local $timeLeft
 Local $lastEndTime = 0
@@ -293,15 +294,13 @@ While Not $testEnd	; main loop that get input, display the resilts
 
 		If $filesReceived[$i] And ($time0 > $timerFileTransfer[$i]) Then
 			LogWrite($i, "Last file transfering is not completed in given time. Reset the file stransfering")
-			FileClose($filesReceived[$i])
-			$filesReceived[$i] = 0;
-			;CloseConnection($i)
+			CloseConnection($i)
 		EndIf
 
 		If $time0 > $timerConnections[$i] Then
 			$timerConnections[$i] = 0
-			LogWrite($automationLogPort, $boxID[$i] & @TAB & "Connection has lost.")
-			LogWrite($i, "(Server) Connection to server has lost.")
+			LogWrite($automationLogPort, $boxID[$i] & @TAB & "Connection has lost duo to time out.")
+			LogWrite($i, "(Server) Connection has lost duo to time out.")
 			GUICtrlSetData($nGUI[$i], "LOST")	; show interrupt message
 			$testEndTime[$i] = 0	; test ends
 			$timeRemains[$i] = 0	; test ends
@@ -344,6 +343,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 
 	$batchAligned = $batchCheck
 	If $batchAligned Then
+		$piCommandHold = False	; Let pi command go through
 		For $i = 1 To $maxConnections
 			If StringInStr($commands[$i], "batchhold") Then	; all aligned box have a batchhold command in the command queue
 				$bufferReceived[$i] = "Request for new command." & @CRLF & $bufferReceived[$i]	; artificially request next command in next round, which is batchhold
@@ -502,7 +502,7 @@ Func ParseCommand($n)
 	$testEndTime[$n] = $time0 + $duration * 1000 ; time that the test will end in milliseconds
 	$progressTest[$n] = CorrectRange(100 * (1-$commandLeft/$totalCommands[$i]), 0, 100)
 	If $filesReceived[$n] Then	; This indicates there exists file uploading, do not send new command until it ends
-		SendCommand($n, "pause 5")	; wait another 5s
+		SendCommand($n, "heartbeat")	; Write a non reply command
 		Return 	; keep the current socket close timer
 	EndIf
 
@@ -549,10 +549,10 @@ Func ParseCommand($n)
 			EndIf
 
 		Case "siren", "lightbar", "aux4", "aux5", "aux6", "lightswitch", "mic1trigger", "mic2trigger"
-			If $socketRaspberryPi1 <= 0 Then
-				$socketRaspberryPi1 = TCPConnect($ipRaspberryPi1, $portRaspberryPi)	; When RSP1 not connected, try to connect it
+			If Not $piCommandHold And $socketRaspberryPi1 <= 0 Then
+				$socketRaspberryPi1 = TCPConnect($ipRaspberryPi1, $portRaspberryPi)	; When RSP1 not connected and not in command hold mode, try to connect it
 			EndIf
-			If $socketRaspberryPi2 <= 0 Then
+			If Not $piCommandHold And $socketRaspberryPi2 <= 0 Then
 				$socketRaspberryPi2 = TCPConnect($ipRaspberryPi2, $portRaspberryPi)	; When RSP2 not connected, try to connect it
 			EndIf
 
@@ -630,13 +630,14 @@ Func ParseCommand($n)
 			Local $sourceFileName
 			LogWrite($n, "(Server) Read '" & $newCommand & " " & $fileName & "' command.")
 
+			$fileName = StringReplace($fileName, "\_", " ")
+			$fileName = StringReplace($fileName, "\!", "|")
 			If StringInStr($filename, "\") Then
 				$netFileName = StringSplit($fileName, "\")
 				$sourceFileName = $workDir & "latest\" & $netFileName[$netFileName[0]]    ; all file need to be update shall sit in \latest folder
 			Else
 				$sourceFileName = $workDir & "latest\" & $fileName
 			Endif
-			$sourceFileName = StringReplace($sourceFileName, "|", " ")
 
 			$file = FileOpen($sourceFileName,16)	; open file for read only in binary mode
 			$fileToBeSent[$n] = FileRead($file)
@@ -694,11 +695,10 @@ Func ParseCommand($n)
 		Case "batchhold"
 			If $batchAligned Then
 				LogWrite($n, "(Server) All clients aligned.")
-				$piCommandHold = False
-				SendCommand($n, "pause 10")
+				SendCommand($n, "pause 10")	; check in next 10s in case connection lost
 			Else
 				PushCommand($n, "batchhold")	; the batchhold command can only be cleared by all active clients entering batch wait mode
-				SendCommand($n, "pause 120")	; check in next 120s in case connection lost
+				SendCommand($n, "pause 600")	; check in next 10min in case connection lost
 			EndIf
 			Return
 
@@ -711,19 +711,16 @@ EndFunc
 Func LogWrite($n,$s)
 	If $n <= 0 Or $n > $maxConnections + 1 Then Return
 
-	_FileWriteLog($logFiles[$n],$s)
+	$s = @HOUR & ":" & @MIN & ":" & @SEC & @TAB & $s & @CRLF	; show the log with time stamps
+	FileWrite($logFiles[$n], $s)
 	If StringInStr($s, "error event") Then Return
-
-	$s = @HOUR & ":" & @MIN & ":" & @SEC & " " & $s & @CRLF	; show the log with time stamps
 
 	If $n = $automationLogPort Then
 		GUICtrlSetData($aLog, $s, 1)
 		Return
 	EndIf
 
-	If Not StringInStr($s, "heartbeat") Then
-		$logContent[$n] &= $s
-	EndIf
+	$logContent[$n] &= $s
 
 	If $n = $portDisplay Then
 		GUICtrlSetData($cLog, $s, 1)	; update the log display in append mode
@@ -912,10 +909,9 @@ Func GetParameter($parameters, $keyword)
 EndFunc
 
 Func ProcessReply($n)
-	Local $reply
+	Local $reply = ""
 	Local $len
 	Local $err
-	Local $newReceiving = False
 	Local $sentPattern = ""
 
 	If Not $bufferReceived[$n] And ($sockets[$n] <= 0) Then Return False
@@ -936,8 +932,8 @@ Func ProcessReply($n)
 		If $len = 0 Then Return False	; receives nothing
 
 		FileWrite($filesReceived[$n], $reply)
-		$byteCounter[$n] -= BinaryLen($reply)
-		LogWrite($n, "(Server) Received " & BinaryLen($reply) & " bytes, " & $byteCounter[$n] & " bytes remains.")
+		$byteCounter[$n] -= $len
+		LogWrite($n, "(Server) Received " & $len & " bytes, " & $byteCounter[$n] & " bytes remains.")
 
 		If $byteCounter[$n] < 5 Then
 			FileClose($filesReceived[$n])	; get and save the file
@@ -965,38 +961,33 @@ Func ProcessReply($n)
 			EndIf
 
 			$bufferReceived[$n] &= $reply	; append the receiving to the buffer
-			$newReceiving = True
 
 			If StringInStr($bufferReceived[$n], "name ") And StringInStr($bufferReceived[$n], " new ") Then
-				$flagOldClient = True
+				$flagOldClient[$n] = True
 				$bufferReceived[$n] = StringReplace($bufferReceived[$n], " new ", " ") & @CRLF & "Request for new command." & @CRLF	; backward compatible
 			EndIf
 
-			If $flagOldClient Then
+			If $flagOldClient[$n] Then
 				If StringInStr($bufferReceived[$n], "Continue Got the update command.")  Then
-					$bufferReceived[$n] &= " Send file now." & @CRLF
+					$bufferReceived[$n] &= " Send file now."
 				EndIf
 
 				If StringInStr($bufferReceived[$n], "Continue End of File")  Then
-					$bufferReceived[$n] &= @CRLF & "Request for new command." & @CRLF
+					$bufferReceived[$n] &= @CRLF & "Request for new command."
 				EndIf
 
-				If StringInStr($bufferReceived[$n], "quit") Then
-					$bufferReceived[$n] &= @CRLF
-				EndIf
+				$bufferReceived[$n] &= @CRLF
 			EndIf
 		EndIf
 	EndIf
 
 	$len = StringInStr($bufferReceived[$n], @CRLF)	; process the first whole reply end with @CRLF
-	If $len = 0 Then Return $newReceiving
+	If $len = 0 Then Return $reply <> ""
 
 	$reply = StringLeft($bufferReceived[$n], $len-1)	; get the reply without @CRLF
 	$bufferReceived[$n] = StringMid($bufferReceived[$n], $len + 2) ; refresh the buffer
-	Local $newCommand
-	Local $msg = StringSplit($reply, " ")
-	Local $readTxt
-	If StringInStr($reply, "Request for") Then
+
+	If StringInStr($reply, "Request for new ") Then
 		LogWrite($n, "")	; write an empty line as a seperator in the log file
 		ParseCommand($n)	; Get a new command and execute it
 		Return True
@@ -1007,6 +998,10 @@ Func ProcessReply($n)
 	EndIf
 
 	LogWrite($n, "(Client) " & $reply)	; write the returned results into the log file
+
+	Local $newCommand
+	Local $msg = StringSplit($reply, " ")
+	Local $readTxt
 
 	If ($msg[0] >= 5) And StringInStr($reply, "Identify ", 1) Then	; the settings reply the identify ID
 		$readTxt =  StringRegExp($reply, "([a-zA-Z]{2}[0-9]{6})", $STR_REGEXPARRAYMATCH)
@@ -1154,6 +1149,7 @@ Func StartNewTest($n, $ID, $clientVersion)
 
 	LogWrite($n, " ")
 	LogWrite($n, $splitChar)
+	LogWrite($n, " " & @MON & "/" & @MDAY & "/" & @YEAR)
 	LogWrite($n, " Automation test for CopTrax DVR box " & $ID)
 	LogWrite($n, " Current version of the test server : " & FileGetVersion ( @ScriptFullPath ) & ", of the client : " & $clientVersion)
 	GUICtrlSetData($cLog, $logContent[$n])	; display and update the log content
@@ -1279,6 +1275,7 @@ Func AcceptConnection ()
 
 	$sockets[$port] = $newSocket	;assigns that socket the incomming connection.
 	$boxIP[$port] = $IP
+	$flagOldClient[$port] = False	; assume every new box is new version until get a name request
 	Return $port
 EndFunc
 
