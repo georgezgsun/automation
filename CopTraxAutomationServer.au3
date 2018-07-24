@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=3.5.0.67
+#AutoIt3Wrapper_Res_Fileversion=3.5.0.72
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -280,7 +280,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 		EndIf
 
 		If $fileSendingAllowed[$i] Then
-			$len = TCPSend($sockets[$i], BinaryMid($fileToBeSent[$i], 1, $maxSendLength))
+			$len = TCPSend($sockets[$i], BinaryMid($fileToBeSent[$i], 1, $maxSendLength))	; send at most maxSendLength bytes each time
 			$err = @error
 			If $err Then
 				LogWrite($i, "(Server) Connection lost while sending files to client. " & BinaryLen( $fileToBeSent[$i] ) & " bytes fails to be sent.")
@@ -289,7 +289,7 @@ While Not $testEnd	; main loop that get input, display the resilts
 				LogWrite($i, "(Server) Sent " & $len & " bytes to client.")
 			EndIf
 			$fileToBeSent[$i] = BinaryMid($fileToBeSent[$i], $len + 1)
-			If Not $fileToBeSent[$i] Then $fileSendingAllowed[$i] = False
+			If Not $fileToBeSent[$i] Then $fileSendingAllowed[$i] = False	; not allow to send file since the filecotent is empty now
 		EndIf
 
 		If $filesReceived[$i] And ($time0 > $timerFileTransfer[$i]) Then
@@ -341,15 +341,15 @@ While Not $testEnd	; main loop that get input, display the resilts
 		EndIf
 	EndIf
 
-	$batchAligned = $batchCheck
-	If $batchAligned Then
-		$piCommandHold = False	; Let pi command go through
+	If $batchCheck And Not $batchAligned Then	; When first time reach Aligned only
+		LogWrite($automationLogPort, "Server" & @TAB & "All clients aligned.")
 		For $i = 1 To $maxConnections
 			If StringInStr($commands[$i], "batchhold") Then	; all aligned box have a batchhold command in the command queue
 				$bufferReceived[$i] = "Request for new command." & @CRLF & $bufferReceived[$i]	; artificially request next command in next round, which is batchhold
 			EndIf
 		Next
 	EndIf
+	$batchAligned = $batchCheck
 
 	If $tempTime <> $lastEndTime Then
 		GUICtrlSetData($nGUI[0], toHMS($lastEndTime))
@@ -607,8 +607,6 @@ Func ParseCommand($n)
 			Else
 				LogWrite($n, "(Server) There is no failure in the test so far.")
 			EndIf
-			SendCommand($n, "pause 5")
-			LogWrite($n, "(Server) Sent 'pause 5' command to client. Next command will be read in 5 seconds")
 
 		Case "synctime"
 			$arg = @YEAR & @MON & @MDAY & @HOUR & @MIN & @SEC
@@ -690,7 +688,6 @@ Func ParseCommand($n)
 					$batchMode = False
 				EndIf
 			EndIf
-			SendCommand($n, "pause 5")
 
 		Case "batchhold"
 			If $batchAligned Then
@@ -964,7 +961,7 @@ Func ProcessReply($n)
 
 			If StringInStr($bufferReceived[$n], "name ") And StringInStr($bufferReceived[$n], " new ") Then
 				$flagOldClient[$n] = True
-				$bufferReceived[$n] = StringReplace($bufferReceived[$n], " new ", " ") & @CRLF & "Request for new command." & @CRLF	; backward compatible
+				$bufferReceived[$n] = StringReplace($bufferReceived[$n], " new ", " ") & @CRLF & "Request for new command."; backward compatible
 			EndIf
 
 			If $flagOldClient[$n] Then
@@ -1021,7 +1018,7 @@ Func ProcessReply($n)
 		Return True
 	EndIf
 
-	If ($msg[1] = "file") Then	; start to upload file from client
+	If ($msg[0] >= 3) And ($msg[1] = "file") Then	; start to upload file from client
 		Local $filename = $msg[2]
 		Local $len =  Int($msg[3])
 		Local $netFileName = StringSplit($filename, "\")
@@ -1321,6 +1318,7 @@ Func SendCommand($n, $command)
 		EndIf
 
 		$piCommandHold = True	; release the pi command hold
+		$piHeartbeatTime = $time0 + $piHeartbeatInterval
 		$commandID += 1
 		If $commandID > 9 Then $commandID = 0
 		If ($socketRaspberryPi1 > 0) Then
