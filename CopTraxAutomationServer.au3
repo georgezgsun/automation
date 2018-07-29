@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=3.5.0.72
+#AutoIt3Wrapper_Res_Fileversion=3.5.0.78
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -665,6 +665,7 @@ Func ParseCommand($n)
 					LogWrite($automationLogPort, $boxID[$n] & @TAB & "Aligned.")
 					PushCommand($n, "batchhold")
 					$batchWait[$n] = True	; indicates client $n in batch wait mode now
+					SendCommand($n, "upload wait")	; make the client not to upload files during the waiting for alignment period
 				Else
 					LogWrite($n, "(Server) FAILED. In batchtest stop mode, cannot achieve align.")
 				EndIf
@@ -711,6 +712,7 @@ Func LogWrite($n,$s)
 	$s = @HOUR & ":" & @MIN & ":" & @SEC & @TAB & $s & @CRLF	; show the log with time stamps
 	FileWrite($logFiles[$n], $s)
 	If StringInStr($s, "error event") Then Return
+	$s = StringReplace($s, @TAB, " ")
 
 	If $n = $automationLogPort Then
 		GUICtrlSetData($aLog, $s, 1)
@@ -983,6 +985,7 @@ Func ProcessReply($n)
 
 	$reply = StringLeft($bufferReceived[$n], $len-1)	; get the reply without @CRLF
 	$bufferReceived[$n] = StringMid($bufferReceived[$n], $len + 2) ; refresh the buffer
+	If Not $reply Then Return True
 
 	If StringInStr($reply, "Request for new ") Then
 		LogWrite($n, "")	; write an empty line as a seperator in the log file
@@ -1043,6 +1046,12 @@ Func ProcessReply($n)
 		GUICtrlSetColor($pGUI[$n], $COLOR_RED)
 		LogWrite($automationLogPort, $boxID[$n] & @TAB & $reply)
 		LogWrite($automationLogPort, "")
+
+		If $filesReceived[$n] Then
+			FileClose($filesReceived[$n])	; close the file
+			$filesReceived[$n] = 0	;clear the flag when file transfer ends
+			LogWrite($n, "(Server) Last file update failed by client.")
+		EndIf
 	EndIf
 
 	If StringInStr($reply, "Fatal error.") Then
@@ -1103,6 +1112,7 @@ Func ProcessReply($n)
 		CloseConnection($n)
 		ClearCommands($n)
 		$timerConnections[$n] = 0
+		$totalConnection -= 1
 		Return True
 	EndIf
 
@@ -1290,7 +1300,7 @@ EndFunc
 Func SendCommand($n, $command)
 	Local $err
 	If $n > 0 Then
-		TCPSend($sockets[$n], $command)
+		TCPSend($sockets[$n], $command & " " & @CRLF)
 		$err = @error
 		If $err Then
 			LogWrite($n, "(Server) Cannot send " & $command & " to client with connection error : " & $err )

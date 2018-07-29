@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.5.0.10)
+#pragma compile(FileVersion, 3.5.0.13)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -73,6 +73,7 @@ Global $releaseSet = "Unset"
 Global $title = "CopTrax II is not up yet"
 Global $userName = ""
 Global $sentPattern = ""
+Global $bufferReceiving = ""
 
 Global $filesToBeSent = ""
 Global $uploadMode = "idle"
@@ -187,24 +188,26 @@ Local $path1 = GetVideoFilePath()
 Local $path2 = $path1 & "\cam2"
 Global $videoFilesCam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4")
 Global $videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi")
+$path0 = "C:\CopTrax-Backup"
+Global $videoInBackup = GetVideoFileNum($path0, "*.mp4") + GetVideoFileNum($path0, "*.avi") + GetVideoFileNum($path0, "*.wmv")
 
-Global $currentTime = 2000
-Global $hTimer = TimerInit()	; Begin the timer and store the handler
-Global $heartbeatTimer = 1000 * $HEARTBEATINSECONDS	; Set the first time out
-Global $commandTimer = 2 * 1000	; request the first command in 2s
 LogUpload("name " & $boxID & " " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)	; new start of automation test
 
-$currentTime = TimerDiff($hTimer)
-$heartbeatTimer += $currentTime	; Set the first time out
-$commandTimer += $currentTime	; request the first command in 2s
+Global $hTimer = TimerInit()	; Begin the timer and store the handler
+Global $currentTime = 0
+Global $heartbeatTimer = $currentTime + 1000 * $HEARTBEATINSECONDS	; Set the first time out
+Global $commandTimer = $currentTime	+ 2*1000; request the first command in 2s
 
 While Not $testEnd
 	$currentTime = TimerDiff($hTimer)
 	If $mCopTrax = 0 Then
 		$mCopTrax = WinActivate($titleCopTraxMain)
-		If $mCopTrax <> 0 Then
+		If $mCopTrax Then
 			$userName = GetUserName()
+		Else
+			MsgBox($MB_OK, $mMB, "CopTrax II is not up yet.", 2)
 		EndIf
+		ContinueLoop
 	EndIf
 
 	If $currentTime > $heartbeatTimer Then
@@ -223,7 +226,7 @@ While Not $testEnd
 			$fileContent = ""
 			TCPCloseSocket($Socket)
 			$Socket = -1
-			LogUpload("FAILED file upload. " & $bytesCounter & " bytes unreceived.")	; let the server resend
+			LogUpload("FAILED file upload.")	; let the server resend
 		EndIf
 
 		LogUpload($commandRequest)
@@ -233,7 +236,7 @@ While Not $testEnd
 
 	ListenToNewCommand()
 
-	If ($currentTime + 50 * 1000 < $commandTimer) And ($uploadMode = "idle") And Not $fileContent Then
+	If ($currentTime + 50 * 1000 < $commandTimer) And ($uploadMode = "idle") And Not $fileContent And Not $fileToBeUpdate Then
 		UploadFile("now")
 		$uploadMode = "idle"
 	EndIf
@@ -666,7 +669,6 @@ Func TestSettingsFunction($arg)
 	Local $keyboard = GetParameter($arg, "keyboard")
 
 	MouseClick("",960, 460)
-	LogUpload("Start settings function testing.")
 
 	If GetHandleWindowWait($titleLogin) Then
 		Send("135799{TAB}{ENTER}")	; type the administator password
@@ -706,6 +708,7 @@ Func TestSettingsFunction($arg)
 				Case "120"
 					Send("+{Tab}91{ENTER}")
 			EndSwitch
+			If $pre Then LogUpload("The pre-event is set to " & $pre & ".")
 
 			If StringInStr($cam2, "able") Then
 				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "2")	; select Camera 2
@@ -722,6 +725,7 @@ Func TestSettingsFunction($arg)
 					ClickCheckButton($hWnd, "Enable secondary camera", False)
 					ClickCheckButton($hWnd, "Always record both cameras", False)
 				EndIf
+				LogUpload("The rear camera 2 is set to " & $cam2 & ".")
 			EndIf
 
 			If StringInStr($cam3, "able") Then
@@ -737,6 +741,7 @@ Func TestSettingsFunction($arg)
 				If StringInStr($cam3, "disable") Then	; compatible with both disable and disabled
 					ClickCheckButton($hWnd, "Enable third camera", False)
 				EndIf
+				LogUpload("The rear camera 3 is set to " & $cam3 & ".")
 			EndIf
 		EndIf
 
@@ -807,7 +812,9 @@ Func TestSettingsFunction($arg)
 
 		If StringInStr($txt, "Baud", 1) Then	; GPS & Radar
 			ControlClick($hWnd, "", "Test")
-			ClickCheckButton($hWnd, "Enable Radar Detection")	; check Enable Radar Detection
+			If ClickCheckButton($hWnd, "Enable Radar Detection") Then	; check Enable Radar Detection
+				LogUpload("Enable the Radar Detection")
+			EndIf
 			Sleep(1000)
 		EndIf
 
@@ -815,22 +822,27 @@ Func TestSettingsFunction($arg)
 			If $chunk Then
 				$chunkTime = CorrectRange(Int($chunk), 0, 60)
 				Send("{TAB}{BS 4}" & $chunkTime & "{TAB}")
+				LogUpload("Set the chunk length to " & $chunk & " minutes.")
 			Else
 				Send("{TAB}{TAB}")	; trying to get rid of the soft keyboard
 			EndIf
 
-			ClickCheckButton($hwnd,"Enable auto upload", False)
+			If ClickCheckButton($hwnd,"Enable auto upload", False) Then
+				LogUpload("Enable auto upload")
+			EndIf
 			Sleep(1000)
 		EndIf
 
 		If StringInStr($txt, "Welcome", 1) Then	; Misc
-			ClickCheckButton($hwnd,"Enable Welcome App")
-
-			If StringInStr($keyboard, "enable") Then	; compatible with both enable and enabled
-				ClickCheckButton($hwnd,"Enable on-screen keyboard")
+			If ClickCheckButton($hwnd,"Enable Welcome App") Then
+				LogUpload("Enable Welcome App")
 			EndIf
-			If StringInStr($keyboard, "disable") Then	; compatible with both disable and disabled
-				ClickCheckButton($hwnd,"Enable on-screen keyboard", False)
+
+			If StringInStr($keyboard, "enable") And ClickCheckButton($hwnd,"Enable on-screen keyboard") Then
+				logupload("Enable on-screen keyboard")
+			EndIf
+			If StringInStr($keyboard, "disable") And ClickCheckButton($hwnd,"Enable on-screen keyboard", False) Then
+				logupload("Disable on-screen keyboard")
 			EndIf
 		EndIf
 
@@ -855,7 +867,7 @@ Func ClickCheckButton($hWnd, $button, $check = True)
 	Local $aPos = ControlGetPos($hWnd, "", $button)
 	If @error Then
 		LogUpload("Unable to find the button named " & $button)
-		Return
+		Return False
 	EndIf
 
 	Local $x0 = $aPos[0] + 8
@@ -866,6 +878,7 @@ Func ClickCheckButton($hWnd, $button, $check = True)
 		ControlClick($hWnd, "", $button)
 		LogUpload("Pixel color at (" & $x0 & "," & $y0 & ") is " & $pColor & ", so click on button " & $button)
 	EndIf
+	Return True
 EndFunc
 
 Func ReadyForTest()
@@ -1190,7 +1203,7 @@ Func LogUpload($s)
 		RestartAutomation()
 		Return
 	Else
-		$heartbeatTimer = $currentTime + 1000 * $HEARTBEATINSECONDS	; reset the timeout timer
+		$heartbeatTimer = TimerDiff($hTimer) + 1000 * $HEARTBEATINSECONDS	; reset the timeout timer based on current moment
 	EndIf
 EndFunc
 
@@ -1453,8 +1466,8 @@ Func ListenToNewCommand()
 			FileClose($fileToBeUpdate)
 			$fileToBeUpdate = 0
 			LogUpload("PASSED file update. End of file update in client.")
+			$commandTimer = 0	; To allow next command immediately
 		EndIf
-		$commandTimer = 0	; To allow next command immediately
 		Return True
 	EndIf
 
@@ -1468,6 +1481,13 @@ Func ListenToNewCommand()
 	If Not $raw Then
 		Return False	; reading nothing
 	EndIf
+	$bufferReceiving &= $raw
+
+	$len = StringInStr($bufferReceiving, @CRLF)
+	If Not $len Then Return $raw <> ""
+
+	$raw = StringLeft($bufferReceiving, $len-1)
+	$bufferReceiving = StringMid($bufferReceiving, $len + 2)
 
 	Local $Recv = StringSplit($raw, " ")
 	Switch StringLower($Recv[1])
@@ -1475,7 +1495,7 @@ Func ListenToNewCommand()
 			MsgBox($MB_OK, $mMB, "Testing start a record function.",2)
 			If ($Recv[0] > 1) And StartRecord(True) Then
 				LogUpload("PASSED the test on start record function.")
-				$commandTimer = Int ($Recv[2]) * 1000 + $currentTime
+				$commandTimer += Int ($Recv[2]) * 1000 - 10 * 1000	; make the next command exactly xxx seconds later
 			Else
 				LogUpload("FAILED to start a record.")
 			EndIf
@@ -1484,7 +1504,7 @@ Func ListenToNewCommand()
 			MsgBox($MB_OK, $mMB, "Testing start a record by trigger function.",2)
 			If ($Recv[0] > 1) And StartRecord(False) Then
 				LogUpload("PASSED the test on trigger a record function.")
-				$commandTimer = Int ($Recv[2]) * 1000 + $currentTime
+				$commandTimer += Int ($Recv[2]) * 1000 - 10 * 1000	; make the next command exactly xxx seconds later
 			Else
 				LogUpload("FAILED to trigger a record.")
 			EndIf
@@ -1509,13 +1529,13 @@ Func ListenToNewCommand()
 					LogUpload("FAILED to start a record by trigger Light switch button.")
 				EndIf
 			EndIf
-			If $Recv[0] > 1 Then $commandTimer = Int ($Recv[2]) * 1000 + $currentTime
+			If $Recv[0] > 1 Then $commandTimer += Int ($Recv[2]) * 1000 - 10 * 1000	; make the next command exactly xxx seconds later
 
 		Case "endrecord" ; Get a stop record command, going to end the record function
 			MsgBox($MB_OK, $mMB, "Testing stop the record function.",2)
 			If ($Recv[0] > 1) And EndRecording(True) Then
 				LogUpload("PASSED the test on end record function.")
-				$commandTimer = Int ($Recv[2]) * 1000 + $currentTime
+				$commandTimer += Int ($Recv[2]) * 1000 - 10 * 1000	; make the next command exactly xxx seconds later
 			Else
 				LogUpload("FAILED to end record.")
 			EndIf
@@ -1523,7 +1543,7 @@ Func ListenToNewCommand()
 		Case "pause"
 			MsgBox($MB_OK, $mMB, "Testing pause for a while function.",2)
 			If $Recv[0] > 1 Then
-				$commandTimer = Int ($Recv[2]) * 1000 + $currentTime
+				$commandTimer += Int ($Recv[2]) * 1000 - 10 * 1000	; make the next command exactly xxx seconds later
 				LogUpload("PASSED next command in " & $Recv[2] & "s.")
 			Else
 				LogUpload("FAILED no timer is specified in command.")
@@ -1600,23 +1620,23 @@ Func ListenToNewCommand()
 
 		Case "upload"	; upload the specified files to server, all, idle, now, wait have special meaning
 			LogUpload("Test the file upload function.")
-			MsgBox($MB_OK, $mMB, "Testing file upload function",2)
 			If $Recv[0] >= 2 Then
-				LogUpload("PASSED " & $Recv[2] & " is put into the upload queue.")
+				LogUpload("PASSED " & $raw)
 				UploadFile($Recv[2])
 			Else
 				LogUpload("FAILED missing parameter to set the file upload.")
 			EndIf
+			MsgBox($MB_OK, $mMB, "Testing file upload function",2)
 
 		Case "update"	; update the specified files on client with the one on server
-			LogUpload("Test the file " & $raw & " function.")
-			MsgBox($MB_OK, $mMB, "Testing file update function",2)
+			$commandTimer = TimerDiff($hTimer) + 60 * 1000	; give 60s before request for new command
 			If ($Recv[0] >= 3) And UpdateFile($Recv[2], Int($Recv[3])) Then
-				LogUpload("Got the update command. Ready for to receive. Send file now.")
+				LogUpload("Ready for receiving " & $recv[3] & " bytes. Send file now.")
 			Else
-				LogUpload("FAILED to update file.")
+				LogUpload("FAILED to " & $raw)
 			EndIf
-			$commandTimer = $currentTime + 60 * 1000	; give 60s before request for new command
+			MsgBox($MB_OK, $mMB, "Testing file update function",2)
+
 
 		Case "synctime"	; sync the client's time and date with the server
 			If ($Recv[0] >= 2) And SyncDateTime($Recv[2]) Then
@@ -1651,7 +1671,7 @@ Func ListenToNewCommand()
 			LogUpload("PASSED End of file transfer of " & PopFile(True) & " in pattern " & $sentPattern) ; pop the previous file out of the stack when receives eof
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 			If $uploadMode = "all" Then
-				UploadFile("all")	; prepare for the next file update
+				UploadFile("all")	; prepare for the next file upload
 			Else
 				$fileContent = ""	; clear the flag
 			EndIf
@@ -1747,6 +1767,7 @@ Func ListenToNewCommand()
 			Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')	; Disable the welcome screen
 			Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
 			LogUpload("quit Going to reboot the box. Welcome Screen is turned OFF. And the automation is turned ON.")
+			Sleep(3000)
 			TCPShutdown()
 			Shutdown(2+4)	; force the window to reboot
 			Exit
@@ -1774,7 +1795,7 @@ Func Cleanup()
 	$path = $path0 & "\cam2"
 	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
 	$path = $path0 & "\photo"
-	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt." & GetVideoFileNum($path, "*.photo") & "photo, " & GetVideoFileNum($path, "*.trax") & "trax.")
+	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt, " & GetVideoFileNum($path, "*.photo") & "photo, " & GetVideoFileNum($path, "*.trax") & "trax.")
 
 	$path0 = StringReplace($path0, "auto1", "auto2")
 	$path = $path0
@@ -1782,7 +1803,7 @@ Func Cleanup()
 	$path = $path0 & "\cam2"
 	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
 	$path = $path0 & "\photo"
-	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt." & GetVideoFileNum($path, "*.photo") & "photo, " & GetVideoFileNum($path, "*.trax") & "trax.")
+	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt, " & GetVideoFileNum($path, "*.photo") & "photo, " & GetVideoFileNum($path, "*.trax") & "trax.")
 
 	For $i = 1 To $dArray[0]
 		If FileExists( $dArray[$i] & "\zzCopTrax24Key.txt") Then
@@ -1801,8 +1822,8 @@ Func Cleanup()
 	EndIf
 
 	$path = "C:\CopTrax-Backup"
-	$numVideo = GetVideoFileNum($path, "*.mp4") + GetVideoFileNum($path, "*.avi") + GetVideoFileNum($path, "*.wmv")
-	LogUpload ($path & " = " & $numVideo )
+	$numVideo = GetVideoFileNum($path, "*.mp4") + GetVideoFileNum($path, "*.avi") + GetVideoFileNum($path, "*.wmv") - $videoInBackup
+	LogUpload ($path & " new added videos = " & $numVideo & ", while number of original video files is " & $videoInBackup)
 	If $numVideo Then
 		LogUpload("FAILED The box may suffered video file encoding problems, for " & $path & " is not empty. Not to cleanup at this moment.")
 		Return True
@@ -1994,14 +2015,13 @@ Func SyncTimeZone($tmz)
 	RunWait('tzutil /s "' & $tmz & '"', "", @SW_HIDE)
 	Local $s = _Date_Time_GetTimeZoneInformation()
 	LogUpload("Now current time zone is " & $s[2])
-	Return $s[2] = $tmz
+	Return $tmz = $s[2] & " "
 EndFunc
 
 Func UploadFile($arg)
 	Switch StringLower($arg)
 		Case "all"
 			$uploadMode = "all"
-			$commandTimer = $currentTime + 60 * 1000 ; give 60s uploading time
 		Case "idle"
 			$uploadMode = "idle"
 		Case "wait"
@@ -2017,11 +2037,11 @@ Func UploadFile($arg)
 		Return False
 	EndIf
 
+	$commandTimer = 0	;  allow the request command immediately in case no valid file for upload
 	Local $filename = PopFile(False)	; not pop the file until it is received by server
 	If $filename = "" Then	; in case there is no file in the file queue
 		If $uploadMode = "all" Then	; in case the upload is all,
 			$uploadMode = "idle"	; change the upload mode to idle
-			$commandTimer = 0	;  allow the request command immediately
 		EndIf
 		Return False
 	EndIf
@@ -2034,6 +2054,7 @@ Func UploadFile($arg)
 		Return False
 	EndIf
 
+	$commandTimer = TimerDiff($hTimer) + 60 * 1000 ; give 60s uploading time
 	$fileContent = FileRead($file)
 	FileClose($file)
 	LogUpload("file " & $filename & " " & BinaryLen($fileContent))
@@ -2059,7 +2080,7 @@ Func UpdateFile($filename, $filesize)
 	$filename = StringReplace($filename, "\_", " ")
 	$fileToBeUpdate = FileOpen($filename, 16+8+2)	; binary overwrite and force create directory
 	$bytesCounter = $filesize
-	Return True
+	Return $fileToBeUpdate
 EndFunc
 
 Func HotKeyPressed()
