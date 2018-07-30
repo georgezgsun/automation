@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.5.0.13)
+#pragma compile(FileVersion, 3.5.0.16)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -191,13 +191,8 @@ Global $videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($pat
 $path0 = "C:\CopTrax-Backup"
 Global $videoInBackup = GetVideoFileNum($path0, "*.mp4") + GetVideoFileNum($path0, "*.avi") + GetVideoFileNum($path0, "*.wmv")
 
-LogUpload("name " & $boxID & " " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight)	; new start of automation test
-
-Global $hTimer = TimerInit()	; Begin the timer and store the handler
-Global $currentTime = 0
-Global $heartbeatTimer = $currentTime + 1000 * $HEARTBEATINSECONDS	; Set the first time out
-Global $commandTimer = $currentTime	+ 2*1000; request the first command in 2s
-
+LogUpload("name " & $boxID & " " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight & " " & $videoInBackup)	; new start of automation test
+$commandTimer += TimerDiff($hTimer) ; request the first command in 2s
 While Not $testEnd
 	$currentTime = TimerDiff($hTimer)
 	If $mCopTrax = 0 Then
@@ -205,7 +200,7 @@ While Not $testEnd
 		If $mCopTrax Then
 			$userName = GetUserName()
 		Else
-			MsgBox($MB_OK, $mMB, "CopTrax II is not up yet.", 2)
+			MsgBox($MB_OK, $mMB, "CopTrax II is down.", 2)
 		EndIf
 		ContinueLoop
 	EndIf
@@ -231,7 +226,6 @@ While Not $testEnd
 
 		LogUpload($commandRequest)
 		$commandTimer = $currentTime + 10 * 1000	; send another new request 10s later if not get new command
-		$heartbeatTimer = $currentTime + 1000 * $HEARTBEATINSECONDS
 	EndIf
 
 	ListenToNewCommand()
@@ -1478,10 +1472,7 @@ Func ListenToNewCommand()
 		$Socket = -1
 		Return False
 	EndIf
-	If Not $raw Then
-		Return False	; reading nothing
-	EndIf
-	$bufferReceiving &= $raw
+	If $raw Then $bufferReceiving &= $raw
 
 	$len = StringInStr($bufferReceiving, @CRLF)
 	If Not $len Then Return $raw <> ""
@@ -1493,18 +1484,19 @@ Func ListenToNewCommand()
 	Switch StringLower($Recv[1])
 		Case "startrecord" ; get a stop command, going to stop testing and quit
 			MsgBox($MB_OK, $mMB, "Testing start a record function.",2)
-			If ($Recv[0] > 1) And StartRecord(True) Then
+			If $Recv[0] > 1 Then $commandTimer += Int ($Recv[2]) * 1000 - 10 * 1000	; make the next command exactly xxx seconds later
+			If StartRecord(True) Then
 				LogUpload("PASSED the test on start record function.")
-				$commandTimer += Int ($Recv[2]) * 1000 - 10 * 1000	; make the next command exactly xxx seconds later
 			Else
 				LogUpload("FAILED to start a record.")
 			EndIf
+			LogUpload("Pause till " & Int($Recv[2]) & "s timer due before sending next command request.")
 
 		Case "trigger" ; get a trigger command, going to test the trigger
 			MsgBox($MB_OK, $mMB, "Testing start a record by trigger function.",2)
-			If ($Recv[0] > 1) And StartRecord(False) Then
+			If $Recv[0] > 1 Then $commandTimer += Int ($Recv[2]) * 1000 - 10 * 1000	; make the next command exactly xxx seconds later
+			If StartRecord(False) Then
 				LogUpload("PASSED the test on trigger a record function.")
-				$commandTimer += Int ($Recv[2]) * 1000 - 10 * 1000	; make the next command exactly xxx seconds later
 			Else
 				LogUpload("FAILED to trigger a record.")
 			EndIf
@@ -1533,12 +1525,13 @@ Func ListenToNewCommand()
 
 		Case "endrecord" ; Get a stop record command, going to end the record function
 			MsgBox($MB_OK, $mMB, "Testing stop the record function.",2)
-			If ($Recv[0] > 1) And EndRecording(True) Then
+			If $Recv[0] > 1 Then $commandTimer += Int ($Recv[2]) * 1000 - 10 * 1000	; make the next command exactly xxx seconds later
+			If EndRecording(True) Then
 				LogUpload("PASSED the test on end record function.")
-				$commandTimer += Int ($Recv[2]) * 1000 - 10 * 1000	; make the next command exactly xxx seconds later
 			Else
 				LogUpload("FAILED to end record.")
 			EndIf
+			LogUpload("Pause till " & Int($Recv[2]) & "s timer due before sending next command request.")
 
 		Case "pause"
 			MsgBox($MB_OK, $mMB, "Testing pause for a while function.",2)
@@ -2022,6 +2015,7 @@ Func UploadFile($arg)
 	Switch StringLower($arg)
 		Case "all"
 			$uploadMode = "all"
+			$commandTimer += 50 * 1000 ; give 60s uploading time
 		Case "idle"
 			$uploadMode = "idle"
 		Case "wait"
@@ -2037,11 +2031,11 @@ Func UploadFile($arg)
 		Return False
 	EndIf
 
-	$commandTimer = 0	;  allow the request command immediately in case no valid file for upload
 	Local $filename = PopFile(False)	; not pop the file until it is received by server
 	If $filename = "" Then	; in case there is no file in the file queue
 		If $uploadMode = "all" Then	; in case the upload is all,
 			$uploadMode = "idle"	; change the upload mode to idle
+			$commandTimer = 0	;  allow the request command immediately in case no more file for upload in all mode
 		EndIf
 		Return False
 	EndIf
@@ -2054,7 +2048,6 @@ Func UploadFile($arg)
 		Return False
 	EndIf
 
-	$commandTimer = TimerDiff($hTimer) + 60 * 1000 ; give 60s uploading time
 	$fileContent = FileRead($file)
 	FileClose($file)
 	LogUpload("file " & $filename & " " & BinaryLen($fileContent))

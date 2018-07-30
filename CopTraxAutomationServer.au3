@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=3.5.0.78
+#AutoIt3Wrapper_Res_Fileversion=3.5.0.79
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -665,23 +665,26 @@ Func ParseCommand($n)
 					LogWrite($automationLogPort, $boxID[$n] & @TAB & "Aligned.")
 					PushCommand($n, "batchhold")
 					$batchWait[$n] = True	; indicates client $n in batch wait mode now
-					SendCommand($n, "upload wait")	; make the client not to upload files during the waiting for alignment period
 				Else
 					LogWrite($n, "(Server) FAILED. In batchtest stop mode, cannot achieve align.")
 				EndIf
 			EndIf
 
 			If $arg = "start" Then
-				LogWrite($n, "(Server) Start batch test mode, hold other boxes from entering trigger test until all box aligned .")
+				LogWrite($n, "(Server) Start batch test mode, hold other boxes from entering trigger test until all box aligned.")
 				LogWrite($automationLogPort, $boxID[$n] & @TAB & "Enter batch test mode.")
 				$batchWait[$n] = False
 				$batchMode = True
+				SendCommand($n, "upload wait")	; make the client not to upload files during the waiting for alignment period
+				LogWrite($n, "Set the upload mode to 'wait' to avoid file uploading while waiting for alignment.")
 			EndIf
 
 			If $arg = "stop" Then
 				LogWrite($n, "(Server) Enter stop batch test mode, disabled all other later boxes from achieving align mode.")
 				$batchWait[$n] = False
 				$batchAligned = False
+				SendCommand($n, "upload idle")	; make the client not to upload files during the waiting for alignment period
+				LogWrite($n, "Set the upload mode back to 'idle' to allow file uploading while waiting.")
 
 				If $batchMode Then
 					SendCommand(0, "h0")
@@ -693,7 +696,7 @@ Func ParseCommand($n)
 		Case "batchhold"
 			If $batchAligned Then
 				LogWrite($n, "(Server) All clients aligned.")
-				SendCommand($n, "pause 10")	; check in next 10s in case connection lost
+				SendCommand($n, "pause 10")	; all aligned box will get this command no matter what the previouse pause mode they are in
 			Else
 				PushCommand($n, "batchhold")	; the batchhold command can only be cleared by all active clients entering batch wait mode
 				SendCommand($n, "pause 600")	; check in next 10min in case connection lost
@@ -1271,12 +1274,11 @@ Func AcceptConnection ()
 			EndIf
 		EndIf
 	Next
-	$port = ($port0 > $port) ? $port0 : $port
+	If $port0 > $port Then $port = $port0
 
 	If $boxIP[$port] <> $IP Then
 		GUICtrlSetData($bGUI[$port], "new box")	; update the text on the button
 		ClearCommands($port)
-		$bufferReceived[$port] = ""	; clear the receiving buffer
 		$logContent[$port] = ""	; clear the cheat sheet reading and previous content
 	EndIf
 
