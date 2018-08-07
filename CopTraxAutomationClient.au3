@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.5.0.16)
+#pragma compile(FileVersion, 3.5.0.17)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -57,7 +57,7 @@ Global $commandRequest = "Request for new command."
 Global Const $mMB = "CopTrax GUI Automation Test"
 
 TCPStartup()
-Global $ip =  TCPNameToIP("ENGR-CX456K2")	; This is the hostname of the server
+Global $ip =  "ENGR-CX456K2"	; This is the hostname of the server
 Global $port = 16869
 Global $Socket = -1
 Global $boxID = "DK123456"
@@ -117,6 +117,18 @@ If WinExists("", "Open CopTrax") Then	; In case there running the welcome screen
 	Exit
 EndIf
 
+Global $currentTime = 2000
+Global $hTimer = TimerInit()	; Begin the timer and store the handler
+Global $heartbeatTimer = 1000 * $HEARTBEATINSECONDS	; Set the first time out
+Global $commandTimer = 2 * 1000	; request the first command in 2s
+
+$ip = TCPNameToIP($ip)
+If Not $ip Then
+	MsgBox($MB_OK, $mMB, "Please check the Ethernet or Wi-Fi connection of this DVR box.")
+	RestartAutomation()
+	Exit
+EndIf
+
 $Socket = TCPConnect($ip, $port)
 Do	; Try to confirm the running of CopTrax App and the network connection to server before running automation
 	If Not ProcessExists($pCopTrax) Then
@@ -135,20 +147,16 @@ MsgBox($MB_OK, $mMB, "Found CopTrax App running. Connected to server at " & $ip 
 If WinExists($titleAccount) Then
 	MsgBox($MB_OK, $mMB, "First time run. Try to create a temporal acount.", 2)
 	LogUpload("First time run. Try to create a temporal acount profile.")
+	LogUpload("Pixels are of color " & PixelGetColor(925, 120) & ", " & PixelGetColor(1000, 508) & ", and " & PixelGetColor(240, 550) & ".")
 	WinActivate($titleAccount)
 
 	If Not CreateNewAccount("auto1", "coptrax") Then
-		MsgBox($MB_OK, $mMB, "Something wrong! Have to reboot the box now.", 5)
 		LogUpload("Something wrong! Have to reboot the box now.")
+		MsgBox($MB_OK, $mMB, "Something wrong! Have to reboot the box now.", 5)
 		Shutdown(2+4)	; force the window to reboot
 		Exit
 	EndIf
 EndIf
-
-Global $currentTime = 2000
-Global $hTimer = TimerInit()	; Begin the timer and store the handler
-Global $heartbeatTimer = 1000 * $HEARTBEATINSECONDS	; Set the first time out
-Global $commandTimer = 2 * 1000	; request the first command in 2s
 
 While $mCopTrax = 0
 	$mCopTrax = WinActivate($titleCopTraxMain)
@@ -157,6 +165,7 @@ While $mCopTrax = 0
 		ProcessClose($pCopTrax)
 		Sleep(1000)
 		RunCopTrax()
+		ContinueLoop
 	EndIf
 
 	If $mCopTrax Then
@@ -175,11 +184,18 @@ WEnd
 Local $count = 3
 While Not StringRegExp($boxID, "[A-Za-z]{2}[0-9]{6}") And ($count > 0)	; try to get the serial number before the start of automation
 	MsgBox($MB_OK, $mMB, "Now reading Serial Number from the box.", 2)
-	TestSettingsFunction("NULL")
+	If Not TestSettingsFunction("NULL") Then
+		ProcessClose($pCopTrax)	; restart the CopTrax App in case cannot read serial number
+		Sleep(1000)
+		RunCopTrax()
+		Sleep(1000)
+	EndIf
 	$count -= 1
 WEnd
 If $count <= 0 Then
-	MsgBox($MB_OK, $mMB, "Cannot read the serial number of the box! Have to quit the automation test now.", 5)
+	MsgBox($MB_OK, $mMB, "Cannot read the serial number of the box! Have to reboot the box now.", 5)
+	logupload("Cannot read the serial number of the box! Have to reboot the box now.")
+	Shutdown(2+4)	; force the window to reboot
 	Exit
 EndIf
 
@@ -193,14 +209,22 @@ Global $videoInBackup = GetVideoFileNum($path0, "*.mp4") + GetVideoFileNum($path
 
 LogUpload("name " & $boxID & " " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight & " " & $videoInBackup)	; new start of automation test
 $commandTimer += TimerDiff($hTimer) ; request the first command in 2s
+Local $connectionTimer = $commandTimer + 10 * 1000	;
 While Not $testEnd
 	$currentTime = TimerDiff($hTimer)
+	If $currentTime > $connectionTimer Then
+		$TestEnd = True
+		$restart = True
+		ExitLoop
+	EndIf
+
 	If $mCopTrax = 0 Then
 		$mCopTrax = WinActivate($titleCopTraxMain)
 		If $mCopTrax Then
 			$userName = GetUserName()
 		Else
 			MsgBox($MB_OK, $mMB, "CopTrax II is down.", 2)
+			logupload("CopTrax II is down.")
 		EndIf
 		ContinueLoop
 	EndIf
@@ -228,7 +252,7 @@ While Not $testEnd
 		$commandTimer = $currentTime + 10 * 1000	; send another new request 10s later if not get new command
 	EndIf
 
-	ListenToNewCommand()
+	If ListenToNewCommand() Then $connectionTimer = $currentTime + 75 * 1000
 
 	If ($currentTime + 50 * 1000 < $commandTimer) And ($uploadMode = "idle") And Not $fileContent And Not $fileToBeUpdate Then
 		UploadFile("now")
@@ -702,7 +726,7 @@ Func TestSettingsFunction($arg)
 				Case "120"
 					Send("+{Tab}91{ENTER}")
 			EndSwitch
-			If $pre Then LogUpload("The pre-event is set to " & $pre & ".")
+			If $pre Then LogUpload("The pre-event is set to " & $pre & "s.")
 
 			If StringInStr($cam2, "able") Then
 				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "2")	; select Camera 2
@@ -1197,7 +1221,7 @@ Func LogUpload($s)
 		RestartAutomation()
 		Return
 	Else
-		$heartbeatTimer = TimerDiff($hTimer) + 1000 * $HEARTBEATINSECONDS	; reset the timeout timer based on current moment
+		$heartbeatTimer = TimerDiff($hTimer) + 1000 * $HEARTBEATINSECONDS - 2000	; reset the timeout timer based on current moment
 	EndIf
 EndFunc
 
@@ -2160,7 +2184,7 @@ Func ReadConfig()
 		If $aLine = "" Then ContinueLoop
 
 		$aTxt = GetParameter($aLine, "ip")	; read the server IP address, default=10.0.5.211
-		If $aTxt Then $ip = TCPNameToIP($aTxt)
+		If $aTxt Then $ip = $aTxt
 		$aTxt = GetParameter($aLine, "port")	; read the server port, default = 16869
 		If $aTxt Then $port = CorrectRange(Int($aTxt), 10000, 65000)
 		$aTxt = GetParameter($aLine, "name")	; read the box serial number, default = Unknown
