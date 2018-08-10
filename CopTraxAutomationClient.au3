@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.5.0.17)
+#pragma compile(FileVersion, 3.5.0.18)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -81,7 +81,7 @@ Global $fileContent = ""
 Global $bytesCounter = 0
 Global $workDir = @ScriptDir & "\"
 Global $configFile = $workDir & "client.cfg"
-Global $logFile = FileOpen( $workDir & "local.log", 1+8)
+Global $logFile = FileOpen( "C:\Users\coptraxadmin\Desktop\Utilities\AutomationTestFAILED.txt", $FO_APPEND )
 ReadConfig()
 Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')	; Delete the scheduler task for Welcome Screen
 Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
@@ -124,7 +124,7 @@ Global $commandTimer = 2 * 1000	; request the first command in 2s
 
 $ip = TCPNameToIP($ip)
 If Not $ip Then
-	MsgBox($MB_OK, $mMB, "Please check the Ethernet or Wi-Fi connection of this DVR box.")
+	MsgBox($MB_OK, $mMB, "Please check the Ethernet or Wi-Fi connection of this DVR box.", 15)
 	RestartAutomation()
 	Exit
 EndIf
@@ -1193,10 +1193,11 @@ Func LogUpload($s)
 	Local $rst
 	Local $err = 0
 	Local $count = 5	; trying to send at most 5 times
-	$s &= @CRLF	; add CR and LF at the end of each reply
-	If StringInStr($s, "FAILED", 1) = 1 Then
-		$s &= "Captured failure screen file " & TakeScreenCapture($mCopTrax) & ". It is now on the way sending to server." & @CRLF
+	If Stringleft($s, 6) = "FAILED" Then
+		AppendTestResult("The automation test " & $s)
+		$s &= @CRLF & "Captured failure screen file " & TakeScreenCapture($mCopTrax) & ". It is now on the way sending to server."
 	EndIf
+	$s &= @CRLF	; add CR and LF at the end of each reply
 
 	Do
 		If $Socket <= 0 Then
@@ -1722,6 +1723,7 @@ Func ListenToNewCommand()
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "quit", "endtest", "quittest"	; let the client to quit the current automation test
+			AppendTestResult("The Automation test is interupt.")
 			LogUpload("quit Got " & $raw & " command. The test will stop.")
 			$testEnd = True	;	Stop testing marker
 			$restart = False
@@ -1781,6 +1783,7 @@ Func ListenToNewCommand()
 			Cleanup()
 
 		Case "reboot"	; let the client to reboot
+			AppendTestResult("The DVR is reboot during the automation test.")
 			Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')	; Disable the welcome screen
 			Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
 			LogUpload("quit Going to reboot the box. Welcome Screen is turned OFF. And the automation is turned ON.")
@@ -1801,6 +1804,8 @@ Func Cleanup()
 	Local $file = FileOpen($filename, $FO_OVERWRITE );
 	FileWriteLine($file, "Echo Welcome to use CopTrax II")
 	FileClose($file)
+	$testEnd = True
+	$restart = False
 
 	If Not QuitCopTrax() Then ProcessClose($pCopTrax)	; try to stop the CopTrax gracefully
 
@@ -1869,13 +1874,28 @@ Func Cleanup()
 	FileDelete ($filename & "*.mp4")
 	LogUpload("SD card:        " & GetVideoFileNum($filename, "*.mp4") & " mp4")
 
+	AppendTestResult("Automation tests PASSED.")
+	FileClose($logFile)
+	FileDelete("C:\Users\coptraxadmin\Desktop\Utilities\AutomationTestFAILED.txt")
+
 	Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
 	Run(@ComSpec & " /c schtasks /Delete /TN Automation /F")	; Disable the automation
 	LogUpload("quit The box is cleaned up and going to be shutdown. Welcome Screen is turned ON. And the automation is turned OFF.")
+	Sleep(3000) ; sleep for a while to let the message reaches the server before the TCP connection lost.
 	Run("C:\Coptrax Support\Tools\Cleanup.bat", "C:\Coptrax Support\Tools\", @SW_HIDE)
-	$testEnd = True
-	$restart = False
 	Exit
+EndFunc
+
+Func AppendTestResult($message)
+	Local $filename = "C:\Users\coptraxadmin\Desktop\Utilities\" & $boxID & ".txt"
+	Local $file = FileOpen($filename, $FO_APPEND)
+	If Not $file Then
+		LogUpload("Cannot open " & $filename)
+	Else
+		FileWriteLine($file, @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & " : " & $message)
+		FileClose($file)
+		LogUpload("Append '" & $message & "' message to " & $filename)
+	EndIf
 EndFunc
 
 Func RunCopTrax()
@@ -1891,15 +1911,14 @@ Func RunCopTrax()
 EndFunc
 
 Func Configure($arg)
-	Local $ct
-	Local $release
-	Local $bwc
 	Local $rst = True
 	Local $file
 	Local $count = 5
 
-	$ct = GetParameter($arg, "ct")	; configure the CopTrax App
-	$release = GetParameter($arg, "release")	; configure the Evidence Viewer
+	Local $ct = GetParameter($arg, "ct")	; configure the CopTrax App
+	Local $release = GetParameter($arg, "release")	; configure the Evidence Viewer
+	Local $case = GetParameter($arg, "case") ; the test case filename
+
 	If $ct Or $release Then
 		If Not QuitCopTrax() Then Return $rst
 
@@ -1933,9 +1952,12 @@ Func Configure($arg)
 		Until $count <= 0
 
 		If $count = 0 Then $rst = False
+
+		FileDelete("C:\Users\coptraxadmin\Desktop\Utilities\" & $boxID & ".txt")
+		AppendTestResult("This box is configured according to " & $case & ", where the configuration is " & $arg )
 	EndIf
 
-	$bwc = GetParameter($arg, "bwc")	; configure the Evidence Viewer
+	Local $bwc = GetParameter($arg, "bwc")	; configure the Evidence Viewer
 	If $bwc Then
 		LogUpload("Configuring Body Worn Camera to turn " & $bwc & ".")
 		If StringInStr($bwc, "on") Then
