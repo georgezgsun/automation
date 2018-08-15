@@ -61,6 +61,7 @@ Global $ip =  "ENGR-CX456K2"	; This is the hostname of the server
 Global $port = 16869
 Global $Socket = -1
 Global $boxID = "DK123456"
+Global $caseID = "FactoryDefault"
 Global $CopTraxAppDir = "C:\Program Files (x86)\IncaX\CopTrax\"
 Global $configDir = $CopTraxAppDir
 Global $mapDir = @LocalAppDataDir & "\CopTraxEvidenceViewer\"
@@ -81,7 +82,6 @@ Global $fileContent = ""
 Global $bytesCounter = 0
 Global $workDir = @ScriptDir & "\"
 Global $configFile = $workDir & "client.cfg"
-Global $logFile = FileOpen( "C:\Users\coptraxadmin\Desktop\Utilities\AutomationTestFAILED.txt", $FO_APPEND )
 ReadConfig()
 Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')	; Delete the scheduler task for Welcome Screen
 Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
@@ -261,8 +261,6 @@ While Not $testEnd
 
 	Sleep(100)
 WEnd
-
-FileClose($logFile)
 
 _EventLog__Close($hEventLogSystem)
 _EventLog__Close($hEventLogApp)
@@ -1194,7 +1192,6 @@ Func LogUpload($s)
 	Local $err = 0
 	Local $count = 5	; trying to send at most 5 times
 	If Stringleft($s, 6) = "FAILED" Then
-		AppendTestResult("The automation test " & $s)
 		$s &= @CRLF & "Captured failure screen file " & TakeScreenCapture($mCopTrax) & ". It is now on the way sending to server."
 	EndIf
 	$s &= @CRLF	; add CR and LF at the end of each reply
@@ -1723,7 +1720,6 @@ Func ListenToNewCommand()
 			MsgBox($MB_OK, $mMB, "Got " & $raw & " command from server.",2)
 
 		Case "quit", "endtest", "quittest"	; let the client to quit the current automation test
-			AppendTestResult("The Automation test is interupt.")
 			LogUpload("quit Got " & $raw & " command. The test will stop.")
 			$testEnd = True	;	Stop testing marker
 			$restart = False
@@ -1783,7 +1779,6 @@ Func ListenToNewCommand()
 			Cleanup()
 
 		Case "reboot"	; let the client to reboot
-			AppendTestResult("The DVR is reboot during the automation test.")
 			Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')	; Disable the welcome screen
 			Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
 			LogUpload("quit Going to reboot the box. Welcome Screen is turned OFF. And the automation is turned ON.")
@@ -1813,19 +1808,19 @@ Func Cleanup()
 	Local $i
 	Local $path0 = StringRegExpReplace(GetVideoFilePath(), "(auto[0-9])", "auto1")
 	Local $path = $path0
-	LogUpload("auto1: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	LogUpload("auto1: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & " wmv, " & GetVideoFileNum($path, "*.gps") & " gps, " & GetVideoFileNum($path, "*.vm") & " vm, " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.rp") & " rp, " & GetVideoFileNum($path, "*.trax") & " trax; ")
 	$path = $path0 & "\cam2"
-	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & " wmv, " & GetVideoFileNum($path, "*.gps") & " gps, " & GetVideoFileNum($path, "*.vm") & " vm, " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.rp") & " rp, " & GetVideoFileNum($path, "*.trax") & " trax; ")
 	$path = $path0 & "\photo"
-	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt, " & GetVideoFileNum($path, "*.photo") & "photo, " & GetVideoFileNum($path, "*.trax") & "trax.")
+	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.txt") & " txt, " & GetVideoFileNum($path, "*.photo") & " photo, " & GetVideoFileNum($path, "*.trax") & " trax.")
 
 	$path0 = StringReplace($path0, "auto1", "auto2")
 	$path = $path0
-	LogUpload("auto2: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	LogUpload("auto2: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & " wmv, " & GetVideoFileNum($path, "*.gps") & " gps, " & GetVideoFileNum($path, "*.vm") & " vm, " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.rp") & " rp, " & GetVideoFileNum($path, "*.trax") & " trax; ")
 	$path = $path0 & "\cam2"
-	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & " wmv, " & GetVideoFileNum($path, "*.gps") & " gps, " & GetVideoFileNum($path, "*.vm") & " vm, " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.rp") & " rp, " & GetVideoFileNum($path, "*.trax") & " trax; ")
 	$path = $path0 & "\photo"
-	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt, " & GetVideoFileNum($path, "*.photo") & "photo, " & GetVideoFileNum($path, "*.trax") & "trax.")
+	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.txt") & " txt, " & GetVideoFileNum($path, "*.photo") & " photo, " & GetVideoFileNum($path, "*.trax") & " trax.")
 
 	For $i = 1 To $dArray[0]
 		If FileExists( $dArray[$i] & "\zzCopTrax24Key.txt") Then
@@ -1856,27 +1851,27 @@ Func Cleanup()
 	$path0 = StringReplace($path0, "auto2", "auto1")
 	$path = $path0
 	DirRemove($path, 1)
-	LogUpload("auto1: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	LogUpload("auto1: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & " wmv, " & GetVideoFileNum($path, "*.gps") & " gps, " & GetVideoFileNum($path, "*.vm") & " vm, " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.rp") & " rp, " & GetVideoFileNum($path, "*.trax") & " trax; ")
 	$path = $path0 & "\cam2"
-	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & " wmv, " & GetVideoFileNum($path, "*.gps") & " gps, " & GetVideoFileNum($path, "*.vm") & " vm, " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.rp") & " rp, " & GetVideoFileNum($path, "*.trax") & " trax; ")
 	$path = $path0 & "\photo"
-	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt.")
+	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.txt") & " txt.")
 
 	$path0 = StringReplace($path0, "auto1", "auto2")
 	$path = $path0
 	DirRemove($path, 1)
-	LogUpload("auto2: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	LogUpload("auto2: -Cam1  = " & GetVideoFileNum($path, "*.wmv") & " wmv, " & GetVideoFileNum($path, "*.gps") & " gps, " & GetVideoFileNum($path, "*.vm") & " vm, " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.rp") & " rp, " & GetVideoFileNum($path, "*.trax") & " trax; ")
 	$path = $path0 & "\cam2"
-	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & "wmv, " & GetVideoFileNum($path, "*.gps") & "gps, " & GetVideoFileNum($path, "*.vm") & "vm, " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.rp") & "rp, " & GetVideoFileNum($path, "*.trax") & "trax, ")
+	LogUpload("       -Cam2  = " & GetVideoFileNum($path, "*.wmv") & " wmv, " & GetVideoFileNum($path, "*.gps") & " gps, " & GetVideoFileNum($path, "*.vm") & " vm, " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.rp") & " rp, " & GetVideoFileNum($path, "*.trax") & " trax; ")
 	$path = $path0 & "\photo"
-	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & "jpg, " & GetVideoFileNum($path, "*.txt") & "txt.")
+	LogUpload("       -Photo = " & GetVideoFileNum($path, "*.jpg") & " jpg, " & GetVideoFileNum($path, "*.txt") & " txt.")
 
 	FileDelete ($filename & "*.mp4")
 	LogUpload("SD card:        " & GetVideoFileNum($filename, "*.mp4") & " mp4")
 
-	AppendTestResult("Automation tests PASSED.")
-	FileClose($logFile)
-	FileDelete("C:\Users\coptraxadmin\Desktop\Utilities\AutomationTestFAILED.txt")
+	$filename = "C:\CopTrax Support\" & $caseID & " " & $boxID & " PASSED.flg"
+	FileOpen($filename, $FO_APPEND)	; Create a file flag of PASSED the automation test
+	LogUpload("Create flag file " & $filename)
 
 	Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
 	Run(@ComSpec & " /c schtasks /Delete /TN Automation /F")	; Disable the automation
@@ -1884,18 +1879,6 @@ Func Cleanup()
 	Sleep(3000) ; sleep for a while to let the message reaches the server before the TCP connection lost.
 	Run("C:\Coptrax Support\Tools\Cleanup.bat", "C:\Coptrax Support\Tools\", @SW_HIDE)
 	Exit
-EndFunc
-
-Func AppendTestResult($message)
-	Local $filename = "C:\Users\coptraxadmin\Desktop\Utilities\" & $boxID & ".txt"
-	Local $file = FileOpen($filename, $FO_APPEND)
-	If Not $file Then
-		LogUpload("Cannot open " & $filename)
-	Else
-		FileWriteLine($file, @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & " : " & $message)
-		FileClose($file)
-		LogUpload("Append '" & $message & "' message to " & $filename)
-	EndIf
 EndFunc
 
 Func RunCopTrax()
@@ -1917,7 +1900,7 @@ Func Configure($arg)
 
 	Local $ct = GetParameter($arg, "ct")	; configure the CopTrax App
 	Local $release = GetParameter($arg, "release")	; configure the Evidence Viewer
-	Local $case = GetParameter($arg, "case") ; the test case filename
+	$caseID = GetParameter($arg, "case") ; the test case filename
 
 	If $ct Or $release Then
 		If Not QuitCopTrax() Then Return $rst
@@ -1939,22 +1922,21 @@ Func Configure($arg)
 			EndIf
 		EndIf
 
-		Do
+		Do ; restart the CopTrax App and check the display
 			RunCopTrax()	; restart CopTrax App
 			If IsDisplayCorrect() Then 	; checking if the display is correct
 				$count = -10	; display correct, quit the loop
 			Else
-				LogUpload("The CopTrax App is not shutdown gracefully. The process is killed instead.")
+				LogUpload("The CopTrax App is not start correctly. Kill the process and restart it.")
 				ProcessClose($pCopTrax)	; display is incorrect, close the CopTrax App
 				Sleep(1000)
+				$mCopTrax = 0
 				$count -= 1
 			EndIf
 		Until $count <= 0
 
 		If $count = 0 Then $rst = False
-
-		FileDelete("C:\Users\coptraxadmin\Desktop\Utilities\" & $boxID & ".txt")
-		AppendTestResult("This box is configured according to " & $case & ", where the configuration is " & $arg )
+		FileDelete("C:\CopTrax Support\*.flg")
 	EndIf
 
 	Local $bwc = GetParameter($arg, "bwc")	; configure the Evidence Viewer

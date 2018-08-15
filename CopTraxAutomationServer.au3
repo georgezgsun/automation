@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=3.5.0.83
+#AutoIt3Wrapper_Res_Fileversion=3.5.0.85
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -120,7 +120,6 @@ Global $nGUI[$maxConnections + 1]	; the control ID of the timer for that UUT
 Global $bGUI[$maxConnections + 1]	; the control ID of the button for that UUT, the name(serial number) is displayed on the button
 Global $totalCommands[$maxConnections + 1]	; the counter of the total test commands in the test case for each UUT
 Global $testEndTime[$maxConnections + 1]	; stores the end time estimation for each UUT
-Global $progressTest[$maxConnections + 1]	; stores the remain command number for each UUT
 Global $testFailures[$maxConnections + 1]	; stores the number of failures in automation test for each UUT
 Global $boxID[$maxConnections + 1]	; stores the serial number of each UUT
 Global $boxIP[$maxConnections + 1]	; stores the IP address of each UUT during the automation test
@@ -129,7 +128,6 @@ Global $errorsFirmware[$maxConnections + 1]	; stores the errors of event logs du
 Global $flagOldClient[$maxConnections + 1] ; stores the flag of old version client
 Local $timeRemains[$maxConnections + 1]	; stores the remain time estimation in seconds for each UUT
 Local $timerConnections[$maxConnections + 1]	; the TCP connection timer for each UUT;  when reaches, TCP connection to that UUT may have lost
-Local $timerSockets[$maxConnections + 1]	; timer of heartbeat for each UUT; when reaches, the server need to send a heartbeat command to that UUT
 Global $timerFileTransfer[$maxConnections + 1]	; timer of file transfering; when reaches, the server need to clear current file transfer mode
 Global $listFailed = ""	; the list of UUT's serial number that failed the automation test
 Global $listPassed = "" ; the list of UUT's serial number that passed the automation test
@@ -140,7 +138,6 @@ For $i = 0 To $maxConnections	; initialize the variables
 	$sockets[$i] = -1	; Stores the sockets for each client
 	$timerConnections[$i] = 0
 	$fileSendingAllowed[$i] = False
-	$timerSockets[$i] = 0
 	$timerFileTransfer[$i] = 0
 	$timeRemains[$i] = 0
 	$filesReceived[$i] = 0
@@ -231,12 +228,11 @@ Local $file
 Local $nextCommand
 Local $err
 Local $len
-While Not $testEnd	; main loop that get input, display the resilts
+While Not $testEnd	; main loop that get input, display the results
 	$time0 = Int(TimerDiff($hTimer))	; get current timer elaspe
 	$i = AcceptConnection()	; accept new client's connection requist
 	If $i Then
 		$timerConnections[$i] = $time0 + 60 * 1000
-		$timerSockets[$i] = $time0 + 5 * 1000
 	EndIf
 
 	$batchCheck = ($totalConnection > 0)
@@ -258,12 +254,10 @@ While Not $testEnd	; main loop that get input, display the resilts
 		$totalConnection += 1
 
 		If ProcessReply($i) Then
-			$timerSockets[$i] = $filesReceived[$i] ? $time0 + 60 * 1000 : $time0 + 10 * 1000 ; leave 60s for file transfer and 10s for normal reply
 			If Not $timerConnections[$i] Then ContinueLoop
 			$timerConnections[$i] = $time0 + 1000 * 90 ; renew the connection check timer
 		EndIf
 
-		GUICtrlSetData($pGUI[$i], $progressTest[$i])
 		$timeLeft = CorrectRange(Round(($testEndTime[$i] - $time0) / 1000), 0, 24*3600)
 		If $timeLeft <> $timeRemains[$i]	Then
 			$timeRemains[$i] = $timeLeft
@@ -273,11 +267,6 @@ While Not $testEnd	; main loop that get input, display the resilts
 		If $timeLeft > $lastEndTime Then
 			$lastEndTime = $timeLeft
 		Endif
-
-		If $time0 > $timerSockets[$i] And $sockets[$i] > 0 Then
-			;LogWrite($automationLogPort, $i & ": Socket timer out.")
-			;CloseConnection($i)
-		EndIf
 
 		If $fileSendingAllowed[$i] Then
 			$len = TCPSend($sockets[$i], BinaryMid($fileToBeSent[$i], 1, $maxSendLength))	; send at most maxSendLength bytes each time
@@ -385,7 +374,13 @@ Func ProcessMSG()
 	Local $msg = GUIGetMsg()
 	If Not $msg Then Return False
 
-	UpdateConfigCombo($idComboBox)	; check and update the combo list
+	Local $fileList = _FileListToArray($workDir, "*.mcfg", 1)	; list *.config files in ..\latest folder
+	$fileList = StringRegExpReplace(_ArrayToString($fileList), "(\.mcfg)", "")	; get rid of the file extension
+	$fileList = StringRegExpReplace($fileList, "(^[0-9].)", "")	; get rid of the heading number
+	If $fileList <> $comboList Then
+		$comboList = $fileList
+		GUICtrlSetData($idComboBox, "|" & $fileList, $config)
+	EndIf
 
 	If $msg = $GUI_EVENT_CLOSE Then
 		LogWrite($automationLogPort, "Server" & @TAB & "Automation test end by operator.")
@@ -500,7 +495,9 @@ Func ParseCommand($n)
 	Local $commandLeft = Int(GetParameter($arg, "count"))
 	Local $duration = Int(GetParameter($arg, "time"))	; time remains in seconds
 	$testEndTime[$n] = $time0 + $duration * 1000 ; time that the test will end in milliseconds
-	$progressTest[$n] = CorrectRange(100 * (1-$commandLeft/$totalCommands[$i]), 0, 100)
+	Local $progress = CorrectRange(100 * (1-$commandLeft/$totalCommands[$i]), 0, 100)
+	GUICtrlSetData($pGUI[$n], $progress)
+
 	If $filesReceived[$n] Then	; This indicates there exists file uploading, do not send new command until it ends
 		SendCommand($n, "heartbeat")	; Write a non reply command
 		Return 	; keep the current socket close timer
@@ -535,8 +532,13 @@ Func ParseCommand($n)
 		Case "settings", "createprofile", "upload", "checkfirmware", "checkapp", "checklibrary", "checkrecord", "pause", "configure"
 			$arg = PopCommand($n)
 			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command.")
+			If StringInStr($newCommand, "config") Then
+				Local $case = StringReplace($currentTestCaseFile, " ", "")	; get rid of space in the filename
+				$case = StringReplace($case, ".txt", "") ; get rid of the .txt
+				Local $netCase = StringSplit($case, "\")
+				$arg &= "|case=" & $netCase[$netCase[0]]
+			EndIf
 			$newCommand &= " " & $arg
-			If StringInStr($newCommand, "config") Then $newCommand &= "|case=" & $currentTestCaseFile
 			LogWrite($i, "Server" & @TAB & "Sent '" & $newCommand & "' command to client.")
 			SendCommand($n, $newCommand)	; send new test command to client
 
@@ -709,7 +711,7 @@ Func LogWrite($n,$s)
 	If $n <= 0 Or $n > $maxConnections + 1 Then Return
 
 	If StringLeft($s,3) = "===" Then
-		$s = "============"
+		$s = "============="
 		$s &= $s & $s
 		$s &= $s & $s & @CRLF
 	Else
@@ -967,7 +969,6 @@ Func ProcessReply($n)
 
 			$bufferReceived[$n] &= $reply	; append the receiving to the buffer
 
-			;If (StringLeft($bufferReceived[$n], 5) = "name ") And (StringMid($bufferReceived[$n], 14, 5) = " new ") Then
 			If StringMid($reply, 14, 5) = " new " Then
 				$flagOldClient[$n] = True
 				$bufferReceived[$n] = StringReplace($reply, " new ", " ") & @CRLF & "Request for new command."; backward compatible
@@ -1013,7 +1014,6 @@ Func ProcessReply($n)
 	If ($msg[0] >= 5) And StringInStr($reply, "Identify ", 1) Then	; the settings reply the identify ID
 		$readTxt =  StringRegExp($reply, "([a-zA-Z]{2}[0-9]{6})", $STR_REGEXPARRAYMATCH)
 		If IsArray($readTxt) And ($readTxt[0] <> $boxID[$n]) Then
-			$ID = $readTxt[0]
 			LogWrite($i, "Server" & @TAB & "Got the box serial number updated from " & $boxID[$n] & " to " & $readTxt[0] & ". Have to update the log file.")
 			$boxID[$n] = $readTxt[0]	; update the box ID
 			$portDisplay = $n	; update the main log display to current box
