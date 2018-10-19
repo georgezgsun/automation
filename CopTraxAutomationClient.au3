@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.5.0.18)
+#pragma compile(FileVersion, 2.8.0.0)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -207,9 +207,13 @@ Global $videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($pat
 $path0 = "C:\CopTrax-Backup"
 Global $videoInBackup = GetVideoFileNum($path0, "*.mp4") + GetVideoFileNum($path0, "*.avi") + GetVideoFileNum($path0, "*.wmv")
 
+Global $failures = 0
+FileDelete("C:\CopTrax Support\*.flg")
+
 LogUpload("name " & $boxID & " " & FileGetVersion(@AutoItExe) & " " & $title & " " & @DesktopWidth & "x" & @DesktopHeight & " " & $videoInBackup)	; new start of automation test
 $commandTimer += TimerDiff($hTimer) ; request the first command in 2s
 Local $connectionTimer = $commandTimer + 10 * 1000	;
+
 While Not $testEnd
 	$currentTime = TimerDiff($hTimer)
 	If $currentTime > $connectionTimer Then
@@ -402,6 +406,7 @@ Func TestAbout()
 
 	If IsRecording() Then
 		LogUpload("A recording is in progress.")
+		EndRecording(True)
 		Return False
 	EndIf
 
@@ -440,6 +445,7 @@ Func TestUserSwitchFunction($arg)
 	If Not ReadyForTest() Then  Return False
 	If IsRecording() Then
 		LogUpload("A recording is in progress.")
+		EndRecording(True)
 		Return False
 	EndIf
 
@@ -675,6 +681,7 @@ Func TestSettingsFunction($arg)
 	If Not ReadyForTest() Then  Return False
 	If IsRecording() Then
 		LogUpload("A recording is in progress. Cannot modify the settings.")
+		EndRecording(True)
 		Return False
 	EndIf
 
@@ -802,24 +809,24 @@ Func TestSettingsFunction($arg)
 				RenewConfig()
 			EndIf
 
-			$x0 = 310
-			For $y0 = 150 To 430 Step 35
-				$pColor = PixelGetColor( $x0, $y0, $hWnd )
-				If $pColor > 0 Then
-					MouseClick("", $x0, $y0)
-					LogUpload("Pixel color at (" & $x0 & "," & $y0 & " ) is " & $pColor & ", so click on it.")
-				EndIf
-				If ($y0 > 200) And ($y0 < 330) Then
-					MouseClick("", $x0+317, $y0)
-					Send("f")
-					Local $j = 1
-					Local $m = Round(($y0-220)/35)
-					For $j = 1 To $m
-						Send("{Down}")
-					Next
-					Send("{Enter}")
-				EndIf
-			Next
+			;$x0 = 310
+			;For $y0 = 150 To 430 Step 35
+			;	$pColor = PixelGetColor( $x0, $y0, $hWnd )
+			;	If $pColor > 0 Then
+			;		MouseClick("", $x0, $y0)
+			;		LogUpload("Pixel color at (" & $x0 & "," & $y0 & " ) is " & $pColor & ", so click on it.")
+			;	EndIf
+			;	If ($y0 > 200) And ($y0 < 330) Then
+			;		MouseClick("", $x0+317, $y0)
+			;		Send("f")
+			;		Local $j = 1
+			;		Local $m = Round(($y0-220)/35)
+			;		For $j = 1 To $m
+			;			Send("{Down}")
+			;		Next
+			;		Send("{Enter}")
+			;	EndIf
+			;Next
 		EndIf
 
 		If StringInStr($txt, "Visual", 1) Then	; Speed Triggers
@@ -828,9 +835,9 @@ Func TestSettingsFunction($arg)
 
 		If StringInStr($txt, "Baud", 1) Then	; GPS & Radar
 			ControlClick($hWnd, "", "Test")
-			If ClickCheckButton($hWnd, "Enable Radar Detection") Then	; check Enable Radar Detection
-				LogUpload("Enable the Radar Detection")
-			EndIf
+			;If ClickCheckButton($hWnd, "Enable Radar Detection") Then	; check Enable Radar Detection
+			;	LogUpload("Enable the Radar Detection")
+			;EndIf
 			Sleep(1000)
 		EndIf
 
@@ -949,6 +956,18 @@ Func ReadyForTest()
 	EndIf
 
 	$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
+	$i = 5
+	While WinExists("[CLASS:IPTip_Main_Window]") And ($i > 0)
+		Send("{Tab}")	; send a Tab key to get rid of soft keyboard
+		Sleep(200)
+		$i -= 1
+	WEnd
+	If $i <= 0 Then
+		LogUpload("The soft keyboad cannot be escaped.")
+		LogUpload("Captured Accessories screen file " & TakeScreenCapture($titleCopTraxMain) & ". It is now on the way sending to server.")
+		Return False
+	EndIf
+
 	If $mCopTrax Then
 		Send("{Tab}")	; send a Tab key to get rid of soft keyboard
 		Return True
@@ -1162,6 +1181,7 @@ Func TestReviewFunction()
 	If Not ReadyForTest() Then Return False
 	If IsRecording() Then
 		LogUpload("A recording is in progress.")
+		EndRecording(True)
 		Return False
 	EndIf
 
@@ -1193,6 +1213,7 @@ Func LogUpload($s)
 	Local $count = 5	; trying to send at most 5 times
 	If Stringleft($s, 6) = "FAILED" Then
 		$s &= @CRLF & "Captured failure screen file " & TakeScreenCapture($mCopTrax) & ". It is now on the way sending to server."
+		$failures += 1
 	EndIf
 	$s &= @CRLF	; add CR and LF at the end of each reply
 
@@ -1580,7 +1601,6 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "settings" ; Get a stop setting command, going to test the settings function
-			LogUpload("Test the settings function.")
 			MsgBox($MB_OK, $mMB, "Testing the settings function",2)
 			If ($Recv[0] >= 2) And TestSettingsFunction($Recv[2]) Then
 				LogUpload("PASSED the test on new settings " & $Recv[2] & ".")
@@ -1589,7 +1609,6 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "createprofile" ; Get a stop setting command, going to test the settings function
-			LogUpload("Test to create/switch a new user profile function.")
 			MsgBox($MB_OK, $mMB, "Testing the user switch function",2)
 			If ($Recv[0] >= 2) And TestUserSwitchFunction($Recv[2]) Then
 				LogUpload("PASSED the test on user switch function.")
@@ -1598,7 +1617,6 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "camera" ; Get a stop camera command, going to test the camera switch function
-			LogUpload("Test the camera switch function.")
 			MsgBox($MB_OK, $mMB, "Testing the camera switch function",2)
 			If TestCameraSwitchFunction() Then
 				LogUpload("PASSED the test on camera switch function.")
@@ -1607,7 +1625,6 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "photo" ; Get a stop photo command, going to test the photo function
-			LogUpload("Test the taking photo function.")
 			MsgBox($MB_OK, $mMB, "Testing the photo function",2)
 			If TestPhotoFunction() Then
 				LogUpload("PASSED the test to take a photo.")
@@ -1616,7 +1633,6 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "review" ; Get a stop review command, going to test the review function
-			LogUpload("Test the review function.")
 			MsgBox($MB_OK, $mMB, "Testing the review function",2)
 			If TestReviewFunction() Then
 				LogUpload("PASSED on the test on review function.")
@@ -1625,7 +1641,6 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "radar" ; Get a stop review command, going to test the review function
-			LogUpload("Test the Radrar function.")
 			MsgBox($MB_OK, $mMB, "Testing the radar function",2)
 			If TestRadarFunction() Then
 				LogUpload("PASSED on the test of show radar function.")
@@ -1674,7 +1689,6 @@ Func ListenToNewCommand()
 			$commandTimer = 0
 
 		Case "checkrecord"	; checkthe recorded files
-			LogUpload("Checking the records function.")
 			MsgBox($MB_OK, $mMB, "Checking the record files.",2)
 			If ($Recv[0] >= 2) And CheckRecordedFiles($Recv[2]) Then
 				LogUpload("PASSED the check on recorded files.")
@@ -1692,7 +1706,6 @@ Func ListenToNewCommand()
 			EndIf
 
 		Case "configure"	; configure the client
-			LogUpload("Configuring the client box...")
 			MsgBox($MB_OK, $mMB, "Configuring the client.",2)
 			If ($Recv[0] >= 2) And Configure($Recv[2]) Then
 				LogUpload("PASSED The client is now configured to version " & $appVersion & ".")
@@ -1835,14 +1848,19 @@ Func Cleanup()
 	LogUpload ($path & " = " & $numVideo )
 	If $numVideo Then
 		LogUpload("FAILED The box may suffered SD card defects, for " & $path & " is not empty. Not to clean up at this moment.")
-		Return True
+		$failures += 1
 	EndIf
 
 	$path = "C:\CopTrax-Backup"
 	$numVideo = GetVideoFileNum($path, "*.mp4") + GetVideoFileNum($path, "*.avi") + GetVideoFileNum($path, "*.wmv") - $videoInBackup
 	LogUpload ($path & " new added videos = " & $numVideo & ", while number of original video files is " & $videoInBackup)
 	If $numVideo Then
-		LogUpload("FAILED The box may suffered video file encoding problems, for " & $path & " is not empty. Not to cleanup at this moment.")
+		LogUpload("Warning! The box may suffered video file encoding problems, for " & $path & " is not empty.")
+	;	Return True
+	EndIf
+
+	If $failures Then
+		LogUpload("There are " & $failures & " failures in this test. Not able to clean up at this moment.")
 		Return True
 	EndIf
 
@@ -1884,6 +1902,7 @@ EndFunc
 Func RunCopTrax()
 	LogUpload("Restarting CopTrax App.")
 	Run($CopTraxAppDir & $pCopTrax, $CopTraxAppDir)
+	Sleep(10*1000) ; The new CopTrax wait longer
 	$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
 	If $mCopTrax Then
 		$userName = GetUserName()
@@ -1924,6 +1943,7 @@ Func Configure($arg)
 
 		Do ; restart the CopTrax App and check the display
 			RunCopTrax()	; restart CopTrax App
+
 			If IsDisplayCorrect() Then 	; checking if the display is correct
 				$count = -10	; display correct, quit the loop
 			Else
@@ -1936,7 +1956,6 @@ Func Configure($arg)
 		Until $count <= 0
 
 		If $count = 0 Then $rst = False
-		FileDelete("C:\CopTrax Support\*.flg")
 	EndIf
 
 	Local $bwc = GetParameter($arg, "bwc")	; configure the Evidence Viewer
@@ -2052,6 +2071,7 @@ Func UploadFile($arg)
 			$uploadMode = "now"
 		Case Else
 			PushFile(StringReplace($arg, "\!", "|"))	; change \! back to |
+			$uploadMode = "now"
 	EndSwitch
 	$fileContent = ""	; clear the flag of uploading
 

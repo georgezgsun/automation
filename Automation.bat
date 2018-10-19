@@ -1,11 +1,9 @@
-Echo This will setup the automation test client on the target box
-:: start Wi-Fi connection
-netsh wlan connect name=ACI-CopTrax2 interface=WiFi
+Echo This will start the automation test client on the target box
+:: Setup the network connection
+netsh interface ip set address "CopTrax" dhcp
+timeout /t 10
+ping ENGR-CX456K2
 
-:: pause for a couple of seconds
-ping localhost -n 10
-
-:: start automation test
 C:
 CD C:\CopTraxAutomation
 Start C:\CopTraxAutomation\CopTraxAutomationClient.exe

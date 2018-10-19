@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=3.5.0.85
+#AutoIt3Wrapper_Res_Fileversion=2.8.0.1
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -56,14 +56,13 @@ Global $piHeartbeatTime = 0
 Global $piHeartbeatInterval = 30 * 1000
 Global $workDir = "C:\CopTraxTest\"
 Global $sentPattern = ""
-Global $config = "FactoryDefault"
+Global $config = "" ; It is empty in the beginning
 Global $InproperID = False	; Keep the record of inproper box ID
 Local $cheatSheet = ReadCheatSheet()
 
 OnAutoItExitRegister("OnAutoItExit")	; Register OnAutoItExit to be called when the script is closed.
 Global $TCPListen = TCPListen ($ipServer, $port, $maxListen)
 
-Global $currentTestCaseFile = $workDir & $config & ".txt"
 Global Const $maxCommands = 38
 Global $allCommands[$maxCommands]	; this section defines the supported test commands
 $allCommands[0] = "record duration interval"
@@ -89,7 +88,7 @@ $allCommands[19] = "endrecord duration"
 $allCommands[20] = "startrecord duration"
 $allCommands[21] = "runapp"
 $allCommands[22] = "stopapp"
-$allCommands[23] = "configure ct release bwc"
+$allCommands[23] = "configure release bwc ct"
 $allCommands[24] = "info"
 $allCommands[25] = "camera"
 $allCommands[26] = "review"
@@ -181,7 +180,6 @@ GUICtrlSetFont($idComboBox, 10, 700, 0, "Courier New")
 GUICtrlSetColor($nGUI[0], $COLOR_GREEN)	; set the main timer in color green
 GUICtrlSetFont($nGUI[0], 12, 400, 0, "Courier New")
 Global $comboList = ""
-UpdateConfigCombo($idComboBox)
 
 GUICtrlSetFont($aLog, 10, 400, 0, "Courier New")
 GUICtrlSetFont($cLog, 10, 400, 0, "Courier New")
@@ -206,7 +204,6 @@ LogWrite($automationLogPort, "Server" & @TAB & "A new batch of automation test s
 LogWrite($automationLogPort, "Server" & @TAB & "Current version : " & FileGetVersion ( @ScriptFullPath ))
 LogWrite($automationLogPort, "Server" & @TAB & "Run @" & $ipServer & ":" & $port & ".")
 LogWrite($automationLogPort, "")
-LogWrite($automationLogPort, "Server" & @TAB & "Current setting of configuration for burn-in is " & $config & ".")
 GUICtrlSetData($cLog, $cheatSheet)
 
 Global $hTimer = TimerInit()	; global timer handle
@@ -372,21 +369,7 @@ Exit
 Func ProcessMSG()
 	Local $i
 	Local $msg = GUIGetMsg()
-	If Not $msg Then Return False
-
-	Local $fileList = _FileListToArray($workDir, "*.mcfg", 1)	; list *.config files in ..\latest folder
-	$fileList = StringRegExpReplace(_ArrayToString($fileList), "(\.mcfg)", "")	; get rid of the file extension
-	$fileList = StringRegExpReplace($fileList, "(^[0-9].)", "")	; get rid of the heading number
-	If $fileList <> $comboList Then
-		$comboList = $fileList
-		GUICtrlSetData($idComboBox, "|" & $fileList, $config)
-	EndIf
-
-	If $msg = $GUI_EVENT_CLOSE Then
-		LogWrite($automationLogPort, "Server" & @TAB & "Automation test end by operator.")
-		LogWrite($automationLogPort, "")
-		Return True
-	EndIf
+	If Not ($msg Or $comboList) Then Return False
 
 	For $i = 1 To $maxConnections
 		If $msg = $bGUI[$i] Then
@@ -397,28 +380,36 @@ Func ProcessMSG()
 				GUICtrlSetData($tLog, "CheatSheet")
 			EndIf
 			GUICtrlSetData($cLog, $logContent[$i])
-			ExitLoop
+			Return False
 		EndIf
 	Next
 
+	Local $fileList = _FileListToArray($workDir, "*.mcfg", 1)	; list *.config files in ..\latest folder
+	$fileList = StringReplace(_ArrayToString($fileList), ".mcfg", "")	; get rid of the file extension
+	$fileList = StringRegExpReplace($fileList, "(^[0-9].)", "")	; get rid of the heading number
+	If $fileList <> $comboList Then
+		$comboList = $fileList
+		If Not $config Then
+			$config = StringLeft($fileList, StringInStr($fileList, "|") - 1) ; assign config to the first available item in the list when it is empty
+			$msg = $idComboBox
+		EndIf
+		GUICtrlSetData($idComboBox, "|" & $fileList, $config)
+	EndIf
+
 	If $msg = $idComboBox Then
 		$config = GUICtrlRead($idComboBox)
-		$currentTestCaseFile = $workdir & $config & ".txt"
 		LogWrite($automationLogPort, "")
 		LogWrite($automationLogPort, "Server" & @TAB & "Change the configure to " & $config & ".")
+		Return False
+	EndIf
+
+	If $msg = $GUI_EVENT_CLOSE Then
+		LogWrite($automationLogPort, "Server" & @TAB & "Automation test end by operator.")
+		LogWrite($automationLogPort, "")
+		Return True
 	EndIf
 
 	Return False
-EndFunc
-
-Func UpdateConfigCombo($id)
-	Local $fileList = _FileListToArray($workDir,"*.mcfg", 1)	; list *.config files in ..\latest folder
-	$fileList = StringRegExpReplace(_ArrayToString($fileList), "(\.mcfg)", "")
-	$fileList = StringRegExpReplace($fileList, "(^[0-9].)", "")
-	If $fileList <> $comboList Then
-		$comboList = $fileList
-		GUICtrlSetData($id, "|" & $fileList, $config)
-	EndIf
 EndFunc
 
 Func toBar($x)
@@ -532,12 +523,7 @@ Func ParseCommand($n)
 		Case "settings", "createprofile", "upload", "checkfirmware", "checkapp", "checklibrary", "checkrecord", "pause", "configure"
 			$arg = PopCommand($n)
 			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command.")
-			If StringInStr($newCommand, "config") Then
-				Local $case = StringReplace($currentTestCaseFile, " ", "")	; get rid of space in the filename
-				$case = StringReplace($case, ".txt", "") ; get rid of the .txt
-				Local $netCase = StringSplit($case, "\")
-				$arg &= "|case=" & $netCase[$netCase[0]]
-			EndIf
+			If StringInStr($newCommand, "config") Then $arg &= "|case=" & StringReplace($config, " ", "")	; get rid of space in the filename
 			$newCommand &= " " & $arg
 			LogWrite($i, "Server" & @TAB & "Sent '" & $newCommand & "' command to client.")
 			SendCommand($n, $newCommand)	; send new test command to client
@@ -626,8 +612,8 @@ Func ParseCommand($n)
 			Local $sourceFileName
 			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & " " & $fileName & "' command.")
 
-			$fileName = StringReplace($fileName, "\_", " ")
-			$fileName = StringReplace($fileName, "\!", "|")
+			;$fileName = StringReplace($fileName, "\_", " ")
+			;$fileName = StringReplace($fileName, "\!", "|")
 			If StringInStr($filename, "\") Then
 				$netFileName = StringSplit($fileName, "\")
 				$sourceFileName = $workDir & "latest\" & $netFileName[$netFileName[0]]    ; all file need to be update shall sit in \latest folder
@@ -711,9 +697,9 @@ Func LogWrite($n,$s)
 	If $n <= 0 Or $n > $maxConnections + 1 Then Return
 
 	If StringLeft($s,3) = "===" Then
-		$s = "============="
-		$s &= $s & $s
-		$s &= $s & $s & @CRLF
+		$s = "=============" ; get 13 =
+		$s = $s & $s & "===" ; 13x2+3 = 29 =
+		$s = $s & $s & $s & $s & @CRLF ; 29x4 = 116
 	Else
 		$s = @HOUR & ":" & @MIN & ":" & @SEC & @TAB & $s & @CRLF	; show the log with time stamps
 	EndIf
@@ -1032,7 +1018,7 @@ Func ProcessReply($n)
 		Local $filename = $msg[2]
 		Local $len =  Int($msg[3])
 		Local $netFileName = StringSplit($filename, "\")
-		Local $destFileName = $workDir & "ClientFiles\" & $netFileName[$netFileName[0]]
+		Local $destFileName = $workDir & "ClientFiles\" & $boxID[$n] & "\" & $netFileName[$netFileName[0]]
 		LogWrite($i, "Server" & @TAB & "" & $filename & " from client is going to be saved as " & $destFileName & " in server.")
 		LogWrite($i, "Server" & @TAB & "Total " & $len & " bytes need to be stransfered.")
 		$filesReceived[$n] = FileOpen($destFileName,16+8+2)	; open file for over-write and create the directory structure if it doesn't exist
@@ -1093,6 +1079,7 @@ Func ProcessReply($n)
 				$testFailures[$n] += 1	; initialize the result true until any failure
 			EndIf
 
+			GUICtrlSetData($pGUI[$n], 100)
 			If $testFailures[$n] = 0 Then
 				LogWrite($n, "Server" & @TAB & "All tests passed.")
 				LogWrite($automationLogPort, $boxID[$n] & @TAB & "All tests passed.")
@@ -1204,7 +1191,7 @@ Func StartNewTest($n, $ID, $clientVersion)
 
 	$filename = $workdir & $boxID[$n] & ".txt"	; try to find if any individual test case exits
 	If Not FileExists($filename) Then	; If there is no individual test case, try to read general test case.
-		$filename = $currentTestCaseFile
+		$filename = $workdir & $config & ".txt"
 	Endif
 	$commands[$n] = ReadTestCase($filename)	; Read test case from file
 	If $commands[$n] = "" Then
