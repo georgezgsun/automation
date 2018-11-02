@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 2.8.0.0)
+#pragma compile(FileVersion, 2.8.0.1)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -219,6 +219,7 @@ While Not $testEnd
 	If $currentTime > $connectionTimer Then
 		$TestEnd = True
 		$restart = True
+		LogUpload("No command received from the server in 90s.")
 		ExitLoop
 	EndIf
 
@@ -256,7 +257,7 @@ While Not $testEnd
 		$commandTimer = $currentTime + 10 * 1000	; send another new request 10s later if not get new command
 	EndIf
 
-	If ListenToNewCommand() Then $connectionTimer = $currentTime + 75 * 1000
+	If ListenToNewCommand() Then $connectionTimer = $currentTime + 90 * 1000
 
 	If ($currentTime + 50 * 1000 < $commandTimer) And ($uploadMode = "idle") And Not $fileContent And Not $fileToBeUpdate Then
 		UploadFile("now")
@@ -324,7 +325,7 @@ Func RestartAutomation()
 	Local $filename = $workDir & "RestartClient.bat"
 	Local $sourceFile = $workDir & "tmp\" & @ScriptName
 	Local $file = FileOpen($filename, $FO_OVERWRITE)
-	FileWriteLine($file,"ping localhost -n 10")
+	FileWriteLine($file,"timeout /t 10")
 	If (FileGetSize($sourcefile) > 1000000) And (_VersionCompare(FileGetVersion(@AutoItExe), FileGetVersion($sourceFile)) < 0) Then
 		FileWriteLine($file,"copy /Y " & $sourceFile & " " & @AutoItExe)
 	EndIf
