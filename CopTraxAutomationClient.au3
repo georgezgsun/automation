@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 2.8.0.1)
+#pragma compile(FileVersion, 2.8.0.2)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -44,7 +44,8 @@ Global Const $titleCopTraxMain = "CopTrax II v"	; "CopTrax II v2.x.x"
 Global Const $titleAccount = "Account" ; "CopTrax - Login / Create Account"
 Global Const $titleInfo = "Action" ; "Menu Action"
 Global Const $titleAbout = "About" ; About CopTrax II
-Global Const $titleLogin = "Login"
+Global Const $titleLogin = "Login" ; Officer login
+Global Const $titleAdmin = "CopTrax" ; Administrator login
 Global Const $titleRadar = "Radar" ; "CopTrax | Radar"
 Global Const $titleReview = "Playback" ; "CopTrax | Video Playback"
 Global Const $titleSettings = "Setup" ; "CopTrax II Setup"
@@ -87,8 +88,7 @@ Run(@comSpec & ' /c schtasks /Delete /TN "ACI\CopTrax Welcome" /F')	; Delete the
 Run(@ComSpec & " /c schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F")	; Enable the Automation next time
 
 Global $fileToBeUpdate = $workDir & "tmp\" & @ScriptName
-Global $testEnd = FileExists($fileToBeUpdate) ? _VersionCompare( FileGetVersion(@AutoItExe), FileGetVersion($fileToBeUpdate) ) < 0 : False
-If FileGetSize($fileToBeUpdate) < 1000000 Then $testEnd = False	; update the client file only when it was completetly downloaded
+Global $testEnd = FileExists($fileToBeUpdate) And FileGetVersion($fileToBeUpdate) And FileGetSize($fileToBeUpdate) > 1000000	; update the client file only when it was completetly downloaded
 $fileToBeUpdate = 0
 Global $restart = $testEnd
 
@@ -122,12 +122,13 @@ Global $hTimer = TimerInit()	; Begin the timer and store the handler
 Global $heartbeatTimer = 1000 * $HEARTBEATINSECONDS	; Set the first time out
 Global $commandTimer = 2 * 1000	; request the first command in 2s
 
-$ip = TCPNameToIP($ip)
-If Not $ip Then
-	MsgBox($MB_OK, $mMB, "Please check the Ethernet or Wi-Fi connection of this DVR box.", 15)
+Local $tempIP = TCPNameToIP($ip)
+If Not $tempIP Then
+	MsgBox($MB_OK, $mMB, "Cannot get the IP address of " & $ip & @CRLF & "Please check the Ethernet or Wi-Fi connection of this DVR box.", 5)
 	RestartAutomation()
 	Exit
 EndIf
+$ip = $tempIP
 
 $Socket = TCPConnect($ip, $port)
 Do	; Try to confirm the running of CopTrax App and the network connection to server before running automation
@@ -138,19 +139,47 @@ Do	; Try to confirm the running of CopTrax App and the network connection to ser
 	EndIf
 
 	If $Socket < 0 Then
-		MsgBox($MB_OK, $mMB, "Unable connected to server. Please check the network connection or the server.", 2)
+		MsgBox($MB_OK, $mMB, "Unable connected to server at " & $ip & ":" & $port & @CRLF & "Please check the network connection or the server.", 2)
 		$Socket = TCPConnect($ip, $port)
 	EndIf
 Until ProcessExists($pCopTrax) And $Socket > 0
 MsgBox($MB_OK, $mMB, "Found CopTrax App running. Connected to server at " & $ip & ". Starting automation test." & @CRLF & "Esc to quit.", 2)
 
+$appVersion = FileGetVersion($CopTraxAppDir & $pCopTrax) ; Get the version of CopTrax App directly from the exe file
+LogUpload("Version of CopTrax App " & $CopTraxAppDir & $pCopTrax & " is " & $appVersion)
+LogUpload("Color of the selected pixels are " & PixelGetColor(925, 120, $mCopTrax) & ", " & PixelGetColor(1000, 508, $mCopTrax) & ", and " & PixelGetColor(240, 550, $mCopTrax) & ".")
+
+Local $count = 10
+While WinExists($titleStatus)
+	LogUpload("The accessories are not ready yet.")
+	Sleep(1000)
+	$count -= 1
+	If $count <= 0 Then
+		LogUpload("quit Automation test halt. Please check the accessories before continue.")
+		Sleep(1000)
+		Exit
+	EndIf
+WEnd
+
 If WinExists($titleAccount) Then
 	MsgBox($MB_OK, $mMB, "First time run. Try to create a temporal acount.", 2)
 	LogUpload("First time run. Try to create a temporal acount profile.")
-	LogUpload("Pixels are of color " & PixelGetColor(925, 120) & ", " & PixelGetColor(1000, 508) & ", and " & PixelGetColor(240, 550) & ".")
 	WinActivate($titleAccount)
 
 	If Not CreateNewAccount("auto1", "coptrax") Then
+		LogUpload("Something wrong! Have to reboot the box now.")
+		MsgBox($MB_OK, $mMB, "Something wrong! Have to reboot the box now.", 5)
+		Shutdown(2+4)	; force the window to reboot
+		Exit
+	EndIf
+EndIf
+
+If WinExists($titleLogin) Then
+	MsgBox($MB_OK, $mMB, "Got Officer login. Try to create a temporal officer acount.", 2)
+	LogUpload("Got Officer login. Try to create a temporal officer acount.")
+	WinActivate($titleLogin)
+
+	If Not OfficerLogin("cop2", "coptrax1") Then
 		LogUpload("Something wrong! Have to reboot the box now.")
 		MsgBox($MB_OK, $mMB, "Something wrong! Have to reboot the box now.", 5)
 		Shutdown(2+4)	; force the window to reboot
@@ -181,23 +210,25 @@ While $mCopTrax = 0
 	EndIf
 WEnd
 
-Local $count = 3
-While Not StringRegExp($boxID, "[A-Za-z]{2}[0-9]{6}") And ($count > 0)	; try to get the serial number before the start of automation
-	MsgBox($MB_OK, $mMB, "Now reading Serial Number from the box.", 2)
+$count = 3
+While Not StringRegExp($boxID, "[A-Za-z]{2}[0-9]{6}")	; try to get the serial number before the start of automation
+	LogUpload("Now reading Serial Number of the DVR box")
+	MsgBox($MB_OK, $mMB, "Now reading Serial Number of the DVR box.", 2)
 	If Not TestSettingsFunction("NULL") Then
 		ProcessClose($pCopTrax)	; restart the CopTrax App in case cannot read serial number
 		Sleep(1000)
 		RunCopTrax()
 		Sleep(1000)
 	EndIf
+
 	$count -= 1
+	If $count <= 0 Then
+		MsgBox($MB_OK, $mMB, "Cannot read the serial number! Have to reboot the box now.", 5)
+		logupload("Cannot read the serial number! Have to reboot the box now.")
+		Shutdown(2+4)	; force the window to reboot
+		Exit
+	EndIf
 WEnd
-If $count <= 0 Then
-	MsgBox($MB_OK, $mMB, "Cannot read the serial number of the box! Have to reboot the box now.", 5)
-	logupload("Cannot read the serial number of the box! Have to reboot the box now.")
-	Shutdown(2+4)	; force the window to reboot
-	Exit
-EndIf
 
 Local $path0 = @MyDocumentsDir & "\CopTraxTemp"
 Local $path1 = GetVideoFilePath()
@@ -325,12 +356,15 @@ Func RestartAutomation()
 	Local $filename = $workDir & "RestartClient.bat"
 	Local $sourceFile = $workDir & "tmp\" & @ScriptName
 	Local $file = FileOpen($filename, $FO_OVERWRITE)
-	FileWriteLine($file,"timeout /t 10")
+	;FileWriteLine($file,"timeout /t 10")
+	FileWriteLine($file,"ping " & $ip)
 	If (FileGetSize($sourcefile) > 1000000) And (_VersionCompare(FileGetVersion(@AutoItExe), FileGetVersion($sourceFile)) < 0) Then
 		FileWriteLine($file,"copy /Y " & $sourceFile & " " & @AutoItExe)
 	EndIf
 	FileWriteLine($file,"del " & $sourceFile)
-	FileWriteLine($file, "start  /d " & $workDir & " " & "Automation.bat")	; run the batch file to re-setup the wifi connection
+	;FileWriteLine($file, "start  /d " & $workDir & " " & "Automation.bat")	; run the batch file to re-setup the wifi connection
+	FileWriteLine($file, "start  /d " & $workDir & " CopTraxAutomationClient.exe")	; run the batch file to re-setup the wifi connection
+	FileWriteLine($file, "Exit")
 	FileClose($file)
 
 	If $Socket > 0 Then TCPCloseSocket($Socket)
@@ -386,18 +420,19 @@ Func QuitCopTrax()
 
 	Sleep(500)
 	Send("{TAB}{END}{TAB}{ENTER}")	; choose the Administrator
-	If Not GetHandleWindowWait($titleLogin, "", 10) Then
-		MsgBox($MB_OK, $mMB, "Unable to trigger the Login window.",2)
-		LogUpload("Unable to close the Login window by click on Apply button.")
+	;The Admin password input has been changed
+	If GetHandleWindowWait($titleAdmin, "(Administrator)") Or GetHandleWindowWait($titleLogin) Then
+		Send("135799{TAB}{ENTER}")	; type the administator password
+		MouseClick("", 500, 150)
+		Local $hWnd = $mCopTrax
 		$mCopTrax = 0
-		Return ProcessClose($pCopTrax)
+		Return WinWaitClose($hWnd, "", 10)
 	EndIf
 
-	Send("135799{TAB}{ENTER}")	; type the administator password
-	MouseClick("", 500, 150)
-	Local $hWnd = $mCopTrax
+	MsgBox($MB_OK, $mMB, "Unable to trigger the admin login window.",2)
+	LogUpload("Unable to trigger the admin login window.")
 	$mCopTrax = 0
-	Return WinWaitClose($hWnd, "", 10)
+	Return ProcessClose($pCopTrax)
 EndFunc
 
 Func TestAbout()
@@ -511,22 +546,28 @@ Func CreateNewAccount($name, $password)
 			LogUpload("Unable to focus on the Host Name input on handler " & $hServer & ".")
 		EndIf
 		Send("10.0.6.32")
-		ControlCommand($hServer, "", "[INSTANCE:1]", "Check")
+
+		LogUpload("The color at (342, 110) is " & Hex(PixelGetColor(342, 110, $hServer), 6) & " and " & Hex(PixelGetColor(342, 110, $mCopTrax), 6));
+		If _VersionCompare($appVersion, "2.8.1") < 0 Then ControlCommand($hServer, "", "[INSTANCE:1]", "Check")
+		;If $pColor Then
+		;	ClickCheckButton($hServer, "The server is hosted in a customer data center")
+		;	EndIf
+
 		ControlClick($hServer, "", "Test")
 
-		Local $i=0
+		Local $i = 10
 		Do
 			$txt = WinGetText($hServer, "Test")
-			$i += 1
+			$i -= 1
+			If $i <= 0 Then
+				WinClose($hServer)
+				LogUpload("Unable to connect to the required server. The text read are " & $txt & @CRLF & ".")
+				WinClose($hWnd)
+				Return False
+			EndIf
 			Sleep(1000)
-		Until StringInStr($txt, "Connection OK") Or $i > 10
+		Until StringInStr($txt, "Connection OK")
 
-		If $i > 10 Then
-			WinClose($hServer)
-			LogUpload("Unable to connect to the required server. The text read are " & $txt & @CRLF & ".")
-			WinClose($hWnd)
-			Return False
-		EndIf
 		ControlClick("Server", "", "OK")
 		WinWaitClose("Server", "", 5)
 
@@ -564,27 +605,27 @@ Func CreateNewAccount($name, $password)
 
 	$mCopTrax = 0
 	Local $count = 5
-	While WinExists($titleStatus) And ($count > 0)
+	While WinExists($titleStatus)
 		Sleep(1000)
 		$count -= 1
+		If $count <= 0 Then
+			LogUpload("The accessories are not ready yet.")
+			LogUpload("Captured Accessories screen file " & TakeScreenCapture($titleStatus) & ". It is now on the way sending to server.")
+			Return False
+		EndIf
 	WEnd
-	If $count <= 0 Then
-		LogUpload("The accessories are not ready yet.")
-		LogUpload("Captured Accessories screen file " & TakeScreenCapture($titleStatus) & ". It is now on the way sending to server.")
-		Return False
-	EndIf
 
 	$count = 5	; adding the check for display malfunction, trying 5 times
-	While Not IsDisplayCorrect() And ($count > 0)
+	While Not IsDisplayCorrect()
 		ProcessClose($pCopTrax)
 		Sleep(1000)
 		RunCopTrax()
 		$count -= 1
+		If $count <=0 Then
+			LogUpload("CopTrax display in-correct after trying for 5 times.")
+			Return False
+		EndIf
 	WEnd
-	If $count <=0 Then
-		LogUpload("CopTrax display in-correct after trying for 5 times.")
-		Return False
-	EndIf
 
 	$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
 	If Not $mCopTrax Then
@@ -606,6 +647,38 @@ Func CreateNewAccount($name, $password)
 
 	$videoFilesCam1 = GetVideoFileNum($path1, "*.wmv") + GetVideoFileNum($path0, @MDAY & "*.mp4")
 	$videoFilesCam2 = GetVideoFileNum($path2, "*.wmv") + GetVideoFileNum($path2, "*.avi")
+	Return True
+EndFunc
+
+Func OfficerLogin($name, $password)
+	Local $hWnd = GetHandleWindowWait($titleLogin, "details", 10)
+	Local $hServer = 0
+	Local $txt = ""
+	If  $hWnd = 0 Then
+		MsgBox($MB_OK, $mMB, "Unable to trigger the Officer Login window. " & @CRLF, 5)
+		LogUpload("Unable to trigger the Officer Login window.")
+		Return False
+	EndIf
+
+	Send($name & "{Tab}")	; type the officer user name
+	Sleep(500)
+
+	Send($password & "{Tab}")	; type the user password
+	Sleep(500)
+	Send("{Enter}")	; type the Enter on login
+
+	Sleep(1000)
+	If WinWaitClose($hWnd,"",10) = 0 Then
+		$txt = WinGetText($hWnd)
+		MsgBox($MB_OK, $mMB, "Clickon the Register button to close the window failed.",2)
+		LogUpload("Unable to exit by click on the Register button. Messages in windows are " & $txt)
+		WinClose($hWnd)	; close this window
+
+		Sleep(1000)
+		Send("{Enter}")	; close the warning window
+		Return False
+	EndIf
+
 	Return True
 EndFunc
 
@@ -635,6 +708,7 @@ EndFunc
 
 Func EndRecording($click)
 	LogUpload("Testing stop record function.")
+	Local $hEndRecord
 
 	If $click Then
 		If Not ReadyForTest() Then  Return False
@@ -645,22 +719,22 @@ Func EndRecording($click)
 		EndIf
 
 		MsgBox($MB_OK, $mMB, "Testing stop record function.", 2)
-		Local $i=0
+		Local $i = 3
 		Do
 			MouseClick("", 960, 80)	; click on the button to stop record
-			$i += 1
-		Until GetHandleWindowWait($titleEndRecord, "OK") Or ($i > 3)
-	EndIf
+			$i -= 1
+			If $i <= 0 Then
+				If $click Then
+					LogUpload("Unable to stop the record by a click on the button. ")
+				Else
+					LogUpload("Unable to stop the record by light switch button. ")
+				EndIf
+				MsgBox($MB_OK,  $mMB, "Unable to trigger the end record function",2)
+				Return False
+			EndIf
 
-	Local $hEndRecord = GetHandleWindowWait($titleEndRecord, "OK")
-	If $hEndRecord = 0 Then
-		If $click Then
-			LogUpload("Unable to stop the record by a click on the button. ")
-		Else
-			LogUpload("Unable to stop the record by light switch button. ")
-		EndIf
-		MsgBox($MB_OK,  $mMB, "Unable to trigger the end record function",2)
-		Return False
+			$hEndRecord = GetHandleWindowWait($titleEndRecord, "OK")
+		Until $hEndRecord
 	EndIf
 
 	ControlSend($hEndRecord, "", "[REGEXPCLASS:(?i)(.*EDIT.*); INSTANCE:1]", "CopTrax automation test.")
@@ -694,7 +768,8 @@ Func TestSettingsFunction($arg)
 
 	MouseClick("",960, 460)
 
-	If GetHandleWindowWait($titleLogin) Then
+	;The Admin password input has been changed
+	If GetHandleWindowWait($titleAdmin, "(Administrator)")  Or Not GetHandleWindowWait($titleLogin) Then
 		Send("135799{TAB}{ENTER}")	; type the administator password
 		MouseClick("", 500, 150)
 		$releaseRead = "WSP"
@@ -909,15 +984,15 @@ Func ReadyForTest()
 	AutoItSetOption ("WinTitleMatchMode", 2)
 
 	Local $i = 5
-	While WinExists($titleStatus) And ($i > 0)
+	While WinExists($titleStatus)
 		Sleep(1000)
 		$i -= 1
+		If $i <= 0 Then
+			LogUpload("The accessories are not ready.")
+			LogUpload("Captured Accessories screen file " & TakeScreenCapture($titleStatus) & ". It is now on the way sending to server.")
+			Return False
+		EndIf
 	WEnd
-	If $i <= 0 Then
-		LogUpload("The accessories are not ready.")
-		LogUpload("Captured Accessories screen file " & TakeScreenCapture($titleStatus) & ". It is now on the way sending to server.")
-		Return False
-	EndIf
 
 	If WinExists($titleCopTraxMain, "Details") Then
 		ControlClick($titleCopTraxMain, "Details", "Details")
@@ -928,8 +1003,8 @@ Func ReadyForTest()
 		Return False
 	EndIf
 
-	If WinExists($titleLogin) Then
-		WinClose($titleLogin)
+	If WinExists($titleAdmin, "(Administrator)") Then
+		WinClose($titleAdmin, "(Administrator)")
 		Sleep(100)
 	EndIf
 
@@ -958,19 +1033,19 @@ Func ReadyForTest()
 
 	$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
 	$i = 5
-	While WinExists("[CLASS:IPTip_Main_Window]") And ($i > 0)
+	While WinExists("[CLASS:IPTip_Main_Window]")
 		Send("{Tab}")	; send a Tab key to get rid of soft keyboard
 		Sleep(200)
 		$i -= 1
+		If $i <= 0 Then
+			LogUpload("The soft keyboad cannot be escaped.")
+			LogUpload("Captured Accessories screen file " & TakeScreenCapture($titleCopTraxMain) & ". It is now on the way sending to server.")
+			Return False
+		EndIf
 	WEnd
-	If $i <= 0 Then
-		LogUpload("The soft keyboad cannot be escaped.")
-		LogUpload("Captured Accessories screen file " & TakeScreenCapture($titleCopTraxMain) & ". It is now on the way sending to server.")
-		Return False
-	EndIf
 
 	If $mCopTrax Then
-		Send("{Tab}")	; send a Tab key to get rid of soft keyboard
+		;Send("{Tab}")	; send a Tab key to get rid of soft keyboard
 		Return True
 	EndIf
 
@@ -1234,15 +1309,15 @@ Func LogUpload($s)
 			Sleep(1000)
 			$count -= 1
 		EndIf
-	Until $rst Or $count <= 0
 
-	If $err Then	; if not able to send in 5 seconds
-		MsgBox($MB_OK, $mMB, "Connection to server is lost when sending " & $s & " with error "  & $err & @CRLF & "Restart the automation test now.", 5)
-		RestartAutomation()
-		Return
-	Else
-		$heartbeatTimer = TimerDiff($hTimer) + 1000 * $HEARTBEATINSECONDS - 2000	; reset the timeout timer based on current moment
-	EndIf
+		If $count <=0 Then	; if not able to send in 5 seconds
+			MsgBox($MB_OK, $mMB, "Connection to server is lost when sending " & $s & " with error "  & $err & @CRLF & "Restart the automation test now.", 5)
+			RestartAutomation()
+			Return
+		EndIf
+	Until $rst
+
+	$heartbeatTimer = TimerDiff($hTimer) + 1000 * $HEARTBEATINSECONDS - 2000	; reset the timeout timer based on current moment
 EndFunc
 
 Func IsRecording()
@@ -1904,6 +1979,21 @@ Func RunCopTrax()
 	LogUpload("Restarting CopTrax App.")
 	Run($CopTraxAppDir & $pCopTrax, $CopTraxAppDir)
 	Sleep(10*1000) ; The new CopTrax wait longer
+
+	; There can be officer login after reboot
+	If WinExists($titleLogin) Then
+		MsgBox($MB_OK, $mMB, "Got Officer login. Try to create a temporal officer acount.", 2)
+		LogUpload("Got Officer login. Try to create a temporal officer acount.")
+		WinActivate($titleLogin)
+
+		If Not OfficerLogin("cop2", "coptrax1") Then
+			LogUpload("Something wrong! Have to reboot the box now.")
+			MsgBox($MB_OK, $mMB, "Something wrong! Have to reboot the box now.", 5)
+			Shutdown(2+4)	; force the window to reboot
+			Exit
+		EndIf
+	EndIf
+
 	$mCopTrax = GetHandleWindowWait($titleCopTraxMain)
 	If $mCopTrax Then
 		$userName = GetUserName()
@@ -2194,6 +2284,9 @@ Func OnAutoItExit()
 EndFunc   ;==>OnAutoItExit
 
 Func ReadConfig()
+	If $CmdLine[0] >= 1 Then	$configFile = $CmdLine[1]
+	MsgBox($MB_OK, $mMB, "Reading the client configuration from " & $configFile, 2)
+
 	Local $file = FileOpen($configFile,0)	; for test case reading, readonly
 	Local $aLine
 	Local $aTxt

@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.8.0.1
+#AutoIt3Wrapper_Res_Fileversion=2.8.0.2
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -704,7 +704,7 @@ Func LogWrite($n,$s)
 		$s = @HOUR & ":" & @MIN & ":" & @SEC & @TAB & $s & @CRLF	; show the log with time stamps
 	EndIf
 
-	FileWrite($logFiles[$n], $s)
+	If $logFiles[$n] Then FileWrite($logFiles[$n], $s)
 	If StringInStr($s, "error event") Then Return
 	$s = StringReplace($s, @TAB, " ")
 
@@ -1009,6 +1009,7 @@ Func ProcessReply($n)
 			FileClose($logFiles[$n])
 			$logFiles[$n] = FileOpen($workDir & "log\" & $boxID[$n] & ".log", 1+8) ; open log file for append write in text mode
 			FileWrite($logFiles[$n], $logContent[$n])	; write the previouse log content into new log file
+			$logContent[$n] = "" ; clear the log when it was written to log file
 			$InproperID = False	; clear the flag
 		EndIf
 		Return True
@@ -1082,8 +1083,7 @@ Func ProcessReply($n)
 			GUICtrlSetData($pGUI[$n], 100)
 			If $testFailures[$n] = 0 Then
 				LogWrite($n, "Server" & @TAB & "All tests passed.")
-				LogWrite($automationLogPort, $boxID[$n] & @TAB & "All tests passed.")
-				LogWrite($automationLogPort, $boxID[$n] & @TAB & "AUTOMATION TEST ENDS.")
+				LogWrite($automationLogPort, $boxID[$n] & @TAB & "All tests passed. AUTOMATION TEST ENDS.")
 				GUICtrlSetColor($pGUI[$n], $COLOR_GREEN)
 				GUICtrlSetData($nGUI[$n], "PASSED")
 				UpdateLists($boxID[$n], "")
@@ -1147,11 +1147,12 @@ Func StartNewTest($n, $ID, $clientVersion)
 	LogWrite($n, " ")
 	LogWrite($n, "=====")
 	LogWrite($n, " " & @MON & "/" & @MDAY & "/" & @YEAR)
-	LogWrite($n, " Automation test for CopTrax DVR box " & $ID)
+	LogWrite($n, " Start automation test for CopTrax DVR box " & $ID & " at " & $boxIP[$n])
 	LogWrite($n, " Current version of the test server : " & FileGetVersion ( @ScriptFullPath ) & ", of the client : " & $clientVersion)
 	GUICtrlSetData($cLog, $logContent[$n])	; display and update the log content
 
 	LogWrite($automationLogPort, "")
+	LogWrite($automationLogPort, " " & @MON & "/" & @MDAY & "/" & @YEAR)
 	LogWrite($automationLogPort, $ID & @TAB & "Connected on " & $boxIP[$n] & " at channel " & $n & ".")
 
 	$portDisplay = $n
@@ -1161,7 +1162,7 @@ Func StartNewTest($n, $ID, $clientVersion)
 
 	Local $latestVersion = FileGetVersion($workDir & "latest\CopTraxAutomationClient.exe")
 	If _VersionCompare($clientVersion, $latestVersion) < 0 Then	; $latest version is greater
-		PushCommand($n, "update C:\CopTraxAutomation\tmp\CopTraxAutomationClient.exe restarttest")
+		PushCommand($n, "update C:\CopTraxAutomation\tmp\CopTraxAutomationClient.exe restarttest restarttest")
 		LogWrite($n, "Find latest automation tester in Server. Updating client to " & $latestVersion & ". Test will restart.")
 		LogWrite($n, "=====")
 		Return
