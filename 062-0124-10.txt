@@ -6,7 +6,11 @@
 ;	1	record 		duration repeat interval	do (repeat) times of the record, each with (duration) mins and (interval) mins in between
 ;	2	settings 	pre chunk cam2 cam3 keyboard	do the settings	pre-event in pre seconds, chunk in minutes, and cam2/cam3/keyboard as enable/enabled/disable/disabled
 ;	3	createprofile 	username password		create a new account with username and password
-;	4	upload 		file				upload a file in the box to automation server
+;	4	upload 		file				upload a file in the box to automation server. In case file is assigned to any of the 4 following words, it means a different upload options. 
+;								1. file=idle, default option, specifies that put later files in queue, which will be uploaded during heartbeats.
+;								2. file=all, specifies to upload all the files in queue right now.
+;								3. file=now, specifies to upload one file in queue right now.
+;								4. file=wait, specifies to put later files in queue which will not be uploaded until get an all or now command.
 ;	5	update 		file				update a file in the box with its latest version in automation server
 ;	6	checkapp 	version				check the CopTrax App version
 ;	7	checkfirmware 	version				check the CopTrax box's firmware version
@@ -41,17 +45,18 @@
 ;	29	synctmz						set the box's time zone according to the server
 ;	29	runapp						start the Corptrax App
 ;	30	stopapp						stop the Corptrax App
-;	31	config		ct ev bwc			configure the CopTrax App to ct=ver1, Evidence viwer to ev=ver2 and Body wear camera to bwc=ver3.
+;	31	config		ct release map			configure the CopTrax App to ct=ver1, release to release=spec and map of evidence viewer to map=state.
 ;								Prepare for the CopTrax App configuration: 
 ;								1) create ver1.mcfg file at C:\CopTraxAutomation\latest folder in server, 
 ;								2) store the test case in ver1.txt where contains this command at c:\CopTraxAutomation folder in server, 
 ;								3) store the files need to be copied over (CopTrax.config and IncaXPCApp.exe at least) in client at C:\CopTrax Support\CT-ver1 folder
-;								4) store the files need to be copied over (CopTraxEvidenceViewer.exe at least) in client at C:\CopTrax Support\EV-ver2 folder;
-;								5) store the files need to be copied over (???.exe at least) in client at C:\CopTrax Support\BWC-ver3 folder;
-;	32	cleanup						clean the trails of running during the automation test, delete the recorded files, delete the accounts
-;	33	quittest					stop automation test
-;	34	restarttest					re-start the automation test
-;	35	reboot						reboot the box
+;								4) store the map files need to be copied over (state.map) in client at C:\CopTrax Support\maps folder;
+;								5) the release can be Universal or WSP in 2.4.3;
+;	32	onfailure	command				Check if there is any failure in the test. If there is failed result, then do the command. The command can be reboot, restarttest, or quittest.
+;	33	cleanup						clean the trails of running during the automation test, delete the recorded files, delete the accounts
+;	34	quittest					stop automation test
+;	35	restarttest					re-start the automation test
+;	36	reboot						reboot the box
 ;=============================================================================================================================================================================
 ; Each line contains a single command;
 ; Commands and keywords are case insensitive
@@ -66,17 +71,33 @@
 ; It is required to put a "batchtest start" command at the begging of any test case when you want to do triggers test; This will make other boxes to wait this box at "batch align" command;
 ; It is required to put a "batchtest align" command right begore trigger commands, which may align all the box before trigger test;
 
+status
+
 synctmz
 synctime
 
-configure ct=WS2
+configure release=Universal bwc=on
+OnFailure reboot	
 
-CreateProfile Username=auto1 password=coptrax
+settings pre=60 chunk=20 cam2=enabled cam3=enabled keyboard=disable	; enable and enabled are of the same meaning
+about
+checkapp 2.8.5
+checkfirmware 2.1.4
+OnFailure reboot	
 
-settings pre=30 chunk=20 cam2=enabled cam3=enabled keyboard=disable	; enable and enabled are of the same meaning
-checkapp 2.2.2
-checkfirmware 2.1.2
+photo
+camera 
+OnFailure reboot
 
-quittest
+upload C:\CopTrax\_Support\BoardTest.log
+record duration=125 
+OnFailure reboot	
 
+update C:\Program\_Files\_(x86)\IncaX\CopTrax\IncaXPCApp.exe.config
+update C:\Program\_Files\Applied\_Concepts\_Inc\CopTrax\_Body\_Camera\_Manager\MobileCam.exe.config
+update C:\CopTrax\_Support\Tools\CopTraxWelcome\CopTraxWelcome.exe.config
+;update C:\CopTrax\_Support\Tools\CopTraxWelcome\CopTraxWelcome.exe
+
+OnFailure reboot
+upload all
 cleanup

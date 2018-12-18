@@ -1,117 +1,141 @@
-@Echo off
-
-:: Set the Welcome screen to be prompt next time
-schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST
-
-:: Change the host name of the DVR temporally
-setlocal
-set RAND=%random%
-set NEWNAME=Coptrax-%RAND%
-WMIC computersystem where name="%computername%" call rename name="%NEWNAME%"
+::*****************************************************************
+::* Pre-automation check for CopTrax Austin, version 2.8.5        *
+::*---------------------------------------------------------------*
+::*                 __   _,--="=--,_   __                         *
+::*                /  \."    .-.    "./  \                        *
+::*               /  ,/  _   : :   _  \/` \                       *
+::*               \  `| /o\  :_:  /o\ |\__/                       *
+::*                `-'| :="~` _ `~"=: |                           *
+::*                   \`     (_)     `/                           *
+::*            .-"-.   \      |      /   .-"-.                    *
+::*.---------{     }--|  /,.-'-.,\  |--{     }---------.          *
+::* )       (_)_)_)  \_/`~-===-~`\_/  (_(_(_)          (          *
+::*( By: George Sun, Duc T. Nguyen, and My Lien Vuong   )         *
+::* )2018/12                                           (          *
+::*'----------------------------------------------------'         *
+::*****************************************************************
+@ECHO off
+TITLE CopTrax Board Test
+SETLOCAL EnableDelayedExpansion
 
 CLS
-Echo Welcome to CopTrax DVR Manufacture Test And Configuration
-Echo CopTrax Display Checking
-Echo
+ECHO This is the Board level test of CopTrax.
+:: Check if we are running as Admin
+FSUTIL dirty query %SystemDrive% >nul
+IF ERRORLEVEL 1 (ECHO This batch file need to be run as Admin. && PAUSE && EXIT /B)
+
+:: PAUSE for a couple of seconds
+ECHO Starts in 5s.
+TIMEOUT /t 5
+SET me=BoardTest
+SET log=C:\CopTrax Support\%me%.log
+ECHO %date%  %~0 > "%log%"
+
+ECHO Checking for the patch.bat exist
+IF EXIST D:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL D:\Patch.dat)
+
+:: Set the Welcome screen to be prompt next time
+SCHTASKS /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST
+CALL :log Setup the scheduler task of Welcome Screen.
+
+:: Change the host name of the DVR temporally
+::SET RAND=%random%
+SET NEWNAME=Coptrax-%random%
+WMIC computersystem where name="%computername%" call rename name="%NEWNAME%"
+CALL :log Change the hostname of this DVR to %NEWNAME%.
 
 :DISPLAY
-Echo Please check the CopTrax display. 
-Echo Type 1 in case you cannot see the bars of CopTrax.
-Echo Type 2 in case the bars displayed and you want to continue to manufacture tool test.
-CHOICE /N /C:12 /M "PICK A NUMBER (1,2)"%1
-IF ERRORLEVEL == 2 GOTO MANUFACTURE
-Taskkill /IM IncaXPCApp.exe /F
+ECHO Please check the CopTrax display.
+ECHO Type 1 in case you cannot see the bars of CopTrax.
+ECHO Type 2 in case the bars displayed and you want to continue to manufacture tool test.
+CHOICE /N /C:12 /M "PICK A NUMBER (1 or 2)"%1
+IF ERRORLEVEL 2 GOTO MANUFACTURE
+CALL :log The display resolution of current CopTrax App is in-correct.
+TASKKILL /IM IncaXPCApp.exe /F
 START /d "C:\Program Files (x86)"\IncaX\CopTrax IncaXPCApp.exe
+CALL :log Restart the CopTrax App to adjust the resolution.
 GOTO DISPLAY
 
 :MANUFACTURE
 :: kill the CopTrax process to leave rooms for validation tools and manufacture tools
-CLS
-Taskkill /IM IncaXPCApp.exe /F
+ECHO.
+CALL :log Welcome to CopTrax DVR Manufacture Test And Configuration.
+TASKKILL /IM IncaXPCApp.exe /F && (CALL :log Killed the CopTrax process to leave rooms for validation tools and manufacture tools.) || (CALL :log No CopTrax is running.)
 
 C:
 CD "C:\CopTrax Support\tools\Manufacturing Test -01"
 ManufacturingTest.exe
+CALL :log Complete the test with Manufacture Tool.
 
 CD "C:\CopTrax Support\CopTraxIIValidation"
 CopTraxBoxII.exe
+CALL :log Turned off the heartbeat of the PIC using Validation Tool.
 
-
-CLS
-netsh wlan disconnect interface="Wi-Fi 2"
-Echo Now it is time to test Wi-Fi connection
-
-:PRIVATE1
-Echo Let's try Wi-Fi 1 with private hotspot
-netsh wlan connect name=ACI-CopTrax2 interface=WiFi
-GOTO PING1
-
-:PUBLIC1
-Echo Let's try Wi-Fi 1 with public hotspot
-netsh wlan connect name=ACI-CopTrax interface=WiFi
+ECHO.
+CALL :log Start Wi-Fi test.
+CALL :log Now test Wi-Fi 1. Turn the WI-Fi 2 off first.
+NETSH wlan disconnect interface="Wi-Fi 2"
+SET WIFIProfile=ACI-CopTrax2
 
 :PING1
-Echo Let's ping an external website at www.cnn.com.
-timeout /t 10
-ping www.cnn.com -n 5
-Echo Let's ping an internal website at automation server
-ping ENGR-CX456K2 -n 5
+IF !WIFIProfile! == ACI-CopTrax (SET WIFIProfile=ACI-CopTrax2) ELSE (SET WIFIProfile=ACI-CopTrax)
+CALL :log Connecting Wi-Fi 1 to !WIFIProfile!.
+NETSH wlan connect name=!WIFIProfile! interface=WiFi
+ECHO Please wait for a while to let the Wi-Fi connected.
+TIMEOUT /t 5
 
-Echo Type 1 in case you want to try Wi-Fi 1 test again with private hotspot.
-Echo Type 2 in case you want to try Wi-Fi 1 test again with public hotspot again.
-Echo Type 3 in case the Wi-Fi test passed and you want to activiate the Windows.
-Echo Type 4 in case the Wi-Fi test passed and you want to skip the Windows activation.
-CHOICE /N /C:1234 /M "PICK A NUMBER (1,2,3, or 4)"%1
-IF ERRORLEVEL == 4 GOTO PRIVATE2
-IF ERRORLEVEL == 3 GOTO ACTIVATION
-IF ERRORLEVEL == 2 GOTO PUBLIC1
-GOTO PRIVATE1
+CALL :log Ping an external website at www.cnn.com.
+PING www.cnn.com
+IF ERRORLEVEL 1 ( CALL :log Ping failed. & GOTO PING1 )
+CALL :log Ping an internal website at automation server.
+PING ENGR-CX456K2
+IF ERRORLEVEL 1 ( CALL :log Ping failed. & GOTO PING1 )
+CALL :log PASSED Wi-Fi Test on Wi-Fi 1.
 
-:ACTIVATION
-CLS
-Echo Now activating the Windows....
+ECHO.
+ECHO Type 1 to activiate the Windows.
+ECHO Type 2 to skip the Windows activation.
+CHOICE /N /C:12 /M "PICK A NUMBER (1 or 2)"%1
+IF ERRORLEVEL 2 GOTO WIFI2
+
+:ACTIVIATION
+ECHO Now activating the Windows....
 cscript c:\windows\system32\slmgr.vbs -ato
-Echo Type 1 in case you want to try the activation again.
-Echo Type 2 in case the activiation has passed.
-CHOICE /N /C:12 /M "PICK A NUMBER (1,2)"%1
-IF ERRORLEVEL == 2 GOTO PRIVATE2
-GOTO ACTIVATION
+IF ERRORLEVEL 1 (CALL :log FAILED to activiate the Windows & GOTO ACTIVATION)
+CALL :log Windows has been successfully activiated.
+TIMEOUT /t 3
 
-:PRIVATE2
-CLS
-Echo Let's try Wi-Fi 2 with private hotspot
-netsh wlan disconnect interface=WiFi
-netsh wlan connect name=ACI-CopTrax2 interface="Wi-Fi 2"
-GOTO PING2
-
-:PUBLIC2
-Echo Let's try Wi-Fi 2 with public hotspot
-netsh wlan connect name=ACI-CopTrax interface="Wi-Fi 2"
+:WIFI2
+CALL :log Now test Wi-Fi 2. Turn the WI-Fi 1 off first.
 
 :PING2
-Echo Let's ping an external website at www.cnn.com
-timeout /t 10
-ping www.cnn.com -n 5
-Echo Let's ping an internal website at automation server
-ping ENGR-CX456K2 -n 5
+IF !WIFIProfile! == ACI-CopTrax (SET WIFIProfile=ACI-CopTrax2) ELSE (SET WIFIProfile=ACI-CopTrax)
+NETSH wlan connect name=!WIFIProfile! interface="WiFi 2"
+CALL :log Connecting Wi-Fi 2 to !WIFIProfile!.
+ECHO Please wait for a while to let the Wi-Fi connected.
+TIMEOUT /t 5
 
-Echo Type 1 in case you want to try Wi-Fi 2 test again with private hotspot.
-Echo Type 2 in case you want to try Wi-Fi 2 test again with public hotspot.
-Echo Type 3 in case the Wi-Fi 2 test has passed.
-CHOICE /N /C:123 /M "PICK A NUMBER (1,2,3)"%1
-IF ERRORLEVEL == 3 GOTO END
-IF ERRORLEVEL == 2 GOTO PUBLIC2
-GOTO PRIVATE2
-
-:END
-CLS
+CALL :log Ping an external website at www.cnn.com.
+PING www.cnn.com
+IF ERRORLEVEL 1 ( CALL :log Ping to www.cnn.com failed. & GOTO PING2 )
+CALL :log Ping an internal website at automation server.
+PING ENGR-CX456K2
+IF ERRORLEVEL 1 ( CALL :log Ping to ENGR-CX456K2 failed. & GOTO PING2 )
+CALL :log PASSED Wi-Fi Test on Wi-Fi 2.
+ECHO.
 
 :: Delete the Welcome Screen task and add the automation task
-schtasks /Delete /TN "ACI\CopTrax Welcome" /F
-schtasks /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F /RL HIGHEST
+SCHTASKS /Delete /TN "ACI\CopTrax Welcome" /F && (CALL :log Deleted the scheduler task for Welcome Screen.)
+SCHTASKS /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F /RL HIGHEST && (CALL :log Added the task for automation.)
 
-Echo All the tests passed.
-Echo Press any key to end the test for this DVR and turn it to burn-in rack test.
-pause
+ECHO.
+CALL :log All the board tests passed.
+ENDLOCAL
+PAUSE
+EXIT /B 0
 
-
+:: A function to write to a log file and write to stdout
+:log
+ECHO %time% : %* >> "%log%"
+ECHO %*
+EXIT /B 0

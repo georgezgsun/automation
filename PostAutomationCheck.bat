@@ -1,4 +1,6 @@
 @Echo off
+TITLE CopTrax Final check
+
 :: Set the Welcome screen to be prompt next time
 schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST
 
@@ -6,7 +8,7 @@ CLS
 Echo This batch assists to check the CopTrax DVR after the burn-in automation test.
 
 :CHECK
-Echo Current configuration is 
+Echo Current configuration is
 Dir "C:\CopTrax Support\*.flg"
 Echo Please check wheather the CopTrax App and the Body Worn Camera fit this configuration
 

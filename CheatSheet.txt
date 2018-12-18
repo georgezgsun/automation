@@ -1,0 +1,22 @@
+﻿Automation Burn-In Test Cheatsheet
+
+1. Turn ON “TRIPP-LITE” power box
+2. Connect all devices (GPS antenna, CAM1, CAM2, Monitor connector) to UUTs EXCEPT power connector
+3. Restart Test Server Application and select UUT Market release
+	a. For Universal release, select 062-0124-00 from the drop-down box on Test Server Window.
+ 	b. For Wisconsin release, select 062-0124-01 from the drop-down box on Test Server Window.
+	c. For Mexico release, select 062-0124-10 from the drop-down box on Test Server Window.
+4. For each UUT, perform the following steps to start test:
+	a.	Connect Power cable to a UUT.
+	b.	Select Monitor Display.
+	c.	Wait until UUT LED become solid green.
+	d.	Automation test starts automatically. 
+		NOTE: No user interaction is required during test run
+5. Repeat step 4 for all UUTs one by one. 
+6. After test completes, perform the following steps for each UUT:
+	a. Switch Monitor to a UUT, ensure Welcome Screen Window displayed.
+	b. Check UUT test status on Test Server window:
+		- If UUT is listed under the left panel “PASSED”, unplug it and label as PASSED.
+		- If UUT is listed under the left panel “FAILED”, unplug it and label as FAILED.
+		(Notice Engineering team if further debugging is needed for the failed UUT)
+7. Close Test Server window when ALL UUTs completed.
