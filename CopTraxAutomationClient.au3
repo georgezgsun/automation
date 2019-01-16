@@ -1,11 +1,11 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 2.8.0.2)
+#pragma compile(FileVersion, 2.8.5.0)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
 #pragma compile(CompanyName, 'Stalker')
-#pragma compile(Icon, ../automation.ico)
+#pragma compile(Icon, automation.ico)
 ;
 ; Test client for CopTrax Version: 3.2
 ; Language:       AutoIt
@@ -145,8 +145,14 @@ Do	; Try to confirm the running of CopTrax App and the network connection to ser
 Until ProcessExists($pCopTrax) And $Socket > 0
 MsgBox($MB_OK, $mMB, "Found CopTrax App running. Connected to server at " & $ip & ". Starting automation test." & @CRLF & "Esc to quit.", 2)
 
-$appVersion = FileGetVersion($CopTraxAppDir & $pCopTrax) ; Get the version of CopTrax App directly from the exe file
-LogUpload("Version of CopTrax App " & $CopTraxAppDir & $pCopTrax & " is " & $appVersion)
+$appVersion = ReportFile($CopTraxAppDir & $pCopTrax) ; Get the version of CopTrax App directly from the exe file
+$libraryVersion = ReportFile($CopTraxAppDir & "CopTraxII.dll") ; Get the version of CopTraxII.dll directly from the dll file
+ReportFile($CopTraxAppDir & "eBlackBox.dll")
+ReportFile($CopTraxAppDir & "FFMPEGMuxer.dll")
+ReportFile($CopTraxAppDir & "CameraLibBase.dll")
+ReportFile($CopTraxAppDir & "CameraLibOpenX.dll")
+ReportFile($CopTraxAppDir & "ManagedWifi.dll")
+ReportFile($CopTraxAppDir & "CameraLibOpenX.dll")
 LogUpload("Color of the selected pixels are " & PixelGetColor(925, 120, $mCopTrax) & ", " & PixelGetColor(1000, 508, $mCopTrax) & ", and " & PixelGetColor(240, 550, $mCopTrax) & ".")
 
 Local $count = 10
@@ -174,7 +180,7 @@ If WinExists($titleAccount) Then
 	EndIf
 EndIf
 
-If WinExists($titleLogin) Then
+If WinExists($titleLogin, "details") Then
 	MsgBox($MB_OK, $mMB, "Got Officer login. Try to create a temporal officer acount.", 2)
 	LogUpload("Got Officer login. Try to create a temporal officer acount.")
 	WinActivate($titleLogin)
@@ -320,6 +326,18 @@ EndIf
 
 Exit
 
+Func ReportFile($filename)
+	Local $fileVersion = FileGetVersion($filename)
+	If @error Then $fileVersion = "0.0.0.0"
+
+	Local $fileSize = FileGetSize($filename)
+	Local $fileDate = FileGetTime($filename, $FT_CREATED, $FT_STRING)
+	If @error Then $fileDate = "0"
+
+	LogUpload($filename & " is of version " & $fileVersion & ", of size " & $fileSize & ", of created date " & $fileDate)
+	Return $fileVersion
+EndFunc
+
 Func RunValidationTool()
 	If Not GetHandleWindowWait("Trigger") Then
 		LogUpload("Unable to trigger Validation Tool. Reboot now.")
@@ -421,7 +439,7 @@ Func QuitCopTrax()
 	Sleep(500)
 	Send("{TAB}{END}{TAB}{ENTER}")	; choose the Administrator
 	;The Admin password input has been changed
-	If GetHandleWindowWait($titleAdmin, "(Administrator)") Or GetHandleWindowWait($titleLogin) Then
+	If GetHandleWindowWait($titleAdmin, "Administrator") Or GetHandleWindowWait($titleLogin) Then
 		Send("135799{TAB}{ENTER}")	; type the administator password
 		MouseClick("", 500, 150)
 		Local $hWnd = $mCopTrax
@@ -769,7 +787,7 @@ Func TestSettingsFunction($arg)
 	MouseClick("",960, 460)
 
 	;The Admin password input has been changed
-	If GetHandleWindowWait($titleAdmin, "(Administrator)")  Or Not GetHandleWindowWait($titleLogin) Then
+	If GetHandleWindowWait($titleAdmin, "Administrator") Then
 		Send("135799{TAB}{ENTER}")	; type the administator password
 		MouseClick("", 500, 150)
 		$releaseRead = "WSP"
@@ -777,7 +795,7 @@ Func TestSettingsFunction($arg)
 		$releaseRead = "Universal"
 	EndIf
 
-	Local $hWnd = GetHandleWindowWait($titleSettings, "", 10)	;"CopTrax II Setup"
+	Local $hWnd = GetHandleWindowWait($titleSettings, "Capture", 10)	;"CopTrax II Setup"
 	If $hWnd = 0 Then
 		MsgBox($MB_OK, $mMB, "Unable to trigger the settings function.", 2)
 		LogUpload("Unable to start the settings window.")
@@ -790,24 +808,32 @@ Func TestSettingsFunction($arg)
 		Local $txt = WinGetText($hWnd)
 
 		If StringInStr($txt, "Capture", 1) Then	; Cameras
-			ControlClick($hWnd, "", "Test")
+			ControlClick($hWnd, "Test", "Test")
+
+			Sleep(3000)
 			Switch $pre
 				Case "0"
 					Send("+{Tab}0{ENTER}")
+					LogUpload("The pre-event is set to 0s.")
 				Case "15"
 					Send("+{Tab}01{ENTER}")
+					LogUpload("The pre-event is set to 15s.")
 				Case "30"
 					Send("+{Tab}3{ENTER}")
+					LogUpload("The pre-event is set to 30s.")
 				Case "45"
 					Send("+{Tab}4{ENTER}")
+					LogUpload("The pre-event is set to 45s.")
 				Case "60"
 					Send("+{Tab}6{ENTER}")
+					LogUpload("The pre-event is set to 60s.")
 				Case "90"
 					Send("+{Tab}9{ENTER}")
+					LogUpload("The pre-event is set to 90s.")
 				Case "120"
 					Send("+{Tab}91{ENTER}")
+					LogUpload("The pre-event is set to 120s.")
 			EndSwitch
-			If $pre Then LogUpload("The pre-event is set to " & $pre & "s.")
 
 			If StringInStr($cam2, "able") Then
 				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "2")	; select Camera 2
@@ -2161,8 +2187,8 @@ Func UploadFile($arg)
 		Case "now"
 			$uploadMode = "now"
 		Case Else
-			PushFile(StringReplace($arg, "\!", "|"))	; change \! back to |
-			$uploadMode = "now"
+			PushFile($arg)
+			$uploadMode = "idle"
 	EndSwitch
 	$fileContent = ""	; clear the flag of uploading
 
@@ -2170,8 +2196,8 @@ Func UploadFile($arg)
 		Return False
 	EndIf
 
-	Local $filename = PopFile(False)	; not pop the file until it is received by server
-	If $filename = "" Then	; in case there is no file in the file queue
+	Local $filename_origin = PopFile(False)	; not pop the file until it is received by server
+	If $filename_origin = "" Then	; in case there is no file in the file queue
 		If $uploadMode = "all" Then	; in case the upload is all,
 			$uploadMode = "idle"	; change the upload mode to idle
 			$commandTimer = 0	;  allow the request command immediately in case no more file for upload in all mode
@@ -2179,7 +2205,8 @@ Func UploadFile($arg)
 		Return False
 	EndIf
 
-	$filename = StringReplace($filename, "\_", " ")	; change \_ back to space
+	Local $filename = StringReplace($filename_origin, "\_", " ")	; change \_ back to space
+	$filename = StringReplace($filename, "\!", "|")	; change \! back to |
 	Local $file = FileOpen($filename,16)
 	If $file = -1 Then
 		LogUpload("Cannot find " & $filename & ", so get rid of it.")
@@ -2189,7 +2216,7 @@ Func UploadFile($arg)
 
 	$fileContent = FileRead($file)
 	FileClose($file)
-	LogUpload("file " & $filename & " " & BinaryLen($fileContent))
+	LogUpload("file " & $filename_origin & " " & BinaryLen($fileContent))
 	Return True
 EndFunc
 

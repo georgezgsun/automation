@@ -22,17 +22,14 @@ IF ERRORLEVEL == 2 GOTO WSP
 :: Kill the CopTrax process first
 Taskkill /IM IncaXPCApp.exe /F
 C:
-CD "C:\CopTrax Support\Tools\Manufacturing Test -01"
+CD "C:\CopTrax Support\Tools\ManufacturingTool"
 ManufacturingTest.exe
 Echo The final checking has completed. In case the DVR has any problems, please return it to the engineering team.
-Echo Press any key to reboot the DVR
+Echo Press any key to reboot the DVR. Turn the power off when you see the Welcome screen.
 pause
-Echo ncpa.cpl > "C:\CopTrax Support\Tools\Automation.bat"
-Echo Exit >> "C:\CopTrax Support\Tools\Automation.bat"
-Echo . >> "C:\CopTrax Support\Tools\Automation.bat"
-rmdir /S /Q "C:\CopTrax Support\Tools\Manufacturing Test -01"
-Echo The DVR is rebooting in 20s.
-Shutdown -r -t 20
+rmdir /S /Q "C:\CopTrax Support\Tools\ManufacturingTool" || (Echo Oops when deleting the manufacture tool. && pause)
+Echo ncpa.cpl > "C:\CopTrax Support\Tools\Automation.bat" || (Echo Oops when creating new batch file. && pause)
+Shutdown -r -t 0
 Exit
 
 :WSP

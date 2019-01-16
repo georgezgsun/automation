@@ -33,6 +33,8 @@ ECHO %date%  %~0 > "%log%"
 
 ECHO Checking for the patch.bat exist
 IF EXIST D:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL D:\Patch.dat)
+IF EXIST E:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL E:\Patch.dat)
+IF EXIST F:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL F:\Patch.dat)
 
 :: Set the Welcome screen to be prompt next time
 SCHTASKS /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST
@@ -63,7 +65,7 @@ CALL :log Welcome to CopTrax DVR Manufacture Test And Configuration.
 TASKKILL /IM IncaXPCApp.exe /F && (CALL :log Killed the CopTrax process to leave rooms for validation tools and manufacture tools.) || (CALL :log No CopTrax is running.)
 
 C:
-CD "C:\CopTrax Support\tools\Manufacturing Test -01"
+CD "C:\CopTrax Support\tools\ManufacturingTool"
 ManufacturingTest.exe
 CALL :log Complete the test with Manufacture Tool.
 

@@ -1,10 +1,10 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.8.0.2
+#AutoIt3Wrapper_Res_Fileversion=2.8.5.1
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
-#pragma compile(Icon, ..\clouds.ico)
+#pragma compile(Icon, clouds.ico)
 ;
 ; Test Server for CopTrax
 ; Version: 1.0
@@ -1018,7 +1018,7 @@ Func ProcessReply($n)
 	If ($msg[0] >= 3) And ($msg[1] = "file") Then	; start to upload file from client
 		Local $filename = $msg[2]
 		Local $len =  Int($msg[3])
-		Local $netFileName = StringSplit($filename, "\")
+		Local $netFileName = StringSplit(StringReplace($filename, "\_", " "), "\")
 		Local $destFileName = $workDir & "ClientFiles\" & $boxID[$n] & "\" & $netFileName[$netFileName[0]]
 		LogWrite($i, "Server" & @TAB & "" & $filename & " from client is going to be saved as " & $destFileName & " in server.")
 		LogWrite($i, "Server" & @TAB & "Total " & $len & " bytes need to be stransfered.")
