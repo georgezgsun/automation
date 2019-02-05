@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 2.8.5.0)
+#pragma compile(FileVersion, 2.8.6.3)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -29,6 +29,8 @@
 #include <Misc.au3>
 #include <StringConstants.au3>
 #include <EventLog.au3>
+#include <WinAPISys.au3>
+
 _Singleton('Automation test client')
 
 HotKeySet("{Esc}", "HotKeyPressed") ; Esc to stop testing
@@ -1138,10 +1140,7 @@ Func TestCameraSwitchFunction()
 	LogUpload("Begin Camera switch function testing.")
 	$file1 = TakeScreenCapture($mCopTrax)
 	LogUpload("Captured Main camera screen file " & $file1 & ". It is now on the way sending to server.")
-	$blue1 = PixelGetColor(250, 120, $mCopTrax)
-	$blue2 = PixelGetColor(550, 320, $mCopTrax)
-	$blue3 = PixelGetColor(750, 420, $mCopTrax)
-	If ($blue1 = $blue2) And ($blue1 = $blue3) And ($blue1 > 0x080000) And ($blue1 < 0x0400) Then
+	If FileGetSize($workDir & "tmp\" & $file1) < 100 * 1024 Then
 		$rst = False
 		LogUpload("Main camera has blank screen.")
 	EndIf
@@ -1150,24 +1149,24 @@ Func TestCameraSwitchFunction()
 	Sleep(2000)
 	$file2 = TakeScreenCapture($mCopTrax)
 	LogUpload("Captured the Rear Cam2 screen file " & $file2 & ". It is now on the way sending to server.")
-	$blue1 = PixelGetColor(250, 120, $mCopTrax)
-	$blue2 = PixelGetColor(550, 320, $mCopTrax)
-	$blue3 = PixelGetColor(750, 420, $mCopTrax)
-	If ($blue1 = $blue2) And ($blue1 = $blue3) And ($blue1 > 0x080000) And ($blue1 < 0x0400) Then
-		$rst = False
-		LogUpload("Blank screen encountered.")
+	If FileGetSize($workDir & "tmp\" & $file2) < 100 * 1024 Then
+		$blue1 = PixelGetColor(250, 120, $mCopTrax)
+		$blue2 = PixelGetColor(550, 320, $mCopTrax)
+		$blue3 = PixelGetColor(750, 420, $mCopTrax)
+		LogUpload("Blank screen encountered for Cam2, where sample colors are " & $blue1 & ", " & $blue2 & ", and " & $blue3 & ".")
+		$rst = Not (($blue1 = $blue2) And ($blue1 = $blue3) And (($blue1 > 0x800000) Or ($blue1 < 0x0400)))
 	EndIf
 
 	MouseClick("", 200,170)	; click to switch rear camera
 	Sleep(2000)
 	$file3 = TakeScreenCapture($mCopTrax)
 	LogUpload("Captured the Rear Cam3 screen file " & $file3 & ". It is now on the way sending to server.")
-	$blue1 = PixelGetColor(250, 120, $mCopTrax)
-	$blue2 = PixelGetColor(550, 320, $mCopTrax)
-	$blue3 = PixelGetColor(750, 420, $mCopTrax)
-	If ($blue1 = $blue2) And ($blue1 = $blue3) And ($blue1 > 0x080000) And ($blue1 < 0x0400) Then
-		$rst = False
-		LogUpload("Blank screen encountered.")
+	If FileGetSize($workDir & "tmp\" & $file3) < 100 * 1024 Then
+		$blue1 = PixelGetColor(250, 120, $mCopTrax)
+		$blue2 = PixelGetColor(550, 320, $mCopTrax)
+		$blue3 = PixelGetColor(750, 420, $mCopTrax)
+		LogUpload("Blank screen encountered for Cam3, where sample colors are " & $blue1 & ", " & $blue2 & ", and " & $blue3 & ".")
+		$rst = Not (($blue1 = $blue2) And ($blue1 = $blue3) And (($blue1 > 0x800000) Or ($blue1 < 0x0400)))
 	EndIf
 
 	MouseClick("", 960,170)	; click back to main camera
@@ -1993,9 +1992,9 @@ Func Cleanup()
 	FileOpen($filename, $FO_APPEND)	; Create a file flag of PASSED the automation test
 	LogUpload("Create flag file " & $filename)
 
-	Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
+	;Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST') ; Enable the welcome screen next time
 	Run(@ComSpec & " /c schtasks /Delete /TN Automation /F")	; Disable the automation
-	LogUpload("quit The box is cleaned up and going to be shutdown. Welcome Screen is turned ON. And the automation is turned OFF.")
+	LogUpload("quit The box is cleaned up.")
 	Sleep(3000) ; sleep for a while to let the message reaches the server before the TCP connection lost.
 	Run("C:\Coptrax Support\Tools\Cleanup.bat", "C:\Coptrax Support\Tools\", @SW_HIDE)
 	Exit
@@ -2304,6 +2303,40 @@ Func ReportCPUMemory($heartbeat = False)
 	LogUpload($logLine)	; Log with CPU and Memory Status
 
 	_ProcessUsageTracker_Destroy($aProcUsage)
+
+	Local $aData = _WinAPI_GetPerformanceInfo()
+	Local $aLine = 'Physical Memory (MB) ' & @TAB
+	$aLine &= 'Total: ' & Floor($aData[3] / 1024 / 1024)
+	$aLine &= ', Available: ' & Floor($aData[4] / 1024 / 1024)
+	$aLine &= ', Cached: ' & Floor($aData[5] / 1024 / 1024)
+	$aLine &= ', Free: ' & Floor($aData[6] / 1024 / 1024)
+	$aLine &= ', Usage: ' & $aMem[0] & '%.'
+	LogUpload($aLine)
+	Local $rep = ($aMem[0] > 40)
+
+	$aLine = 'Kernel Memory (MB) ' & @TAB
+	$aLine &= 'Paged: ' & Floor($aData[7] / 1024 / 1024)
+	$aLine &= ', Nonpaged: ' & Floor($aData[8] / 1024 / 1024)
+	LogUpload($aLine)
+
+	$aLine = 'Page Size (MB) ' & @TAB & @TAB
+	$aLine &= 'Total: ' & Round($aMem[3] /1024)
+	$aLine &= ', Available: ' & Round($aMem[4] /1024)
+	LogUpload($aLine)
+
+	$aLine = 'Virtual Memory (MB) ' & @TAB
+	$aLine &= 'Total: ' & Round($aMem[5] /1024)
+	$aLine &= ', Available: ' & Round($aMem[6] /1024)
+	LogUpload($aLine)
+
+	$aLine = 'System Status' & @TAB & @TAB
+	$aLine &= 'Handles: ' & $aData[10]
+	$aLine &= ', Processes: ' & $aData[11]
+	$aLine &= ', Threads: ' & $aData[12]
+	LogUpload($aLine)
+
+	$aLine = '     '
+	LogUpload($aLine)
 EndFunc
 
 Func OnAutoItExit()

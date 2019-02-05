@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.8.5.1
+#AutoIt3Wrapper_Res_Fileversion=2.8.5.3
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -1100,6 +1100,7 @@ Func ProcessReply($n)
 		GUICtrlSetState($nGui[$n], $GUI_SHOW)
 		LogWrite($n, "=====")
 		LogWrite($n, " ")
+		$logContent[$n] = ""	; clear the previouse log content
 
 		CloseConnection($n)
 		ClearCommands($n)

@@ -1,6 +1,6 @@
 Echo Warning! This will cleanup the automation test trails
 :: wait 10 s
-ping localhost -n 10
+timeout /t 10
 
 :: kill the CopTrax and clear the profile
 Taskkill /IM IncaXPCApp.exe /F
@@ -11,12 +11,12 @@ Del /Q C:\ProgramData\*coptrax*
 :: Kill the firmware monitor.exe
 Taskkill /IM FirmwareMonitor.exe /F
 
-:: modify the autostart scheduler tasks, delete the automation and create the welcome screen. Allready achieved in automation.
-schtasks /Delete /TN Automation /F
-schtasks /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST
-
 :: prepare the post automation batch file
-copy /Y /V C:\CopTraxAutomation\PostAutomationCheck.bat "C:\CopTrax Support\Tools\Automation.bat"
+copy /Y /V C:\CopTraxAutomation\PostAutomationCheck.bat "C:\CopTrax SupportAutomation.bat"
+
+:: modify the autostart scheduler tasks, change the automation and delete the welcome screen. 
+SCHTASKS /Delete /TN "ACI\CopTrax Welcome" /F
+SCHTASKS /Create /SC ONLOGON /TN Automation /TR "C:\CopTrax Support\automation.bat" /F /RL HIGHEST
 
 :: delete the file trailers
 Del /S /F /Q F:\*.mp4
@@ -44,4 +44,6 @@ netsh interface ip set address "CopTrax" static 10.25.50.100 255.255.255.0
 WMIC computersystem where name="%computername%" call rename name="CopTrax"
 
 :: start the welcome screen
-shutdown.exe -r -t 0
+CD "C:\CopTrax Support\Tools\CopTraxWelcome"
+CopTraxWelcome.exe
+::shutdown.exe -r -t 0
