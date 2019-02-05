@@ -86,8 +86,8 @@ FOR /D %%I IN ( "%LocalAppData%\coptrax\auto*" ) Do (RMDIR /S /Q "%%I" && CALL :
 FOR /D %%I IN ( "%LocalAppData%\coptrax\cop*" ) Do (RMDIR /S /Q "%%I" && CALL :log Deleted the video files in %%I.)
 ::RMDIR /S /Q "%LocalAppData%\coptrax\auto1"
 ::RMDIR /S /Q "%LocalAppData%\coptrax\auto2"
-::RMDIR /S /Q "%LocalAppData%\coptrax\cop1"
-::RMDIR /S /Q "%LocalAppData%\coptrax\cop2"
+RMDIR /S /Q "%LocalAppData%\coptrax\cop1"
+RMDIR /S /Q "%LocalAppData%\coptrax\cop2"
 CALL :log All video files in users folder have been deleted.
 
 :: prepare the Wi-Fi profile, modIFy the autostart scheduler tasks

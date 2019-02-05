@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CopTraxWelcome>
+  <!--This file provides language translation support for the CopTraxII application -->
+  <!--To add a language, copy this file, then edit it to change display name, filename and-->
+  <!--   version (if necessary), then edit the 'string' attributes with new language characters as desired-->
+  <!--Make sure the filename in the file matches the actual name of the saved file-->
+  <!--Some string attributes have spaces and/or dashes at the beginning or end of the string-->
+  <!--   When translating, maintain these spaces and dashes to support proper concatenation during use-->
+  <!--Some string attributes have '&#xD;&#xA;' special characters included-->
+  <!--   These are line feed characters and should be left in place when translating-->
+  <LangInfo version="1.0.0" filename="Spanish.xml" cultureName="es-MX" displayName="Español" />
+  <Items>
+      <Item textID="stringLanguage" string="Idioma" />
+      <Item textID="stringOptions" string="Opciones"/>
+      <Item textID="stringDisableWelcomeScreen" string="Desactivar la pantalla de bienvenida"/>
+      <Item textID="labelValidationTool" string="Herramienta"/>
+      <Item textID="labelCalibration" string="Calibración del monitor"/>
+      <Item textID="labelConnectWifi" string="Conéctate a Wi-Fi"/>
+      <Item textID="labelCustomSupport" string="Atención al cliente"/>
+      <Item textID="labelTeamViewer" string="Team Viewer"/>
+      <Item textID="labelOpenCopTrax" string="Abrir CopTrax"/>
+	    <!--Customer Support Form -->
+      <Item textID="columnHeader1" string="Ingeniero de soporte"/>
+      <Item textID="columnHeader2" string="Teléfono"/>
+      <Item textID="buttonExit" string="Salida"/>
+  </Items>
+</CopTraxWelcome>
