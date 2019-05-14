@@ -13,6 +13,8 @@
 	    <!--Main Form -->
       <Item textID="stringLanguage" string="Language"/>
       <Item textID="stringOptions" string="Options"/>
+      <Item textID="stringEnable" string="Enable"/>
+      <Item textID="stringEnableWelcomeScreen" string="Enable Welcome Screen"/>
       <Item textID="stringDisableWelcomeScreen" string="Disable Welcome Screen"/>
       <Item textID="labelValidationTool" string="Validation Tool"/>
       <Item textID="labelCalibration" string="Monitor Calibration"/>

@@ -107,6 +107,10 @@ CALL :log Setup the scheduler tasks of CopTrax Welcome.
 REGEDIT.EXE /S "%Automation%\SetupAutoEndTasks.reg" || (CALL :log Cannot modIFy the registry key. && EXIT /B 1)
 CALL :log Updated the registery key.
 
+:: delete the memory leaking service provide by RunSwUSB
+SC config RunSwUSB start= demand
+CALL :log Configured the service RunSwUSB to be started on demand.
+
 :: try to empty the temp sub-folder
 RMDIR /S /Q "%temp%"
 CALL :log The temp folder at "%temp%" has been cleaned.

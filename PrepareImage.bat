@@ -1,5 +1,5 @@
 ::**********************************************************
-::*   Image builder for CopTrax Austin, version 2.8.5      *
+::*   Image builder for CopTrax Austin, version 2.8.7      *
 ::*--------------------------------------------------------*
 ::*                __   _,--="=--,_   __                   *
 ::*               /  \."    .-.    "./  \                  *
@@ -16,11 +16,11 @@
 ::*****8****************************************************
 
 @ECHO off
-TITLE Image builder for CopTrax Austin, version 2.8.5
+TITLE Image builder for CopTrax Austin, version 2.8.7
 SETLOCAL EnableDelayedExpansion
 
 CLS
-ECHO Warning! This will help to update the DVR to golden image 2.8.5 with log.
+ECHO Warning! This will help to update the DVR to golden image 2.8.7 with log.
 :: Check IF we are running as Admin
 FSUTIL dirty query %SystemDrive% >nul
 IF ERRORLEVEL 1 (ECHO This batch file need to be run as Admin. && PAUSE && EXIT /B)
@@ -37,7 +37,7 @@ SET ValidationTool=%Support%\CopTraxIIValidation
 TIMEOUT /t 5
 SET me=%~n0
 SET log=%Support%\%me%.log
-ECHO %date% Image builder 2.8.5 > "%log%"
+ECHO %date% Image builder 2.8.7 > "%log%"
 
 :: Update the welcome screen, manufacture tool and automation folders
 CD /d %~dp0

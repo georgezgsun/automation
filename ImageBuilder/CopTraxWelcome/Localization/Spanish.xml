@@ -12,6 +12,8 @@
   <Items>
       <Item textID="stringLanguage" string="Idioma" />
       <Item textID="stringOptions" string="Opciones"/>
+      <Item textID="stringEnable" string="Habilitar"/>
+      <Item textID="stringEnableWelcomeScreen" string="Habilitar la pantalla de bienvenida"/>
       <Item textID="stringDisableWelcomeScreen" string="Desactivar la pantalla de bienvenida"/>
       <Item textID="labelValidationTool" string="Herramienta"/>
       <Item textID="labelCalibration" string="Calibración del monitor"/>

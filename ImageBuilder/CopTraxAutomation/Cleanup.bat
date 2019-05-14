@@ -12,7 +12,7 @@ Del /Q C:\ProgramData\*coptrax*
 Taskkill /IM FirmwareMonitor.exe /F
 
 :: prepare the post automation batch file
-copy /Y /V C:\CopTraxAutomation\PostAutomationCheck.bat "C:\CopTrax SupportAutomation.bat"
+copy /Y /V C:\CopTraxAutomation\PostAutomationCheck.bat "C:\CopTrax Support\Automation.bat"
 
 :: modify the autostart scheduler tasks, change the automation and delete the welcome screen. 
 SCHTASKS /Delete /TN "ACI\CopTrax Welcome" /F

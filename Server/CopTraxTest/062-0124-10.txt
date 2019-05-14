@@ -1,5 +1,5 @@
 ;=============================================================================================================================================================================
-;	Automation Test Case Version 2.x				
+;	Automation Test Case Version 2.8.7				
 ;=============================================================================================================================================================================
 ;	The supported test command are
 ;	No.	Command		Parameters			function
@@ -79,9 +79,9 @@ synctime
 configure release=Universal bwc=on
 OnFailure reboot	
 
-settings pre=60 chunk=20 cam2=enabled cam3=enabled keyboard=disable	; enable and enabled are of the same meaning
+settings pre=60 chunk=10 cam2=enabled cam3=enabled keyboard=disable	; enable and enabled are of the same meaning
 about
-checkapp 2.8.5
+checkapp 2.8.7
 checkfirmware 2.1.4
 OnFailure reboot	
 
@@ -90,13 +90,12 @@ camera
 OnFailure reboot
 
 upload C:\CopTrax\_Support\BoardTest.log
-record duration=125 
+record duration=35
 OnFailure reboot	
 
 update C:\Program\_Files\_(x86)\IncaX\CopTrax\IncaXPCApp.exe.config
 update C:\Program\_Files\Applied\_Concepts\_Inc\CopTrax\_Body\_Camera\_Manager\MobileCam.exe.config
 update C:\CopTrax\_Support\Tools\CopTraxWelcome\CopTraxWelcome.exe.config
-;update C:\CopTrax\_Support\Tools\CopTraxWelcome\CopTraxWelcome.exe
 
 OnFailure reboot
 upload all

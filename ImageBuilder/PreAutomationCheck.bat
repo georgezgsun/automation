@@ -1,5 +1,5 @@
 ::*****************************************************************
-::* Pre-automation check for CopTrax Austin, version 2.8.5        *
+::* Pre-automation check for CopTrax Austin, version 2.8.6        *
 ::*---------------------------------------------------------------*
 ::*                 __   _,--="=--,_   __                         *
 ::*                /  \."    .-.    "./  \                        *
@@ -10,8 +10,8 @@
 ::*            .-"-.   \      |      /   .-"-.                    *
 ::*.---------{     }--|  /,.-'-.,\  |--{     }---------.          *
 ::* )       (_)_)_)  \_/`~-===-~`\_/  (_(_(_)          (          *
-::*( By: George Sun, Duc T. Nguyen, and My Lien Vuong   )         *
-::* )2018/12                                           (          *
+::*( By: George Sun, 2019/2                             )         *
+::* )Applied Concept Inc.                              (          *
 ::*'----------------------------------------------------'         *
 ::*****************************************************************
 @ECHO off
@@ -32,9 +32,9 @@ SET log=C:\CopTrax Support\%me%.log
 ECHO %date%  %~0 > "%log%"
 
 ECHO Checking for the patch.bat exist
-IF EXIST D:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL D:\Patch.dat)
-IF EXIST E:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL E:\Patch.dat)
-IF EXIST F:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL F:\Patch.dat)
+IF EXIST D:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL D:\Patch.bat)
+IF EXIST E:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL E:\Patch.bat)
+IF EXIST F:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL F:\Patch.bat)
 
 :: Set the Welcome screen to be prompt next time
 SCHTASKS /Create /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "C:\CopTrax Support\Tools\CopTraxWelcome\CopTraxWelcome.exe" /F /RL HIGHEST
@@ -92,23 +92,7 @@ IF ERRORLEVEL 1 ( CALL :log Ping failed. & GOTO PING1 )
 CALL :log Ping an internal website at automation server.
 PING ENGR-CX456K2
 IF ERRORLEVEL 1 ( CALL :log Ping failed. & GOTO PING1 )
-CALL :log PASSED Wi-Fi Test on Wi-Fi 1.
-
-ECHO.
-ECHO Type 1 to activiate the Windows.
-ECHO Type 2 to skip the Windows activation.
-CHOICE /N /C:12 /M "PICK A NUMBER (1 or 2)"%1
-IF ERRORLEVEL 2 GOTO WIFI2
-
-:ACTIVIATION
-ECHO Now activating the Windows....
-cscript c:\windows\system32\slmgr.vbs -ato
-IF ERRORLEVEL 1 (CALL :log FAILED to activiate the Windows & GOTO ACTIVATION)
-CALL :log Windows has been successfully activiated.
-TIMEOUT /t 3
-
-:WIFI2
-CALL :log Now test Wi-Fi 2. Turn the WI-Fi 1 off first.
+CALL :log PASSED Wi-Fi Test on Wi-Fi 1. Now testing Wi-Fi 2. Turn the WI-Fi 1 off first.
 
 :PING2
 IF !WIFIProfile! == ACI-CopTrax (SET WIFIProfile=ACI-CopTrax2) ELSE (SET WIFIProfile=ACI-CopTrax)
@@ -126,14 +110,31 @@ IF ERRORLEVEL 1 ( CALL :log Ping to ENGR-CX456K2 failed. & GOTO PING2 )
 CALL :log PASSED Wi-Fi Test on Wi-Fi 2.
 ECHO.
 
+:ACTIVIATION
+ECHO.
+ECHO Type 1 to activiate the Windows.
+ECHO Type 2 to skip the Windows activation and do more tests manually.
+CHOICE /N /C:12 /M "PICK A NUMBER (1 or 2)"%1
+IF ERRORLEVEL 2 (CALL :log Board test end without passed. & Explorer.exe & Exit /B 1)
+
+ECHO Now activating the Windows....
+cscript c:\windows\system32\slmgr.vbs -ato
+IF ERRORLEVEL 1 (CALL :log FAILED to activiate the Windows & GOTO ACTIVATION)
+CALL :log Windows has been successfully activiated.
+TIMEOUT /t 3
+
+ECHO.
+ECHO Type 1 to remove the RealTek Driver and finish the Board test.
+ECHO Type 2 to retry activiation.
+CHOICE /N /C:12 /M "PICK A NUMBER (1 or 2)"%1
+IF ERRORLEVEL 2 GOTO ACTIVIATION
+
 :: Delete the Welcome Screen task and add the automation task
 SCHTASKS /Delete /TN "ACI\CopTrax Welcome" /F && (CALL :log Deleted the scheduler task for Welcome Screen.)
 SCHTASKS /Create /SC ONLOGON /TN Automation /TR C:\CopTraxAutomation\automation.bat /F /RL HIGHEST && (CALL :log Added the task for automation.)
-
-ECHO.
-CALL :log All the board tests passed.
+"C:\Program Files (x86)\InstallShield Installation Information\{9C049509-055C-4CFF-A116-1D12312225EB}\Install.exe" -uninst
+CALL :log Removed the Realtek Driver. All the board tests passed.
 ENDLOCAL
-PAUSE
 EXIT /B 0
 
 :: A function to write to a log file and write to stdout

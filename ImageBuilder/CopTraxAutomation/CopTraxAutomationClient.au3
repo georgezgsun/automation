@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 2.8.6)
+#pragma compile(FileVersion, 2.8.7.1)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -441,7 +441,7 @@ Func QuitCopTrax()
 	Sleep(500)
 	Send("{TAB}{END}{TAB}{ENTER}")	; choose the Administrator
 	;The Admin password input has been changed
-	If GetHandleWindowWait($titleAdmin, "Administrator") Or GetHandleWindowWait($titleLogin) Then
+	If GetHandleWindowWait($titleLogin) Or GetHandleWindowWait($titleAdmin, "Administrator") Then
 		Send("135799{TAB}{ENTER}")	; type the administator password
 		MouseClick("", 500, 150)
 		Local $hWnd = $mCopTrax
@@ -789,7 +789,7 @@ Func TestSettingsFunction($arg)
 	MouseClick("",960, 460)
 
 	;The Admin password input has been changed
-	If GetHandleWindowWait($titleAdmin, "Administrator") Then
+	If GetHandleWindowWait($titleLogin) Or GetHandleWindowWait($titleAdmin, "Administrator") Then
 		Send("135799{TAB}{ENTER}")	; type the administator password
 		MouseClick("", 500, 150)
 		$releaseRead = "WSP"
@@ -1347,7 +1347,9 @@ EndFunc
 
 Func IsRecording()
 	If $mCopTrax Then
-		Return PixelGetColor(940,100, $mCopTrax) <> 0x038c4a
+		Local $pColor = PixelGetColor(940,100, $mCopTrax)
+		if ($pColor == 0x038c4a) or ($pColor == 0x00CC00) Then Return False
+		Return True
 	Else
 		Return False
 	EndIf
