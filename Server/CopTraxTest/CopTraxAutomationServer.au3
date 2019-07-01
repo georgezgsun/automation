@@ -1,6 +1,6 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Res_Description=Automation test server
-#AutoIt3Wrapper_Res_Fileversion=2.8.6.1
+#AutoIt3Wrapper_Res_Fileversion=2.8.7.2
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -480,13 +480,12 @@ Func CloseConnection($n)
 EndFunc
 
 Func ParseCommand($n)
-	Local $interval
-	Local $IP
+	Local $i = $n ; in case it is mis used $i somewhere
 	Local $arg = EstimateCommands($commands[$n]) ;
 	Local $commandLeft = Int(GetParameter($arg, "count"))
 	Local $duration = Int(GetParameter($arg, "time"))	; time remains in seconds
 	$testEndTime[$n] = $time0 + $duration * 1000 ; time that the test will end in milliseconds
-	Local $progress = CorrectRange(100 * (1-$commandLeft/$totalCommands[$i]), 0, 100)
+	Local $progress = CorrectRange(100 * (1-$commandLeft/$totalCommands[$n]), 0, 100)
 	GUICtrlSetData($pGUI[$n], $progress)
 
 	If $filesReceived[$n] Then	; This indicates there exists file uploading, do not send new command until it ends
@@ -503,29 +502,29 @@ Func ParseCommand($n)
 	Switch $newCommand	; process the new command
 		Case "record"
 			$arg = PopCommand($n)
-			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command.")
+			LogWrite($n, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command.")
 			$duration = CorrectRange(Int(GetParameter($arg, "duration")), 1, 999)
-			$interval = Int(GetParameter($arg, "interval"))
+			Local $interval = Int(GetParameter($arg, "interval"))
 			If $interval < 1 Or $interval > 10 Then $interval = 10
 
 			PushCommand($n, "endrecord " & $interval)
 			$newCommand = "startrecord " & $duration * 60
 			SendCommand($n, $newCommand)
-			LogWrite($i, "Server" & @TAB & "Sent '" & $newCommand & "' command to client. The endrecord command will be sent in " & $duration & " mins.")
+			LogWrite($n, "Server" & @TAB & "Sent '" & $newCommand & "' command to client. The endrecord command will be sent in " & $duration & " mins.")
 
 		Case "endrecord"
 			$arg = PopCommand($n)
-			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command.")
+			LogWrite($n, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command.")
 			$newCommand = "endrecord " & Int($arg)*60
 			SendCommand($n, $newCommand)	; send new test command to client
-			LogWrite($i, "Server" & @TAB & "Sent '" & $newCommand & "' command to client. Next command is in " & $arg & " mins.")
+			LogWrite($n, "Server" & @TAB & "Sent '" & $newCommand & "' command to client. Next command is in " & $arg & " mins.")
 
 		Case "settings", "createprofile", "upload", "checkfirmware", "checkapp", "checklibrary", "checkrecord", "pause", "configure"
 			$arg = PopCommand($n)
-			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command.")
+			LogWrite($n, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command.")
 			If StringInStr($newCommand, "config") Then $arg &= "|case=" & StringReplace($config, " ", "")	; get rid of space in the filename
 			$newCommand &= " " & $arg
-			LogWrite($i, "Server" & @TAB & "Sent '" & $newCommand & "' command to client.")
+			LogWrite($n, "Server" & @TAB & "Sent '" & $newCommand & "' command to client.")
 			SendCommand($n, $newCommand)	; send new test command to client
 
 		Case "siren", "lightbar", "aux4", "aux5", "aux6", "lightswitch", "mic1trigger", "mic2trigger"
@@ -537,7 +536,7 @@ Func ParseCommand($n)
 			EndIf
 
 			$arg = PopCommand($n)
-			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command.")
+			LogWrite($n, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command.")
 
 			$duration = CorrectRange(Int($arg), 1, 60)
 			Local $aCommand = "trigger " & Int($arg) * 60
@@ -555,89 +554,95 @@ Func ParseCommand($n)
 			Endif
 
 			If $piCommandHold Then
-				LogWrite($i, "Server" & @TAB & "Sent '" & $aCommand & "' command to client. '" & $piCommand & "' command to Raspberry Pi is already sent momentarilly before.")
+				LogWrite($n, "Server" & @TAB & "Sent '" & $aCommand & "' command to client. '" & $piCommand & "' command to Raspberry Pi is already sent momentarilly before.")
 			Else
 				SendCommand(0, $piCommand)  ; send pi its command
-				LogWrite($i, "Server" & @TAB & "Sent '" & $aCommand & "' command to client. Sent '" & $piCommand & "' command to Raspberry Pi.")
+				LogWrite($n, "Server" & @TAB & "Sent '" & $aCommand & "' command to client. Sent '" & $piCommand & "' command to Raspberry Pi.")
 			EndIf
 			SendCommand($n, $aCommand)    ; send new test command to client
 			$batchWait[$n] = False	; enter batchtest stop mode, stops any other box from entering aligned mode
 
 		Case "review", "photo", "info", "status", "radar", "stopapp", "runapp", "camera", "about", "reboot", "quittest", "restarttest", "cleanup"
 			SendCommand($n, $newCommand)	; send new test command to client
-			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & "' command.")
-			LogWrite($i, "Server" & @TAB & "Sent '" & $newCommand & "' command to client.")
+			LogWrite($n, "Server" & @TAB & "Read '" & $newCommand & "' command.")
+			LogWrite($n, "Server" & @TAB & "Sent '" & $newCommand & "' command to client.")
 
 		Case "onfailure"
 			$arg = PopCommand($n)
-			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command. Checking for any failures so far.")
+			LogWrite($n, "Server" & @TAB & "Read '" & $newCommand & " " & $arg & "' command. Checking for any failures so far.")
 			If $testFailures[$n] > 0 Then
 				$commands[$n] = ""	; clear the command queue when there are failures
 
 				If StringInStr($arg, "start") Then
 					PushCommand($n, "upload all restart")
-					LogWrite($i, "Server" & @TAB & "Change the rest test commands to 'upload all restart' because there are " & $testFailures[$n] & " failures in this test.")
+					LogWrite($n, "Server" & @TAB & "Change the rest test commands to 'upload all restart' because there are " & $testFailures[$n] & " failures in this test.")
 				EndIf
 
 				If StringInStr($arg, "quit") Then
 					PushCommand($n, "upload all quittest")
-					LogWrite($i, "Server" & @TAB & "Change the rest test commands to 'upload all quit'  because there are " & $testFailures[$n] & " failures in this test.")
+					LogWrite($n, "Server" & @TAB & "Change the rest test commands to 'upload all quit'  because there are " & $testFailures[$n] & " failures in this test.")
 				EndIf
 
 				If StringInStr($arg, "boot") Then
 					PushCommand($n, "upload all reboot")
-					LogWrite($i, "Server" & @TAB & "Change the rest test commands to 'upload all reboot' because there are " & $testFailures[$n] & " failures in this test.")
+					LogWrite($n, "Server" & @TAB & "Change the rest test commands to 'upload all reboot' because there are " & $testFailures[$n] & " failures in this test.")
 				EndIf
 			Else
-				LogWrite($i, "Server" & @TAB & "There is no failure in the test so far.")
+				LogWrite($n, "Server" & @TAB & "There is no failure in the test so far.")
 			EndIf
 
 		Case "synctime"
 			$arg = @YEAR & @MON & @MDAY & @HOUR & @MIN & @SEC
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
-			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & "' command.")
-			LogWrite($i, "Server" & @TAB & "Sent '" & $newCommand & " " & $arg & "' command to client.")
+			LogWrite($n, "Server" & @TAB & "Read '" & $newCommand & "' command.")
+			LogWrite($n, "Server" & @TAB & "Sent '" & $newCommand & " " & $arg & "' command to client.")
 
 		Case "synctmz"
 			Local $tmzarg = _Date_Time_GetTimeZoneInformation ( )
 			$arg = $tmzarg[2]
 			SendCommand($n, $newCommand & " " & $arg)	; send new test command to client
-			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & "' command.")
-			LogWrite($i, "Server" & @TAB & "Sent '" & $newCommand & " " & $arg & "' command to client.")
+			LogWrite($n, "Server" & @TAB & "Read '" & $newCommand & "' command.")
+			LogWrite($n, "Server" & @TAB & "Sent '" & $newCommand & " " & $arg & "' command to client.")
 
 		Case "update"
-			Local $fileName = PopCommand($n)
-			Local $file
-			Local $netFileName
-			Local $sourceFileName
-			LogWrite($i, "Server" & @TAB & "Read '" & $newCommand & " " & $fileName & "' command.")
+			Local $orgFilename = PopCommand($n)
+			LogWrite($n, "Server" & @TAB & "Read '" & $newCommand & " " & $orgFilename & "' command.")
 
-			;$fileName = StringReplace($fileName, "\_", " ")
-			;$fileName = StringReplace($fileName, "\!", "|")
-			If StringInStr($filename, "\") Then
-				$netFileName = StringSplit($fileName, "\")
-				$sourceFileName = $workDir & "latest\" & $netFileName[$netFileName[0]]    ; all file need to be update shall sit in \latest folder
+			Local $Filename = StringReplace($orgFilename, "\_", " ")
+			Local $sourceFilename =  $workDir & "latest\"    ; all file need to be updated shall sit in \latest folder
+			$Filename = StringReplace($Filename, "\!", "|")
+			If StringInStr($Filename, "\") Then
+				Local $netFilename = StringSplit($Filename, "\")
+				$sourceFilename &= $netFilename[$netFileName[0]]
 			Else
-				$sourceFileName = $workDir & "latest\" & $fileName
+				$sourceFilename &= $Filename
 			Endif
 
-			$file = FileOpen($sourceFileName,16)	; open file for read only in binary mode
+			Local $file = FileOpen($sourceFilename,16)	; open file for read only in binary mode
+			if $file < 0 Then ; deal with the not existing files
+				$testFailures[$n] += 1
+				GUICtrlSetColor($pGUI[$n], $COLOR_RED)
+				LogWrite($n, "Server" & @TAB & "Cannot read '" & $sourceFileName & "'")
+				LogWrite($automationLogPort, $boxID[$n] & @TAB & "Cannot read '" & $sourceFileName & "'")
+				LogWrite($automationLogPort, "")
+				Return
+				EndIf
 			$fileToBeSent[$n] = FileRead($file)
 			FileClose($file)
 			Local $fLen = BinaryLen($fileToBeSent[$n])
-			$newCommand = "update " & $fileName & " " & $fLen
+			$newCommand = "update " & $orgFilename & " " & $fLen
 			SendCommand($n, $newCommand)	; send new test command to client
-			LogWrite($i, "Server" & @TAB & "Sent '" & $newCommand & "' command to client.")
-			LogWrite($i, "Server" & @TAB & "Sending " & $sourceFileName & " in server to update " & $fileName & " in client.")
+			LogWrite($n, "Server" & @TAB & "Sent '" & $newCommand & "' command to client.")
+			LogWrite($n, "Server" & @TAB & "Sending " & $sourceFilename & " in server to update " & $Filename & " in client.")
 			$fileSendingAllowed[$n] = False
 
 		Case "batchtest"
 			$arg = StringLower(PopCommand($n))
-			LogWrite($i, "Server" & @TAB & "Read 'batchtest " & $arg & "' command.")
+			LogWrite($n, "Server" & @TAB & "Read 'batchtest " & $arg & "' command.")
 
-			$IP =  StringInStr($arg, "10.0.") ? TCPNameToIP($arg) : ""
+			Local $IP =  StringInStr($arg, "10.0.") ? TCPNameToIP($arg) : ""
 			If $IP Then
-				LogWrite($i, "Server" & @TAB & "Select the Raspberry Pi simulator at " & $IP & " to do the triggers test.")
+				LogWrite($n, "Server" & @TAB & "Select the Raspberry Pi simulator at " & $IP & " to do the triggers test.")
 				LogWrite($automationLogPort, "Server" & @TAB & "Select the Raspberry Pi simulator at " & $IP & " to do the triggers test.")
 				$ipRaspberryPi1 = $IP
 				$ipRaspberryPi2 = @IPAddress1
@@ -645,17 +650,17 @@ Func ParseCommand($n)
 
 			If $arg = "align" Then
 				If $batchMode Then
-					LogWrite($i, "Server" & @TAB & "PASSED. Wait till all other clients aligned.")
+					LogWrite($n, "Server" & @TAB & "PASSED. Wait till all other clients aligned.")
 					LogWrite($automationLogPort, $boxID[$n] & @TAB & "Aligned.")
 					PushCommand($n, "batchhold")
 					$batchWait[$n] = True	; indicates client $n in batch wait mode now
 				Else
-					LogWrite($i, "Server" & @TAB & "FAILED. In batchtest stop mode, cannot achieve align.")
+					LogWrite($n, "Server" & @TAB & "FAILED. In batchtest stop mode, cannot achieve align.")
 				EndIf
 			EndIf
 
 			If $arg = "start" Then
-				LogWrite($i, "Server" & @TAB & "Start batch test mode, hold other boxes from entering trigger test until all box aligned.")
+				LogWrite($n, "Server" & @TAB & "Start batch test mode, hold other boxes from entering trigger test until all box aligned.")
 				LogWrite($automationLogPort, $boxID[$n] & @TAB & "Enter batch test mode.")
 				$batchWait[$n] = False
 				$batchMode = True
@@ -664,7 +669,7 @@ Func ParseCommand($n)
 			EndIf
 
 			If $arg = "stop" Then
-				LogWrite($i, "Server" & @TAB & "Enter stop batch test mode, disabled all other later boxes from achieving align mode.")
+				LogWrite($n, "Server" & @TAB & "Enter stop batch test mode, disabled all other later boxes from achieving align mode.")
 				$batchWait[$n] = False
 				$batchAligned = False
 				SendCommand($n, "upload idle")	; make the client not to upload files during the waiting for alignment period
@@ -679,7 +684,7 @@ Func ParseCommand($n)
 
 		Case "batchhold"
 			If $batchAligned Then
-				LogWrite($i, "Server" & @TAB & "All clients aligned.")
+				LogWrite($n, "Server" & @TAB & "All clients aligned.")
 				SendCommand($n, "pause 10")	; all aligned box will get this command no matter what the previouse pause mode they are in
 			Else
 				PushCommand($n, "batchhold")	; the batchhold command can only be cleared by all active clients entering batch wait mode
@@ -688,7 +693,7 @@ Func ParseCommand($n)
 			Return
 
 		Case Else
-			LogWrite($i, "Server" & @TAB & "Unknown command '" & $newCommand & "'. Commands in stack are " & $commands[$n])
+			LogWrite($n, "Server" & @TAB & "Unknown command '" & $newCommand & "'. Commands in stack are " & $commands[$n])
 			SendCommand($n, "pause 5")
 	EndSwitch
 EndFunc
@@ -903,7 +908,7 @@ EndFunc
 
 Func ProcessReply($n)
 	Local $reply = ""
-	Local $len
+	Local $len = 0
 	Local $err
 	Local $sentPattern = ""
 
@@ -913,7 +918,7 @@ Func ProcessReply($n)
 		$reply = TCPRecv($sockets[$n], 1000000, 1)	; receives in binary mode using longer length
 		$err = @error
 		If $err Then
-			LogWrite($i, "Server" & @TAB & "Connection lost with error : " & $err)
+			LogWrite($n, "Server" & @TAB & "Connection lost with error : " & $err)
 			LogWrite($automationLogPort, $boxID[$n] & @TAB & "Connection lost with error : " & $err)
 			FileClose($filesReceived[$n])	; get and save the file
 			$filesReceived[$n] = 0	;clear the flag when file transfer ends
@@ -926,7 +931,7 @@ Func ProcessReply($n)
 
 		FileWrite($filesReceived[$n], $reply)
 		$byteCounter[$n] -= $len
-		LogWrite($i, "Server" & @TAB & "Received " & $len & " bytes, " & $byteCounter[$n] & " bytes remains.")
+		LogWrite($n, "Server" & @TAB & "Received " & $len & " bytes, " & $byteCounter[$n] & " bytes remains.")
 
 		If $byteCounter[$n] < 5 Then
 			FileClose($filesReceived[$n])	; get and save the file
@@ -948,7 +953,7 @@ Func ProcessReply($n)
 
 		If $reply Then
 			If IsBinary($reply) Then
-				LogWrite($i, "Server" & @TAB & "Received unsaved upload file content with " & $len & " bytes.")
+				LogWrite($n, "Server" & @TAB & "Received unsaved upload file content with " & $len & " bytes.")
 				CloseConnection($n)
 				Return True
 			EndIf
@@ -1000,7 +1005,7 @@ Func ProcessReply($n)
 	If ($msg[0] >= 5) And StringInStr($reply, "Identify ", 1) Then	; the settings reply the identify ID
 		$readTxt =  StringRegExp($reply, "([a-zA-Z]{2}[0-9]{6})", $STR_REGEXPARRAYMATCH)
 		If IsArray($readTxt) And ($readTxt[0] <> $boxID[$n]) Then
-			LogWrite($i, "Server" & @TAB & "Got the box serial number updated from " & $boxID[$n] & " to " & $readTxt[0] & ". Have to update the log file.")
+			LogWrite($n, "Server" & @TAB & "Got the box serial number updated from " & $boxID[$n] & " to " & $readTxt[0] & ". Have to update the log file.")
 			$boxID[$n] = $readTxt[0]	; update the box ID
 			$portDisplay = $n	; update the main log display to current box
 			GUICtrlSetData($bGUI[$n], $boxID[$n])	; update the text on the button
@@ -1020,13 +1025,13 @@ Func ProcessReply($n)
 		Local $len =  Int($msg[3])
 		Local $netFileName = StringSplit(StringReplace($filename, "\_", " "), "\")
 		Local $destFileName = $workDir & "ClientFiles\" & $boxID[$n] & "\" & $netFileName[$netFileName[0]]
-		LogWrite($i, "Server" & @TAB & "" & $filename & " from client is going to be saved as " & $destFileName & " in server.")
-		LogWrite($i, "Server" & @TAB & "Total " & $len & " bytes need to be stransfered.")
+		LogWrite($n, "Server" & @TAB & "" & $filename & " from client is going to be saved as " & $destFileName & " in server.")
+		LogWrite($n, "Server" & @TAB & "Total " & $len & " bytes need to be stransfered.")
 		$filesReceived[$n] = FileOpen($destFileName,16+8+2)	; open file for over-write and create the directory structure if it doesn't exist
 		$timerFileTransfer[$n] = $time0 + 60 * 1000; set the timer of file transfering, the file transfer shall
 		$byteCounter[$n] = $len
 		SendCommand($n, "send")	; send "send" command to client to trigger the file transfer
-		LogWrite($i, "Server" & @TAB & "Sent 'send' command to client.")
+		LogWrite($n, "Server" & @TAB & "Sent 'send' command to client.")
 		Return True
 	EndIf
 
@@ -1044,7 +1049,7 @@ Func ProcessReply($n)
 		If $filesReceived[$n] Then
 			FileClose($filesReceived[$n])	; close the file
 			$filesReceived[$n] = 0	;clear the flag when file transfer ends
-			LogWrite($i, "Server" & @TAB & "Last file update failed by client.")
+			LogWrite($n, "Server" & @TAB & "Last file update failed by client.")
 		EndIf
 	EndIf
 
@@ -1071,12 +1076,12 @@ Func ProcessReply($n)
 	If ($msg[0] >= 1) And ($msg[1] = "quit") Then
 		If StringLen($commands[$n]) > 5 Then
 			LogWrite($automationLogPort, $boxID[$n] & @TAB & "Tests was interrupted.")
-			LogWrite($i, "Server" & @TAB & "Tests was interrupted.")
+			LogWrite($n, "Server" & @TAB & "Tests was interrupted.")
 			GUICtrlSetData($nGUI[$n], "interrupt")
 		Else
 			If StringInStr($boxID[$n], "DK") Then
 				LogWrite($automationLogPort, $boxID[$n] & @TAB & "Serial number is inproper.")
-				LogWrite($i, "Server" & @TAB & "" & $boxID[$n] & " is not a properly programmed serial number. The box need to be re-programmed.")
+				LogWrite($n, "Server" & @TAB & "" & $boxID[$n] & " is not a properly programmed serial number. The box need to be re-programmed.")
 				$testFailures[$n] += 1	; initialize the result true until any failure
 			EndIf
 
