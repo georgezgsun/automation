@@ -1,5 +1,5 @@
 ::*****************************************************************
-::* Pre-automation check for CopTrax Austin, version 2.8.6        *
+::* Pre-automation check for CopTrax Austin, version 3.0.0        *
 ::*---------------------------------------------------------------*
 ::*                 __   _,--="=--,_   __                         *
 ::*                /  \."    .-.    "./  \                        *
@@ -115,7 +115,7 @@ ECHO.
 ECHO Type 1 to activiate the Windows.
 ECHO Type 2 to skip the Windows activation and do more tests manually.
 CHOICE /N /C:12 /M "PICK A NUMBER (1 or 2)"%1
-IF ERRORLEVEL 2 (CALL :log Board test end without passed. & Explorer.exe & Exit /B 1)
+IF ERRORLEVEL 2 (CALL :log Bypass the Windows activiation. & GOTO REALTEK)
 
 ECHO Now activating the Windows....
 cscript c:\windows\system32\slmgr.vbs -ato
@@ -123,6 +123,7 @@ IF ERRORLEVEL 1 (CALL :log FAILED to activiate the Windows & GOTO ACTIVATION)
 CALL :log Windows has been successfully activiated.
 TIMEOUT /t 3
 
+:REALTEK
 ECHO.
 ECHO Type 1 to remove the RealTek Driver and finish the Board test.
 ECHO Type 2 to retry activiation.

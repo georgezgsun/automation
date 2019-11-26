@@ -21,9 +21,11 @@ Echo Please check wheather the CopTrax App and the Body Worn Camera fit this con
 Echo Type 1 in case the configuration fit and you want to check the camera
 Echo Type 2 to configure the DVR manually to 062-124-01 or WSP
 Echo Type 3 to configure the DVR manually to 062-124-00 or Universal
-Echo Type 4 to cancel the final check
-CHOICE /N /C:1234 /M "MAKE YOUR CHOICE (1, 2, 3 or 4)"%1
-IF ERRORLEVEL == 4 GOTO BYPASS
+Echo Type 4 in case the configuration is 062-124-02 and not to check the camera
+Echo Type 5 to cancel the final check
+CHOICE /N /C:12345 /M "MAKE YOUR CHOICE (1, 2, 3, 4 or 5)"%1
+IF ERRORLEVEL == 5 GOTO BYPASS
+IF ERRORLEVEL == 4 GOTO IROOM
 IF ERRORLEVEL == 3 GOTO UNIVERSAL
 IF ERRORLEVEL == 2 GOTO WSP
 
@@ -37,6 +39,7 @@ CALL :log Start Cameras checking.
 ManufacturingTest.exe
 CALL :log PASSED the test on cameras.
 
+:IROOM
 CD \
 rmdir /S /Q "C:\CopTrax Support\Tools\ManufacturingTool" && (CALL :log Deleted the manufacture tool.) || (CALL :log Oops when deleting the manufacture tool. && pause)
 Echo ncpa.cpl > "C:\CopTrax Support\Tools\Automation.bat" && (CALL :log Updated the Welcome Screen batch file) || (CALL :log Cannot update the Welcome Screen batch file. && pause)
@@ -91,7 +94,7 @@ pause
 GOTO CHECK
 Exit
 
-:: Bypass the final check, no welcome screen
+:: Bypass the final check
 :BYPASS
 CALL :log Required to bypass the final check.
 CD /
@@ -99,7 +102,7 @@ rmdir /S /Q "C:\CopTrax Support\Tools\ManufacturingTool" && (CALL :log Deleted t
 Echo ncpa.cpl > "C:\CopTrax Support\Tools\Automation.bat" && (CALL :log Updated the Welcome Screen batch file) || (CALL :log Cannot update the Welcome Screen batch file. && pause)
 
 SCHTASKS /Delete /TN Automation /F
-SCHTASKS /Delete /TN "ACI\CopTrax Welcome" /F
+schtasks /Delete /TN "ACI\CopTrax Welcome" /F
 CALL :log Deleted the Final Check and the Welcome Screen auto-luanch.
 Exit
 

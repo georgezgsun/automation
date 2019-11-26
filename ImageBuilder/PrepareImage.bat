@@ -1,5 +1,5 @@
 ::**********************************************************
-::*   Image builder for CopTrax Austin, version 2.8.5      *
+::*   Image builder for CopTrax Austin, version 3.0.0      *
 ::*--------------------------------------------------------*
 ::*                __   _,--="=--,_   __                   *
 ::*               /  \."    .-.    "./  \                  *
@@ -13,14 +13,23 @@
 ::*(  By: George Sun And Duc T. Nguyen, 2019/01        )   *
 ::* ) Applied Concepts Inc.                           (    *
 ::*'---------------------------------------------------'   *
-::*****8****************************************************
+::**********************************************************
+
+::Task list
+:: Task 1: Get Interview Room configurations copied
+:: Task 2: Get Maufacturer Tool downgrade to their prefered version
+:: Task 3: Get TeamViewer server upgraded. Maunally setup.
+:: Task 4: Get Intel Wi-Fi adapter setting
+:: Task 5: Get ID Monitor specified
+:: Task 6: Get scroll bar size enlarged
+
 
 @ECHO off
-TITLE Image builder for CopTrax Austin, version 2.8.5
+TITLE Image builder for CopTrax Austin, version 3.0.0
 SETLOCAL EnableDelayedExpansion
 
 CLS
-ECHO Warning! This will help to update the DVR to golden image 2.8.5 with log.
+ECHO Warning! This will help to update the DVR to golden image 3.0.0 with log.
 :: Check IF we are running as Admin
 FSUTIL dirty query %SystemDrive% >nul
 IF ERRORLEVEL 1 (ECHO This batch file need to be run as Admin. && PAUSE && EXIT /B)
@@ -32,6 +41,7 @@ SET Tools=%Support%\Tools
 SET Welcome=%Tools%\CopTraxWelcome
 SET ManufactureTool=%Tools%\ManufacturingTool
 SET ValidationTool=%Support%\CopTraxIIValidation
+SET IRoom=%Support%\Configurations\IRoom
 
 :: PAUSE for a couple of seconds
 TIMEOUT /t 5
@@ -45,7 +55,9 @@ FOR /D %%I IN ("%Support%\Manufact*") DO (RMDIR /S /Q "%%I" && CALL :log Deleted
 FOR /D %%I IN ("%Tools%\Manufact*") DO (RMDIR /S /Q "%%I" && CALL :log Deleted the user profile in sub-folder %%I. || CALL :log Oops on deleting %%I.)
 RMDIR /S /Q "%Welcome%" && CALL :log Deleted the current version of CopTrax Welcome at %Welcome% || CALL :log Oops on deleting Welcome screen.
 RMDIR /S /Q "%Automation%" && CALL :log Deleted the current version of Automation Tool at %Automation% || CALL :log Oops on deleting Automation Tool.
-RMDIR /S /Q "%ValidationTool%" && CALL :log Deleted the current version of Validation Tool at %ValidationTool% || CALL :log Oops on deleting Validation Tool at %ValidationTool%.
+RMDIR /S /Q "%ValidationTool%" && CALL :log Deleted the current version of Validation Tool at %ValidationTool% || CALL :log Oops on deleting Validation Tool 
+at %ValidationTool%.
+RMDIR /S /Q "%Support%\Configurations" && CALL :log Deleted the current version of Configurations at %Support% || CALL :log Oops on deleting Configurations folder at %Support%.
 
 MKDIR "%ValidationTool%" && (CALL :log Create new subfolder %ValidationTool% for validation tool.) || (CALL :log Cannot create subfolder "%ValidationTool%" for Validation Tool. && PAUSE && EXIT /B 1)
 COPY /Y "CopTraxIIValidation\*.*" "%ValidationTool%" && (CALL :log Copied the latest Validation Tool to %ValidationTool%.) || (CALL :log Cannot copy Validation Tool. && PAUSE && EXIT /B 1)
@@ -62,6 +74,8 @@ MKDIR "%Welcome%\Localization"
 COPY /Y CopTraxWelcome\*.* "%Welcome%" && (CALL :log Copied the latest CorTrax Welcome to %Welcome%.) || (CALL :log Cannot copy CorTrax Welcome. && PAUSE && EXIT /B 1)
 COPY /Y CopTraxWelcome\Localization\*.* "%Welcome%\Localization" && (CALL :log Copied the latest Localization of Welcome to %Welcome%\Localization.) || (CALL :log Cannot copy CorTrax Welcome localization. && PAUSE && EXIT /B 1)
 
+MKDIR "%IRoom%"
+COPY /Y Configurations\IRoom\*.* "%IRoom%" && (CALL :log Copied the Interview room files to %IRoom%)
 ::Restore the launguage of CopTrax App and Body Camera App.
 ::COPY /Y /V IncaXPCApp.exe.config "%ProgramFiles(x86)%\IncaX\CopTrax\IncaXPCApp.exe.config" && (CALL :log Restored the languange of CopTrax App to English.)
 ::COPY /Y /V MobileCam.exe.config "%ProgramFiles%\Applied Concepts Inc\CopTrax Body Camera Manager\MobileCam.exe.config" && (CALL :log Restored the languange of Body Camera to English.)
@@ -110,6 +124,11 @@ CALL :log Updated the registery key.
 :: delete the memory leaking service provide by RunSwUSB
 SC config RunSwUSB start= demand
 CALL :log Configured the service RunSwUSB to be started on demand.
+
+:: try to modify the settings of Intel Wi-Fi Adapter
+CD "C:\CopTrax Support\Tools"
+SetIntelWifiOption.exe
+CALL :log Modify the settings of Intel Wi-Fi Adapter
 
 :: try to empty the temp sub-folder
 RMDIR /S /Q "%temp%"

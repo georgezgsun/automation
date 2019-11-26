@@ -28,6 +28,7 @@ Del /S /F /Q C:\Users\coptraxadmin\Documents\CopTraxTemp\*.*
 Del /S /F /Q "C:\CopTrax Support\*.log"
 Del /S /F /Q "C:\CopTrax Support\*.msi"
 rmdir /S /Q C:\CoptraxAutomation
+rmdir /S /Q "C:\CopTrax Support\Configures"
 rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\coptrax\auto1"
 rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\coptrax\auto2"
 rmdir /S /Q "C:\Users\coptraxadmin\AppData\Local\coptrax\auto3"

@@ -81,7 +81,7 @@ OnFailure reboot
 
 settings pre=60 chunk=10 cam2=enabled cam3=enabled keyboard=disable	; enable and enabled are of the same meaning
 about
-checkapp 2.8.7
+checkapp 3.0.0
 checkfirmware 2.1.4
 OnFailure reboot	
 

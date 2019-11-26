@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 2.8.7.1)
+#pragma compile(FileVersion, 3.0.0.0)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -42,7 +42,7 @@ HotKeySet("+!n", "HotKeyPressed") ; Shift-Alt-n, to quick skip to next test comm
 HotKeySet("!{SPACE}", "HotKeyPressed") ; Alt-Space show the running CopTraxAutomation
 HotKeySet("^{SPACE}", "HotKeyPressed") ; Ctrl-Space show the running CopTraxAutomation
 
-Global Const $titleCopTraxMain = "CopTrax II v"	; "CopTrax II v2.x.x"
+Global Const $titleCopTraxMain = "CopTrax I"	; "CopTrax II v2.x.x" or "CopTrax Interview Room"
 Global Const $titleAccount = "Account" ; "CopTrax - Login / Create Account"
 Global Const $titleInfo = "Action" ; "Menu Action"
 Global Const $titleAbout = "About" ; About CopTrax II
@@ -270,7 +270,7 @@ While Not $testEnd
 			MsgBox($MB_OK, $mMB, "CopTrax II is down.", 2)
 			logupload("CopTrax II is down.")
 		EndIf
-		ContinueLoop
+		;ContinueLoop
 	EndIf
 
 	If $currentTime > $heartbeatTimer Then
@@ -2038,6 +2038,7 @@ Func Configure($arg)
 	Local $ct = GetParameter($arg, "ct")	; configure the CopTrax App
 	Local $release = GetParameter($arg, "release")	; configure the Evidence Viewer
 	$caseID = GetParameter($arg, "case") ; the test case filename
+	Local $mode = GetParameter($arg, "mode") ; configure the interview room
 
 	If $ct Or $release Then
 		If Not QuitCopTrax() Then Return $rst
@@ -2051,8 +2052,13 @@ Func Configure($arg)
 			LogUpload("Configuring Coptrax App to release " & $release & ".")
 			$releaseSet = $release
 			$file = FileOpen($CopTraxAppDir & "CopTrax.config", 2) ; Open the coptrax.config file in overwrite mode
+			FileWriteLine($file, "release=" & $release)
 			If $file <> -1 Then
-				FileWriteLine($file, "release=" & $release)
+				If $mode Then
+					FileWriteLine($file, " mode=" & $mode)
+					LogUpload(" Added mode=" & $mode & " to CopTrax.config.")
+				EndIf
+
 				FileClose($file)
 			Else
 				$rst = False
