@@ -15,13 +15,13 @@
 ::*'---------------------------------------------------'   *
 ::**********************************************************
 
-::Task list
-:: Task 1: Get Interview Room configurations copied
-:: Task 2: Get Maufacturer Tool downgrade to their prefered version
+::Task list migrate from 2.8.7 to 3.0.0
+:: Task 1: Get Interview Room configurations copied ## Manually Done
+:: Task 2: Get Maufacturer Tool downgrade to their prefered version ## verify v1102 is the same production line
 :: Task 3: Get TeamViewer server upgraded. Maunally setup.
-:: Task 4: Get Intel Wi-Fi adapter setting
-:: Task 5: Get ID Monitor specified
-:: Task 6: Get scroll bar size enlarged
+:: Task 4: Get Intel Wi-Fi adapter setting ## Manually Done
+:: Task 5: Get ID Monitor specified   ## Manually Done
+:: Task 6: Get scroll bar size enlarged  ## Embedded in the CTapp release.
 
 
 @ECHO off
@@ -41,7 +41,7 @@ SET Tools=%Support%\Tools
 SET Welcome=%Tools%\CopTraxWelcome
 SET ManufactureTool=%Tools%\ManufacturingTool
 SET ValidationTool=%Support%\CopTraxIIValidation
-SET IRoom=%Support%\Configurations\IRoom
+SET IRoom=%Support%\Configures\CT-IRoom
 
 :: PAUSE for a couple of seconds
 TIMEOUT /t 5
@@ -49,36 +49,42 @@ SET me=%~n0
 SET log=%Support%\%me%.log
 ECHO %date% Image builder 2.8.5 > "%log%"
 
-:: Update the welcome screen, manufacture tool and automation folders
+:: Update the manufacture tool and automation folders
 CD /d %~dp0
 FOR /D %%I IN ("%Support%\Manufact*") DO (RMDIR /S /Q "%%I" && CALL :log Deleted the user profile in sub-folder %%I. || CALL :log Oops on deleting %%I.)
 FOR /D %%I IN ("%Tools%\Manufact*") DO (RMDIR /S /Q "%%I" && CALL :log Deleted the user profile in sub-folder %%I. || CALL :log Oops on deleting %%I.)
-RMDIR /S /Q "%Welcome%" && CALL :log Deleted the current version of CopTrax Welcome at %Welcome% || CALL :log Oops on deleting Welcome screen.
+
 RMDIR /S /Q "%Automation%" && CALL :log Deleted the current version of Automation Tool at %Automation% || CALL :log Oops on deleting Automation Tool.
-RMDIR /S /Q "%ValidationTool%" && CALL :log Deleted the current version of Validation Tool at %ValidationTool% || CALL :log Oops on deleting Validation Tool 
+
+:: No updrage on Validation tool
+::RMDIR /S /Q "%ValidationTool%" && CALL :log Deleted the current version of Validation Tool at %ValidationTool% || CALL :log Oops on deleting Validation Tool 
 at %ValidationTool%.
-RMDIR /S /Q "%Support%\Configurations" && CALL :log Deleted the current version of Configurations at %Support% || CALL :log Oops on deleting Configurations folder at %Support%.
+::MKDIR "%ValidationTool%" && (CALL :log Create new subfolder %ValidationTool% for validation tool.) || (CALL :log Cannot create subfolder "%ValidationTool%" for Validation Tool. && PAUSE && EXIT /B 1)
+::COPY /Y "CopTraxIIValidation\*.*" "%ValidationTool%" && (CALL :log Copied the latest Validation Tool to %ValidationTool%.) || (CALL :log Cannot copy Validation Tool. && PAUSE && EXIT /B 1)
 
-MKDIR "%ValidationTool%" && (CALL :log Create new subfolder %ValidationTool% for validation tool.) || (CALL :log Cannot create subfolder "%ValidationTool%" for Validation Tool. && PAUSE && EXIT /B 1)
-COPY /Y "CopTraxIIValidation\*.*" "%ValidationTool%" && (CALL :log Copied the latest Validation Tool to %ValidationTool%.) || (CALL :log Cannot copy Validation Tool. && PAUSE && EXIT /B 1)
-
+:: Downgrade the Manuafacturing Tool
 MKDIR "%ManufactureTool%"
 COPY /Y "Manufacturing Test -01\*.*" "%ManufactureTool%" && (CALL :log Copied the latest Manufacture Tool to %ManufactureTool%.) || (CALL :log Cannot copy Manufactering Tool. && PAUSE && EXIT /B 1)
 
+:: Update the automation
 MKDIR "%Automation%"
 MKDIR "%Automation%\tmp"
 COPY /Y CopTraxAutomation\*.* "%Automation%" && (CALL :log Copied the latest Automation Tool to %Automation%.) || (CALL :log Cannot copy Automation. && PAUSE && EXIT /B 1)
 
-MKDIR "%Welcome%"
-MKDIR "%Welcome%\Localization"
-COPY /Y CopTraxWelcome\*.* "%Welcome%" && (CALL :log Copied the latest CorTrax Welcome to %Welcome%.) || (CALL :log Cannot copy CorTrax Welcome. && PAUSE && EXIT /B 1)
-COPY /Y CopTraxWelcome\Localization\*.* "%Welcome%\Localization" && (CALL :log Copied the latest Localization of Welcome to %Welcome%\Localization.) || (CALL :log Cannot copy CorTrax Welcome localization. && PAUSE && EXIT /B 1)
+:: No upgrade on Welcome screen
+::RMDIR /S /Q "%Welcome%" && CALL :log Deleted the current version of CopTrax Welcome at %Welcome% || CALL :log Oops on deleting Welcome screen.
+::MKDIR "%Welcome%"
+::MKDIR "%Welcome%\Localization"
+::COPY /Y CopTraxWelcome\*.* "%Welcome%" && (CALL :log Copied the latest CorTrax Welcome to %Welcome%.) || (CALL :log Cannot copy CorTrax Welcome. && PAUSE && EXIT /B 1)
+::COPY /Y CopTraxWelcome\Localization\*.* "%Welcome%\Localization" && (CALL :log Copied the latest Localization of Welcome to %Welcome%\Localization.) || (CALL :log Cannot copy CorTrax Welcome localization. && PAUSE && EXIT /B 1)
 
+:: Update the Configurations for IRoom
+RMDIR /S /Q "%Support%\Configurations" && CALL :log Deleted the current version of Configurations at %Support% || CALL :log Oops on deleting Configurations folder at %Support%.
 MKDIR "%IRoom%"
-COPY /Y Configurations\IRoom\*.* "%IRoom%" && (CALL :log Copied the Interview room files to %IRoom%)
+COPY /Y Configures\IRoom\*.* "%IRoom%" && (CALL :log Copied the Interview room files to %IRoom%)
 ::Restore the launguage of CopTrax App and Body Camera App.
-::COPY /Y /V IncaXPCApp.exe.config "%ProgramFiles(x86)%\IncaX\CopTrax\IncaXPCApp.exe.config" && (CALL :log Restored the languange of CopTrax App to English.)
-::COPY /Y /V MobileCam.exe.config "%ProgramFiles%\Applied Concepts Inc\CopTrax Body Camera Manager\MobileCam.exe.config" && (CALL :log Restored the languange of Body Camera to English.)
+COPY /Y /V IncaXPCApp.exe.config "%ProgramFiles(x86)%\IncaX\CopTrax\IncaXPCApp.exe.config" && (CALL :log Restored the languange of CopTrax App to English.)
+COPY /Y /V MobileCam.exe.config "%ProgramFiles%\Applied Concepts Inc\CopTrax Body Camera Manager\MobileCam.exe.config" && (CALL :log Restored the languange of Body Camera to English.)
 
 COPY /Y /V "%Automation%\Cleanup.bat" "%Tools%" && (CALL :log Copied Cleanup.bat to %Tools%.) || (CALL :log Cannot copy Cleanup.bat && PAUSE && EXIT /B 1)
 COPY /Y /V "PreAutomationCheck.bat" "%Tools%\Automation.bat" && (CALL :log Copied PreAutomationCheck.bat to replace %Tools%\Automation.bat.) || (CALL :log Cannot copy PreAutomationCheck.bat to "%Tools%\Automation.bat". && PAUSE && EXIT /B 1)
@@ -118,17 +124,17 @@ SCHTASKS /CREATE /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "%Welcome%\CopTraxWel
 CALL :log Setup the scheduler tasks of CopTrax Welcome.
 
 :: update the registery key
-REGEDIT.EXE /S "%Automation%\SetupAutoEndTasks.reg" || (CALL :log Cannot modIFy the registry key. && EXIT /B 1)
-CALL :log Updated the registery key.
+::REGEDIT.EXE /S "%Automation%\SetupAutoEndTasks.reg" || (CALL :log Cannot modIFy the registry key. && EXIT /B 1)
+::CALL :log Updated the registery key.
 
 :: delete the memory leaking service provide by RunSwUSB
-SC config RunSwUSB start= demand
-CALL :log Configured the service RunSwUSB to be started on demand.
+::SC config RunSwUSB start= demand
+::CALL :log Configured the service RunSwUSB to be started on demand.
 
 :: try to modify the settings of Intel Wi-Fi Adapter
-CD "C:\CopTrax Support\Tools"
-SetIntelWifiOption.exe
-CALL :log Modify the settings of Intel Wi-Fi Adapter
+::CD "C:\CopTrax Support\Tools"
+::SetIntelWifiOption.exe
+::CALL :log Modify the settings of Intel Wi-Fi Adapter
 
 :: try to empty the temp sub-folder
 RMDIR /S /Q "%temp%"

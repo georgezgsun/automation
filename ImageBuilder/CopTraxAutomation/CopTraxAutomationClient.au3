@@ -838,7 +838,7 @@ Func TestSettingsFunction($arg)
 			EndSwitch
 
 			If StringInStr($cam2, "able") Then
-				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "2")	; select Camera 2
+				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:4]", "2")	; select Camera 2, it is instance 4 for V3.0.0
 				sleep(2500)
 
 				If StringInStr($cam2, "enable") Then	; compatible with both enable and enabled
@@ -856,7 +856,7 @@ Func TestSettingsFunction($arg)
 			EndIf
 
 			If StringInStr($cam3, "able") Then
-				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "3")	; select Camera 3
+				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:4]", "3")	; select Camera 3
 				sleep(2500)
 
 				If StringInStr($cam3, "enable") Then	; compatible with both enable and enabled

@@ -1,0 +1,567 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CopTrax>
+  <!--This file provides language translation support for the CopTraxII application -->
+  <!--To add a language, copy this file, then edit it to change display name, filename and-->
+  <!--   version (if necessary), then edit the 'string' attributes with new language characters as desired-->
+  <!--Make sure the filename in the file matches the actual name of the saved file-->
+  <!--Some string attributes have spaces and/or dashes at the beginning or end of the string-->
+  <!--   When translating, maintain these spaces and dashes to support proper concatenation during use-->
+  <!--Some string attributes have '&#xD;&#xA;' special characters included-->
+  <!--   These are line feed characters and should be left in place when translating-->
+  <LangInfo version="1.0.0" filename="Spanish.xml" cultureName="es-MX" displayName="Español" />
+  <Items>
+    <!--Generic common strings -->
+    <Item textID="buttonOK" string="OK" />
+    <Item textID="buttonCancel" string="Anular" />
+    <Item textID="buttonApply" string="Aplicar" />
+    <Item textID="buttonExit" string="Salir" />
+    <Item textID="buttonBrowser" string="Navegador" />
+    <Item textID="buttonYes" string="Sí" />
+    <Item textID="buttonNo" string="No" />
+    <Item textID="buttonAbort" string="Abortar" />
+    <Item textID="buttonRetry" string="Repetir" />
+    <Item textID="buttonIgnore" string="Ignorar" />    
+    <Item textID="lblNotSupported" string="no es compatible" />
+    <Item textID="SystemInternalError" string="¡Error interno!" />
+    <Item textID="stringSettings" string="Configuraciones" />
+    <Item textID="stringMisc" string="Diverso" />
+    <Item textID="stringEnable" string="Habilitar" />
+    <Item textID="stringDisable" string="Inhabilitar" />
+    <Item textID="stringTest" string="Prueba" />
+    <Item textID="stringPassword" string="Contraseña" />
+    <Item textID="stringLanguage" string="Idioma" />
+    <Item textID="stringDate" string="Fecha" />
+    <Item textID="stringHours" string="Horas" />
+    <Item textID="stringMinutes" string="Minutos" />
+    <Item textID="stringSeconds" string="Segundos" />
+    <Item textID="stringAdd" string="Añadir" />
+    <Item textID="stringRemove" string="Remover" />
+    <Item textID="stringTrue" string="Cierto" />
+    <Item textID="stringFalse" string="Falso" />
+    <Item textID="stringError" string="Error" />
+    <Item textID="stringWarning" string="Aviso" />
+    <Item textID="LabelProgress" string="Progreso" />
+    <Item textID="LabelLogin" string="Iniciar" />
+    <Item textID="LoginLabelUserName" string="Usuario" />
+    <Item textID="LoginLabelStatus" string="Estado" />
+    <Item textID="LoginLabelStatusReady" string="Listo para enviar" />
+    <Item textID="LoginLabelStatusNotComplete" string="Form. no completo" />
+    <Item textID="LoginLabelStatusAuthenticating" string="Autenticando" />
+    <Item textID="LoginLabelStatusAuthenticationSuccessful" string="Autenticación exitosa" />
+    <Item textID="LoginLabelStatusFailed" string="Credenciales invalidos" />
+
+    <Item textID="LoginLabelInvalidLoginDetails" string="Detalles de acceso incorrectos" />
+    <Item textID="LoginLabelAccountDoesNotExist" string="La cuenta no existe" />
+    <Item textID="LoginLabelInvalidCustomerKey" string="Clave de cliente inválida" />
+    <Item textID="LoginLabelInvalidUserPassword" string="Usuario o contraseña inválida" />
+    <Item textID="LoginLabelAdminLoginNotAllowed" string="Inicio sesión admin. no permitido" />
+
+    <Item textID="LoginLabelInternalError" string="Se produjo un error interno cuando intentamos autenticar sus credenciales." />
+    <Item textID="LoginLabelPleaseTryAgain" string="Inténtalo de nuevo."  />
+    <Item textID="LoginLabelNoNetwork" string="Parece que no hay conexiones de red en este momento." />
+    <Item textID="LoginLabelCheckAndTryAgain" string="Por favor, comprueba la configuración del red y vuelve a intentar." />
+    <Item textID="LoginLabelBadUserAndPassword" string="No pudimos autenticar su usuario y contraseña en este momento." />
+    <Item textID="LoginLabelCheckCredentials" string="Por favor, compruebe sus credenciales de inicio de sesión y vuelva a intentarlo." />
+    <Item textID="LoginLabelActiveDirectoryAuthentication" string="Autenticación de Active Directory" />
+
+    <!--Settings Form -->
+    <Item textID="TabletSetupFormTitile" string="Configuración CopTrax II" />
+    <Item textID="stringCameras" string="Cámaras" />
+    <Item textID="SettingsHWTriggerTabLabel" string="Disparadores" />
+    <Item textID="SettingsSpeedTriggerTabLabel" string="Disp de velocidad" />
+    <Item textID="SettingsGPSTabLabel" string="GPS &amp; Radar" />
+    <Item textID="SettingsSecurityTabLabel" string="Seguridad" />
+    <Item textID="SettingsUploadingTabLabel" string="carga y &#xD;&#xA;almacenamiento" />
+    <!--Cameras Tab -->
+    <Item textID="SettingsCameraFirstVideoCapture" string="Disp. de captura video" />
+    <Item textID="SettingsCameraFirstAudioCapture" string="Disp. de captura audio" />
+    <Item textID="SettingsCameraPreEventSeconds" string="Video pre-evento en segundos" />
+    <Item textID="SettingsCameraVideoQuality" string="Calidad de video (MB / Min)" />
+    <Item textID="VideoQualityHigh" string="Alto - 40" />
+    <Item textID="VideoQualityNormal" string="Normal - 30" />
+    <Item textID="VideoQualitySmall" string="Pequeño - 20" />
+    <Item textID="SettingsCameraZoomLevel" string="Nivel de zoom" />
+    <Item textID="SettingsResolutionTabLabel" string="Resolución de video" />
+    <Item textID="enableAudio2CheckBox" string="Habilitar 2a cámara" />
+    <Item textID="checkBoxEnableThirdCamera" string="Habilitar 3a cámara" />
+    <Item textID="synchronizeCheckBox" string="Siempre grabe ambas cámaras" />
+    <Item textID="SettingsCameraButtonTest" string="Prueba" />
+    <Item textID="SettingsCamera1" string="1a Cámara" />
+    <Item textID="SettingsCamera2" string="2a Cámara" />
+    <Item textID="SettingsCamera3" string="3a Cámara" />
+    <!--HW TriggerBox Tab -->
+    <Item textID="LabelTriggerBox" string="Disp de disparo" />
+    <Item textID="identifyTriggerBox" string="Identificar" />
+    <Item textID="LabelPin" string="PIN" />
+    <Item textID="LabelActive" string="Activo" />
+    <Item textID="LabelSymbol" string="Símbolo" />
+    <Item textID="LabelLEDSwitch" string="Interruptor LED" />
+    <Item textID="groupBoxIgnition" string="Temporizador de apagado (minutos)" />
+    <Item textID="labelIgnPowerDown" string="Apagar después de" />
+    <Item textID="groupBoxMatchTrigger" string="Anulación disp coincidente" />
+    <Item textID="enableTriggerStopRecordCB" string="Desactivar grabación activada" />
+    <Item textID="groupBoxAcceler" string="Umbral del acelerómetro (g)" />
+    <Item textID="labelPursue" string="Perseguir:" />
+    <Item textID="labelImpact" string="Impacto:" />
+    <Item textID="labelMostSensitive" string="Más sensible" />
+    <Item textID="labelLessSensitive" string="Menos sensible" />
+    <!--Speed Triggers Tab -->
+    <Item textID="labelSpeedTriggers" string="Disp de velocidad" />
+    <Item textID="enableSpedTriggerCheckBox" string="Activar grabación de video con disps de velocidad" />
+    <Item textID="indicatorsCB" string="Deshabilitar indicadores audio y visuales cuando se activan" />
+    <Item textID="labelTrggerStartSpeed" string="Velocidad de iniciar disp" />
+    <Item textID="labelTrggerStopSpeed" string="Velocidad de dejar disp." />
+    <Item textID="labelPostStopDuration" string="Duración despues de detener motor" />
+    <Item textID="labelMPH" string="MPH" />
+    <!--GPS and Radar Tab -->
+    <Item textID="allowRecordingWithoutGpsCB" string="Permitir grabación video cuando GPS está apagado" />
+    <Item textID="gpsBroadcastCheckBox" string="Hab transmisión automatizada de ubicacion de vehículo" />
+    <Item textID="useKmhCB" string="km/h para datos velocidad" />
+    <Item textID="groupBoxRadar" string="Config de Radar Stalker" />
+    <Item textID="checkBoxEnableRadar" string="Hab detección de radar" />
+    <Item textID="radarBuadRateLabel" string="Velo en baudios del Radar" />
+    <!--Security Tab -->
+    <Item textID="labelSecurityProtect" string="Seguridad adicional para proteger config: requiere conectividad al Internet" />
+    <Item textID="labelAdminUser" string="Usuario Admin CopTrax" />
+    <Item textID="protectSettingsCb" string="Proteger la config con inicio de sesión administrativa" />
+    <Item textID="statusLabel" string="Estado: formulario no completo" />
+    <Item textID="reportTakencheckBox" string="Habilitar informe tomado" />
+    <Item textID="buttoneditLinkLabel" string="Editar Tipos de Incidentes" />
+    <!--Upload and Storage Tab -->
+    <Item textID="labelMaxVideoMins" string="Duración máx video (minutos)" />
+    <Item textID="autoUploadCB" string="Hab carga automática" />
+    <Item textID="deleteCheckBox" string="Borrar después de cargar" />
+    <Item textID="enableWAPUploadCB" string="Designación de un WAP para cargas" />
+    <Item textID="labelWapList" string="SSID WAP" />
+    <Item textID="labelWapAvilList" string="SSID WAP disponibles" />
+    <Item textID="labelwapSSIDTb" string="Ingrese SSID" />
+    <Item textID="buttonWapImport" string="Importar" />
+    <Item textID="enableMassStorageCB" string="Habilite copiar al alm. masivo" />
+    <Item textID="labelMassStoragePath" string="Ruta de alm. masivo" />
+    <Item textID="labelVideoBackupDir" string="Videos que no se pueden procesar se moverán a este archivo" />
+    <Item textID="failedVideosDirLabel" string="Archivo" />
+    <Item textID="checkBoxEnableBackgroundRecording" string="Habilitar grabación de fondo" />
+    <Item textID="labelBackgroundVideoPath" string="Ruta de alm. video de fondo" />
+    <!--Misc Tab -->
+    <Item textID="checkForUpdateCB" string="Buscar actualizaciones automáticamente" />
+    <Item textID="checkBoxEnableOnsreenKeyboard" string="Hab teclado en pantalla" />
+    <Item textID="persistAdminCB" string="Aplicar config a todos administradores" />
+    <Item textID="checkBoxEnableWelcome" string="Hab ap de bienvenida" />
+    <Item textID="cameraLedFlashCB" string=" Perfil auto de conmutación nocturna de la cámara" />
+    <Item textID="enableStreamingCB" string="Hab transm en vivo cuando Pre-Evenemento está desactivado" />
+    <Item textID="gbLoginOptions" string="Opciones sesión inicial (req conexión a Internet)" />
+    <Item textID="requireOfficerLoginCB" string="Hab inicio sesión del oficial" />
+    <Item textID="enableActiveDirectoryLoginCB" string="Hab inicio de Dir Activo MS" />
+    <Item textID="lblActiveDirectoryDomain" string="Domino" />
+    <Item textID="enableDefaultUser" string="Habilitar usuario predeterm"/>
+
+    <!--Message Texts -->
+    <Item textID="stringReadyApplyProtection" string="Listo para aplicar la protección de inicio de sesión" />
+    <Item textID="stringTriggerMapped2" string="disp. asignado dos veces, revise el mapeo" />
+    <Item textID="stringNegvaluesWarn" string="Valores negativos no permitidos" />
+    <Item textID="stringStopSpeedWarn" string="La velocidad de parar debe ser al menos 10 km/h bajo la velo de arranque" />
+    <Item textID="stringIgnPowerErr" string="Config error de apagado de motor" />
+    <Item textID="stringInvalidFields" string="Campo(s) contiene(n) valores no válidos" />
+    <Item textID="stringBlankTriggerNamesError" string= "No se permiten nombres de activador en blanco" />
+    <Item textID="stringSelVideoDevice" string="Seleccione un disp de capturar video" />
+    <Item textID="stringADLoginEnabled" string="Inicios de sesión Dir Activo habilitados." />
+    <Item textID="stringADDomainError" string="Configuración de &apos;DOMINIO&apos; está vacía. Configure su &apos;DOMINIO&apos; correctamente." />
+    <Item textID="stringAudioDeviceWarnLine1" string="Dispositivo audio 2 es el mismo que disp Video Audio" />
+    <Item textID="stringAVDeviceWarnLine2" string="Seleccione un diferente disp de audio secundario " />
+    <Item textID="stringAVDeviceWarnLine3" string="o desmarcar la selección" />
+    <Item textID="stringVideoDeviceWarnLine1" string="Dispositivo video 2 es el mismo que disp Video Audio" />
+    <Item textID="stringSelTargetPath" string="Sel ruta de destino" />
+    <Item textID="stringNotComplete" string="Estado: formulario no completo" />
+    <Item textID="stringReadyAuthent" string="Estado: lista para probar autenticación" />
+    <Item textID="stringAuthenticating" string="Autenticando" />
+    <Item textID="stringFailIdentifyTB" string="No puede id. caja de activación, compruebe que  disp esté conectado y vuelva a intentarlo" />
+    <Item textID="stringFailConnectTB" string="Fallado conectar al caja activación" />
+    <Item textID="stringUnableToSave" string="No puede guardar configuración, " />
+    <Item textID="stringInvalidSSID" string="SSID invalido" />
+    <Item textID="stringImportComplete" string="Comando de importación completo" />
+    <!--ReportTakenForm -->
+    <Item textID="ReportTakenForm" string="Informe tomado" />
+    <Item textID="labelIncidentType" string="Tipo de incidente" />
+    <Item textID="labelComments" string="Comentarios" />
+    <Item textID="saveButton" string="OK" />
+    <Item textID="cancelButton" string="Anular" />
+    <Item textID="labelOperUser" string="Usuario" />
+    <Item textID="stringNoInfo" string="sin información" />
+    <Item textID="stringFailSaveReport" string="Error guardar informe" />
+    <Item textID="stringSendMsgErrorr" string="Enviar error de mensaje CopTrax -" />
+    <!--Main Form -->
+    <Item textID="AppRestartWarnMessage" string="CopTrax se reiniciará para aplicar cambios. Presione OK para reiniciar ahora" />
+    <Item textID="MainTitle" string=" conectado como admin" />
+    <Item textID="MainRecordButtonStart" string="Empezar a grabar" />
+    <Item textID="MainRecordButtonStop" string="Para de grabar" />
+    <Item textID="MainCameraSwitchButton" string="Cambiar cámaras" />
+    <Item textID="MainPreviewButton" string="Revisa la grabación más reciente" />
+    <Item textID="MainPhotoButton" string="Tomar foto" />
+    <Item textID="MainSetupButton" string="Configuración" />
+    <Item textID="MainInformationButton" string="Info del sistema" />
+    <Item textID="MainToolStripButtonRadar" string="Radar" />
+    <Item textID="MainToolStripButtonZoom" string="Configuración de cámara frontal" />
+    <Item textID="MainConfirmDialogVersion" string="Una nueva versión de" />
+    <Item textID="MainConfirmDialogUpdateAvailable" string=" está disponible" />
+    <Item textID="MainConfirmDialogUpdateDownload" string="¿Quieres descargarlo ahora?" />
+    <Item textID="MainConfirmDialogUpdateNotAvailable" string="No hay actualizaciones disponibles" />
+    <Item textID="MainStatusRecordingInProgress" string="grabación en progreso" />
+    <Item textID="MainStatusSavingVideo2" string="Espere mientras CopTrax guarda su última grabación" />
+    <Item textID="MainStatusDiskFull" string="DISCO LLENO" />
+    <Item textID="MainStatusDiskPercent" string="DISCO:" />
+    <Item textID="MainStatusInitializing" string="Inicializando" />
+    <Item textID="MainStatusBroadcasting" string="Transmitiendo" />
+    <Item textID="MainStatusSavingVideo" string="Guardando video ..." />
+    <Item textID="MainStatusProcessing" string="Procesando" />
+    <Item textID="MainStatusUploading" string="Cargando" />
+    <Item textID="MainStatusQueued1" string="En cola" />
+    <Item textID="MainStatusQueued2" string="Video en cola" />
+    <Item textID="MainStatusNOGPS" string="SIN GPS" />
+    <Item textID="MainStatusReady" string="Listo" />
+    <Item textID="MainStatusOff" string="Apagado" />
+    <Item textID="MainStatusRecordingStatus" string="Grabando" />
+    <Item textID="MainStatusCamera" string="Cámara" />
+    <Item textID="MainStatusPhotoTaken" string="Fotos tomadas " />
+    <Item textID="MainStatusWaiting" string="Esperando…" />
+    <Item textID="MainStatusAccountSwitchComplete" string="Cambio de cuenta completado.&#xD;&#xA;Aceptar para reiniciar CopTrax " />
+    <Item textID="MainStatusBeforeLogout" string="Deja la grabación y complete Informe de incidente antes de cerrar sesión" />
+    <Item textID="MainErrorMessage1" string="AVISO: CopTrax está grabando video" />
+    <Item textID="MainErrorMessage2" string="¿Estás seguro que quieres salir de CopTrax?" />
+    <Item textID="MainErrorMessage3" string="AVISO: salir de CopTrax envía un mensaje al servidor" />
+    <Item textID="MainErrorMessage4" string="Para configurar" />
+    <Item textID="MainErrorMessage5" string=" necesita ejecutar la aplicación como administrador&#xD;&#xA;" />
+    <Item textID="MainErrorMessage6" string="Clic con el botón derecho en el icono y seleccione Ejecutar como admin" />
+    <Item textID="MainErrorMessage7" string="No se encuentra Microsoft DirectX versión 8.1 o superior &#xD;&#xA;Por favor instale DirectX" />
+    <Item textID="MainErrorMessage11" string="Debes registrar correctamente antes de usar aplicación" />
+    <Item textID="MainErrorMessage15" string="Cámara principal desenchufada. CopTrax necesita cerrar" />
+    <Item textID="MainErrorMessage16" string="Clave de prueba CopTrax ha expirado&#xD;&#xA;Póngase en contacto con su proveedor" />
+    <Item textID="MainErrorMessage17" string="CopTrax no pudo conectar al cámara secundaria&#xD;&#xA;" />
+    <Item textID="MainErrorMessage18" string="Verifique configuración o deshabilite la cámara secundaria si desenchufado" />
+    <Item textID="MainErrorMessage19" string="No puede conectar al disp de video secundario" />
+    <Item textID="MainErrorMessage20" string="No pudo iniciar la grabación de cámara 2&#xD;&#xA;Verifique que hay un disp de audio compatible seleccionado." />
+    <Item textID="MainErrorMessage25" string="Error iniciar grabación con cámara secundaria en modo de vista previa&#xD;&#xA;" />
+    <Item textID="MainErrorMessage26" string="Esto puede ocurrir debido a la insuficiencia de recursos disp&#xD;&#xA;" />
+    <Item textID="MainErrorMessage27" string="Error al comenzar a grabar&#xD;&#xA;" />
+    <Item textID="MainErrorMessage28" string="No pudo conectar a la Cámara 2&#xD;&#xA;Verifique que el disp esté config correctamente " />
+    <Item textID="MainErrorMessage29" string="Error guardar la instantánea" />
+    <Item textID="MainErrorMessage32" string="Configuración requiere que conectes webcam&#xD;&#xA;Por favor, conecte su webcam y reinicie la aplicación.&#xD;&#xA;" />
+    <Item textID="MainErrorMessage33" string=" ahora saldrá" />
+    <Item textID="MainErrorMessage34" string="No puede buscar actualizaciones este momento" />
+    <Item textID="MainErrorMessage36" string="El dispositivo de audio para la 2a cámara no está disponible" />
+    <Item textID="MainErrorMessageDiskFull" string="Disco lleno, no puede iniciar nueva grabación" />
+    <Item textID="MainErrorMessageUploadingNoSwitch" string="No puedes cambiar cuenta mientras se cargan datos" />
+    <Item textID="MainErrorMessageRecordingNoSwitch" string="No puedes cambiar cuenta mientras se graba" />
+    <Item textID="MainErrorMessageNotSwitch" string="Cuenta no está cambiada" />
+    <Item textID="MainErrorMessageRadarNotAvailable" string="No puede conectar al radar&#xD;&#xA;Compruebe el puerto COM y la config de velocidad baudios&#xD;&#xA;CopTrax requere reinicio después de cambiar la config del radar " />
+    <Item textID="MainErrorMessageTriggerBoxFailed" string="La caja de activacion Stalker no inicializó" />
+    <Item textID="MainErrorMessageReportTaken" string="El administrador está administrando centralmente las categorías de Informe." />
+    <Item textID="MainErrorMessageUSBAppMissing" string="CopTraxIIUSB app missing... " />
+    <Item textID="MainErrorMessageADLoginFailed" string="El inicio de Active Directory falló." />
+    <Item textID="MainErrorMessageADLoginSetting" string="Su config de &apos;dominio&apos; no está configurada correctamente." />
+    <Item textID="MainErrorMessageLoginBeforeSwitchAccount" string="Debes iniciar sesión con éxito para cambiar usuario" />
+    <!--PanAndZoomControl in Main -->
+    <Item textID="MainZoomZoom" string="Zoom" />
+    <Item textID="MainZoomPan" string="Mueva" />
+    <Item textID="MainZoomReset" string="Restaurar valores predet." />
+    <Item textID="MainZoomTilt" string="Inclinación" />
+    <Item textID="MainZoomFocus" string="Foco" />
+    <!--MenuForm -->
+    <Item textID="MenuFormTitle" string="Acción del menú" />
+    <Item textID="MenuFormItemAbout" string="Sobre" />
+    <Item textID="MenuFormItemUpdate" string="Buscar actualizacion" />
+    <Item textID="MenuFormItemSwitchAccount" string="Crear una cuenta" />
+    <Item textID="MenuFormItemServer" string="Servidor" />
+    <Item textID="MenuFormItemReset" string="Reiniciar" />
+    <Item textID="MenuFormItemNetworkSetup" string="Config de la red" />
+    <Item textID="MenuFormItemDateTimeSetting" string="Ajuste de fecha y hora" />
+    <Item textID="MenuFormItemSupport" string="Soporte remote" />
+    <Item textID="MenuFormItemLogout" string="Cerrar sesión" />
+    <Item textID="MenuFormItemVideoTransfer" string="Transferir video" />
+    <Item textID="MenuFormItemBWC" string="Programa cámara corporal" />
+    <Item textID="MenuFormItemCalibration" string="Calibración del monitor" />
+    <Item textID="MenuFormItemCameraPropertie" string="Propiedades de cámara" />
+    <Item textID="MenuFormItemBackup" string="Mover video de respaldo" />
+    <Item textID="MenuFormItemAdmin" string="Administrador" />
+    <Item textID="MenuFormItemViewUploads" string="Ver cargados" />
+    <Item textID="MenuFormItemViewTransfers" string="Ver transferencias" />
+    <!--AboutBox1 -->
+    <Item textID="AboutBoxCustomer" string="Universal" />
+    <Item textID="AboutBoxIdentity" string="Identidad:" />
+    <Item textID="AboutBoxIsAdmin" string="Es el administrador: " />
+    <Item textID="AboutBoxSystemOS" string="Sistema y SO:" />
+    <Item textID="AboutBoxAvailableDisk" string="Esp en disco disponible:" />
+    <Item textID="AboutBoxPendingProcess" string="Proceso pendiente:" />
+    <Item textID="AboutBoxPendingUpload" string="Carga pendiente:" />
+    <Item textID="AboutBoxProductKey" string="Clave de prod:" />
+    <!--Application update screen -->
+    <Item textID="ApplicationUpdatescreenTitle" string="Act de la aplicación" />
+    <Item textID="ApplicationUpdategroupBox1" string="Buscar versión más nueva" />
+    <Item textID="ApplicationUpdategroupBox2" string="Progreso" />
+    <Item textID="ApplicationUpdateUpdateAvailable" string="Actualización disponible. Seleccione &apos;Descargar e instalar&apos; para descargar e Instalar ..." />
+    <Item textID="ApplicationUpdateUpdateNotAvailable" string="No hay act disponible" />
+    <Item textID="ApplicationUpdateProductNotAvailable" string="No encontró código de prod" />
+    <Item textID="ApplicationUpdateReadyToInstall" string="Las actualizaciones están listas para instalación,&#xD;&#xA;la aplicación cerrará. ¿Continuar?" />
+    <Item textID="ApplicationUpdateConnecting" string="Conectando al nube de Stalker..." />
+    <Item textID="ApplicationUpdateCollecting" string="Recopilando info de la versión..." />
+    <Item textID="ApplicationUpdateProcessing" string="Procesando la info de la versión..." />
+    <Item textID="ApplicationUpdateInternetNotAvailable" string="Actualización por Internet no disponible.&#xD;&#xA;¿Desea actualizar localmente (opción USB)?" />
+    <Item textID="ApplicationUpdateMessageBoxTitle" string="Aplicación ACI" />
+    <Item textID="ApplicationUpdateDownloading" string="Descargando, espere..." />
+    <Item textID="ApplicationUpdateDownloadCompleted" string="Descarga completa" />
+    <Item textID="ApplicationUpdatebuttonCheck" string="Revisa" />
+    <Item textID="ApplicationUpdatebuttonInstall" string="Descargar e instalar" />
+    <!--MainCamera -->
+    <Item textID="MainCameraSDCardError" string="Hay un problema con la tarjeta SD interna.&#xD;&#xA;Llame al soporte de CopTrax para asistencia &#xD;&#xA;al +1-800-782-5537. " />
+    <Item textID="MainCameraDiskLow" string="Espacio en disco es minimo, elimine videos para liberar espacio del discoo." />
+    <Item textID="MainCameraDiskFull" string="Disco lleno, elimine videos para liberar espacio del disco." />
+    <Item textID="MainCameraDiskFree" string="elimine videos para liberar espacio del disco" />
+    <Item textID="MainCameraPromoteAction" string="&#xD;&#xA;hace clic INFO, seleccione &apos;Mover video de respaldo&apos;." />
+    <Item textID="MainCameraPromptSize" string="cap de carpeta de respaldo CopTrax excede" />
+    <!--Tansfer2USBDialog -->
+    <Item textID="Tansfer2USBDialogTitle" string="Diálogo de copia de seguridad CopTrax" />
+    <Item textID="Tansfer2USBDialogOriginalLocation" string="Local. original" />
+    <Item textID="Tansfer2USBDialogDrive" string="Disco USB" />
+    <Item textID="Tansfer2USBDialogAfterCopy" string="Elim original después de Copiar" />
+    <Item textID="Tansfer2USBDialogButtonDetect" string="Detecta USB" />
+    <Item textID="Tansfer2USBDialogButtonMove" string="Mover archivos" />
+    <Item textID="Tansfer2USBDialogButtonDelete" string="Borrar archivos" />
+    <!--<Item textID="Tansfer2USBDialogButtonCancel" string="Cancel" /> -->
+    <Item textID="Tansfer2USBDialogDefaultPrompt" string="Tienes archivos de video sin procesar. &#xD;&#xA;Seleccione &apos;Mover archivos&apos; para mover los videos a la USB.&#xD;&#xA;Seleccione &apos;Borrar archivos&apos; para eliminar perm. los archivos de video." />
+    <Item textID="Tansfer2USBDialogStatusFileNotAvailable" string="No hay una ruta de archivo disp." />
+    <Item textID="Tansfer2USBDialogStatusNoDriveFound" string="No encontró una und extraíble" />
+    <Item textID="Tansfer2USBDialogStatusNumDriveFound" string="und(es) extraíble encontrada" />
+    <Item textID="Tansfer2USBDialogStatusDeviceArrived" string="Llegó nuevo disp." />
+    <Item textID="Tansfer2USBDialogStatusDeviceRemoved" string="Disp eliminado" />
+    <Item textID="Tansfer2USBDialogStatusTaskCompleted" string="Tarea terminada" />
+    <Item textID="Tansfer2USBDialogStatusCancelledWait" string="Cancelado. Espera..." />
+    <Item textID="Tansfer2USBDialogStatusTaskCancelled" string="Tarea cancelado" />
+    <Item textID="Tansfer2USBDialogStatusInsertUSB" string="INSERTAR una USB" />
+    <Item textID="Tansfer2USBDialogStatusNoEnoughSpace" string="No hay suficiente espacio" />
+    <Item textID="Tansfer2USBDialogStatusHasEnoughSpace" string="Hay suficiente espacio" />
+    <Item textID="Tansfer2USBDialogStatusSelectUSB" string="SELECCIONE una USB" />
+    <Item textID="Tansfer2USBDialogStatusCompleted" string="Completado" />
+    <Item textID="Tansfer2USBDialogStatusMoving" string="Moviendo" />
+    <Item textID="Tansfer2USBDialogStatusDeleting" string="Borrando" />
+    <Item textID="Tansfer2USBDialogStatusOperationError" string="Error durante operación" />
+    <Item textID="Tansfer2USBDialogStatusCheckingUSB" string="Comprobando USB" />
+    <Item textID="Tansfer2USBDialogDeleteConfirm" string="¿Seguro que quieres eliminar  videos permanente?" />
+    <!--Login Form -->
+    <Item textID="LoginLabel" string="CopTrax - Iniciar sesión / Crear cuenta" />
+    <Item textID="LoginServer" string="Servidor" />
+    <Item textID="LoginCustomerKey" string="Clave Cliente" />
+    <Item textID="LoginProductKey" string="Clave Producto" />
+    <Item textID="LoginConfirmPassword" string="Confirmar Contraseña" />
+    <Item textID="LoginRegisterButton" string="Registrar" />
+    <Item textID="LoginLabelStatusFailed2" string="Registro fallido" />
+    <Item textID="LoginMessageAccountExpired" string="Lo sentimos, su cuenta de cliente ha expirado" />
+    <Item textID="LoginMessageUserNameNoSpace" string="Espacios no permitidos en nombres de usuario" />
+    <!--Server Configuration Form -->
+    <Item textID="ServerConfigLabel" string="Configuración servidor" />
+    <Item textID="ServerConfigHost" string="Nombre de host" />
+    <Item textID="ServerConfigTestButton" string="Prueba" />
+    <Item textID="ServerConfigDataCenter" string="El servidor está en un centro de datos de clientes" />
+    <Item textID="ServerConfigConnecting" string="Intentando conectarse a" />
+    <Item textID="ServerConfigConnectionOK" string="Conexión OK" />
+    <Item textID="ServerConfigMigratingTo" string="Migrando la cuenta a " />
+    <Item textID="ServerConfigMigratedTo" string="Cuenta migrada a " />
+    <Item textID="ServerConfigConnectionFailed" string="Conexión falló" />
+    <!--Settings Login Form -->
+    <Item textID="SettingsLoginLabel" string="CopTrax - Inicio sesión admin" />
+    <Item textID="SettingsLoginUser" string="Usuario Admin" />
+    <Item textID="SettingsLoginStayLoggedIn" string="Permanezca conectado mientras CopTrax está ejecutando" />
+    <Item textID="SettingsLoginStatus" string="Estado: formulario no completo" />
+    <Item textID="SettingsLoginStatusReady" string="Estado: lista para probar autenticación" />
+    <Item textID="SettingsLoginToolTip" string="Si está marcado, acceso a la confip de la aplicación se habilitará hasta que salgas de CopTrax" />
+    <!--Officer Login Form -->
+    <Item textID="OfficerLoginStatusLabel" string="Ingrese sus detalles de inicio" />
+    <Item textID="OfficerLoginStatusEnterPassword" string="Introducir contraseña" />
+    <Item textID="OfficerLoginStatusRetry" string="Contraseña incorrecta, intentada " />
+    <Item textID="OfficerLoginStatusAccountNotExist" string="Cuenta no existe" />
+    <Item textID="OfficerLoginStatusInvalidKey" string="Clave de cliente inválida" />
+    <!--GeocastManagerUserControl -->
+    <Item textID="GeocastManagerColumnHeaderDate" string="Fecha" />
+    <Item textID="GeocastManagerColumnHeaderSize" string="Tamaño" />
+    <Item textID="GeocastManagerColumnHeaderType" string="Tipo" />
+    <Item textID="GeocastManagerMenuItemPlayVideo" string="Reproduce video" />
+    <Item textID="GeocastManagerMenuItemUpload" string="Cargar" />
+    <Item textID="GeocastManagerMenuItemDelete" string="Borrar" />
+    <Item textID="GeocastManagerMenuItemPlayVideoMap" string="Reproducir video con mapa" />
+    <Item textID="GeocastManagerMenuItemPlayAudio" string="Reproducir audio" />
+    <Item textID="GeocastManagerStatusUploaded" string="Cargado" />
+    <Item textID="GeocastManagerStatusUploadedPreparing" string="Preparar / espera a servidor ..." />
+    <Item textID="GeocastManagerStatusUploadedInProgress" string="Cargando por Servicio CopTrax" />
+    <Item textID="GeocastManagerStatusUploadedValidating" string="Cargado - validando tamaño de carga, espere ..." />
+    <Item textID="GeocastManagerStatusUploaded100" string="argado al 100% al" />
+    <Item textID="GeocastManagerStatusUploadRequired" string="Requiere carga" />
+    <Item textID="GeocastManagerUploadTime" string="tiempo prevista:" />
+    <Item textID="GeocastManagerConfirmMessage" string="¿Seguro que quieres eliminar elementos seleccionados?" />
+    <Item textID="GeocastManagerErrorMessageDelete" string="Algunos archivos no se pueden borrar&#xD;&#xA;Cargue todo y luego borra " />
+    <Item textID="GeocastManagerErrorMessageDeleteFailed" string="Error al borrar archivo" />
+    <!--ToolsWindow -->
+    <Item textID="ToolsWindowTitle" string=" - Herramientas de video" />
+    <Item textID="ToolsWindowButtonTransfer" string="Transferir" />
+    <Item textID="ToolsWindowButtonDetect" string="Detectar" />
+    <Item textID="ToolsWindowToolStripLocalStorage" string="Almacenamiento local" />
+    <Item textID="ToolsWindowToolStripMassStorage" string="Disp de almacenamiento masivo" />
+    <Item textID="ToolsWindowToolStripPending" string="Pendiente:" />
+    <Item textID="ToolsWindowToolStripPendingQueued" string=" en cola para procesamiento" />
+    <Item textID="ToolsWindowAutoUploadEnabled" string="Carga auto habilitada, conectada a" />
+    <Item textID="ToolsWindowAutoUploadDisabled" string="Carga auto desactivada. No conectado a WIFI" />
+    <Item textID="ToolsWindowToolTipRefresh" string="Refrescar" />
+    <Item textID="ToolsWindowToolTipTransfer" string="Transferir al alm. masivo" />
+    <Item textID="ToolsWindowToolTipUpload" string="Cargar todo" />
+    <Item textID="ToolsWindowConfirmMessage" string="¿Eeguro  que quieres cerrar esta ventana?" />
+    <Item textID="ToolsWindowConfirmMessageAbortUpload" string="AVISO: cerrar esta ventana cancelará la carga actual" />
+    <Item textID="ToolsWindowConfirmMessageAbortTransfer" string="AVISO: cerrar esta ventana cancelará transferencia de archivos actual" />
+    <Item textID="ToolsWindowConfirmMessageTransferComplete" string="¡Se completó transferencia de archivos! &#xD;&#xA;¿Desea eliminar archivos transferidos del CopTrax GVD? " />
+    <Item textID="ToolsWindowConfirmMessageDelete" string="Recuerde eliminar archivos para reclamar espacio en el disco" />
+    <Item textID="ToolsWindowConfirmMessageTransferAll" string="¿Seguro que quieres transferir todos los archivos al dispositivo &#xD;&#xA;de almacenamiento?" />
+    <Item textID="ToolsWindowErrorMessageCopyFailed" string="Error al copiar uno o más archivos." />
+    <Item textID="ToolsWindowErrorMessageNoMassStorage" string="Ningún dispositivo masivo configurado." />
+    <Item textID="ToolsWindowErrorMessageNoEnoughDisk" string="No hay suf espacio en disco del dispositivo masivo." />
+    <Item textID="ToolsWindowStatusDeleted" string="Borrado" />
+    <Item textID="ToolsWindowStatusDeleting" string="Borrando" />
+    <Item textID="ToolsWindowStatusDeleteFailed" string="Error al borrar" />
+    <Item textID="ToolsWindowStatusDeleteFailedAll" string="Error borrar todos archivos" />
+    <Item textID="ToolsWindowStatusCopying" string="Copiando…" />
+    <Item textID="ToolsWindowStatusCopied" string="Copiado" />
+    <Item textID="ToolsWindowStatusNoSpace" string="Sin espacio: no copiado" />
+    <Item textID="ToolsWindowStatusFileExist" string="Existe: no copiado" />
+    <Item textID="ToolsWindowMessageUploadManually" string="Ha habilitado la carga automática  Para cargar archivos manualmente, &#xD;&#xA;debes desactivar la carga automática" />
+    <!--FindWindow -->
+    <Item textID="FindWindowTitle" string="CopTrax | Encontrar ubicacion" />
+    <Item textID="FindWindowStreet" string="Calle" />
+    <Item textID="FindWindowCity" string="Ciudad" />
+    <Item textID="FindWindowCountry" string="País" />
+    <!--ADLoginDialog-->
+    <Item textID="ADLoginDialogTitle" string="Inicio de sesión LDAP" />
+    <Item textID="ADLoginDialogStatus" string="Autenticación fallida. Vuelva a ingresar credenciales." />
+    <!--Audio Warning Form -->
+    <Item textID="AudioWarningLabel" string="Esperando dispositivo audio" />
+    <Item textID="AudioWarningDetailLabel" string="CopTrax está esperando dispositivo audio primario se inicialice." />
+    <Item textID="AudioWarningStatusLabel" string="Espere, esto podría tomar hasta 1 minuto." />
+    <Item textID="AudioWarningMessageUnableConnect" string="Incapaz de conectar a" />
+    <Item textID="AudioWarningMessageFailedAccess" string="Error al acceder a filtros audio" />
+    <!--Confirm Dialog Form -->
+    <Item textID="ConfirmDialogYouSure" string="¿Seguro que quieres eliminar esta cosa?" />
+    <!--CopTraxStatusForm -->
+    <Item textID="StatusFormTitle" string="CopTrax | Estado" />
+    <Item textID="StatusFormColumnHeaderComponent" string="Componente" />
+    <Item textID="StatusFormComponentFrontCamera" string="Cámara frontal" />
+    <Item textID="StatusFormComponentFrontAudio" string="Audio frontal" />
+    <Item textID="StatusFormComponentRearCamera" string="Cámara trasera" />
+    <Item textID="StatusFormComponentRearAudio" string="Audio trasero" />
+    <Item textID="StatusFormComponentDVRBox" string="Caja GVD" />
+    <Item textID="StatusFormStatusNotAvailable" string="No disponible" />
+    <Item textID="StatusFormStatusAvailable" string="Disponible" />
+    <Item textID="StatusFormStatusInitialized" string="Inicializado" />
+    <Item textID="StatusFormStatusNotConnected" string="No conectado" />
+    <Item textID="StatusFormStatusWaiting" string="Esperando" />
+    <Item textID="StatusFormInitializingIPCamera" string="Cámara IP frontal inicializando..." />
+    <Item textID="StatusFormInitializingUSBCamera" string="Cámara USB frontal inicializando..." />
+
+    <!--Download Resources Form -->
+    <Item textID="DownloadResourcesTitle" string="Obt. archivos" />
+    <Item textID="DownloadResourcesDownloading" string="Descargando archivos adicionales" />
+    <Item textID="DownloadResourcesStatusLabel" string="Por favor espera..." />
+    <!--ReportTakenEditDialog -->
+    <Item textID="ReportTakenEditTitle" string="Tipos de info. de incidentes" />
+    <Item textID="ReportTakenEditAvailableType" string="Tipos disponibles" />
+    <Item textID="ReportTakenEditDisplayType" string="Tipos" />
+    <Item textID="ReportTakenEditNewIncidentType" string="Nuevo tipo de incidente" />
+    <Item textID="ReportTakenEditEnableReportTaken" string="Habilitar informe tomado" />
+    <Item textID="ReportTakenEditMessageNotSelect" string="Debe tener un mínimo de un tipo de informe seleccionado" />
+    <Item textID="ReportTakenEditAddItems" string="Agregar a la lista de visualización" />
+    <Item textID="ReportTakenEditRemoveItems" string="Eliminar de la lista de visualización" />
+    <!--ShutdownOverlayPrompt -->
+    <Item textID="ShutdownOverlayPromptDefault" string="Espere mientras CopTrax guarda última grabación video." />
+    <!--VideoPlaybackWindow -->
+    <Item textID="VideoPlaybackWindowTitle" string="CopTrax | Reproducción de vídeo" />
+    <Item textID="VideoPlaybackWindowTarget" string="OBJETIVO" />
+    <Item textID="VideoPlaybackWindowFast" string="RÁPIDO" />
+    <Item textID="VideoPlaybackWindowPatrol" string="PATRULLA" />
+    <Item textID="VideoPlaybackWindowAt" string=" a " />
+    <!--DiskUtils -->
+    <Item textID="DiskUtilsMessageRemoveUSB" string="Quite los disp USB enchufados e intente de nuevo" />
+    <!--Program -->
+    <Item textID="ProgramMessageConfCorrupt" string="No se pudo iniciar CopTrax - su config está dañada y no se puede restaurar automáticamente " />
+    <Item textID="ProgramMessageAlreadyRunning" string="No se pudo iniciar CopTrax&#xD;&#xA;Verifique que la aplicación no ya esté ejecutando con otro usuario " />
+    <Item textID="ProgramMessageHardwareIssue" string="CopTrax detectó un problema con una conexión de equipo y necesita reiniciarse" />
+    <Item textID="ProgramIroom" string="Sala de entrevistas de CopTrax" />
+    <!--More -->
+    <Item textID="stringSSIDWarn2to32" string="SSID debe ser entre 2 y 32 caracteres." />
+    <Item textID="stringSSIDWarnLeadTrailSpace" string="SSID no permite un espacio inicial o final." />
+    <Item textID="stringSSIDWarnInvalidChar" string="SSID contiene caracteres inválidos. Permiten dígitos alfanuméricos y guiones bajos, guiones, coma, punto y espacio." />
+    <Item textID="stringErrorSaveAdmin" string="Error guardar config de admin" />
+    <Item textID="stringFailCreateDir" string="Error crear directorio" />
+    <Item textID="stringAutoSaveSecs" string="Guardar automáticamente en segundos" />
+    <Item textID="stringInfo" string="Información" />
+    <Item textID="stringFirmware" string="Firmware" />
+    <Item textID="stringSerialNum" string="Número de Serie" />
+    <Item textID="stringUnknown" string="Desconocido" />
+    <Item textID="ApplicationUpdatelabelVersion" string="Versión actual" />
+    <!--Radar -->
+    <Item textID="textSame" string="MISMA" />
+    <Item textID="textFront" string="FRENTE" />
+    <Item textID="textRear" string="TRAS" />
+    <Item textID="textFast" string="RÁP" />
+    <Item textID="textLock" string="TRAB" />
+    <Item textID="textTarget" string="OBJ" />
+    <Item textID="textPatrol" string="PATR" />
+    <Item textID="textExceptionCopy" string="Excepción mientras copia " />
+    <Item textID="textExceptionHandler" string="Excepción SetRadarEventHandler " />
+    <Item textID="textFileNotFound" string="Archivo no encontrado " />
+    <!--New texts -->
+    <Item textID="textEnterAdminPassword" string="Ingrese la contraseña del administrador" />
+    <Item textID="textUploadAttemptsWarn" string="10 intentos de subir. Probablemente los problemas estan con la cuenta. Deja de intentarlo." />
+    <Item textID="textRemoteServerFail" string="No se puede conectar con el servidor remoto." />
+    <Item textID="textAuthenticationFail" string="Autenticacion fallida" />
+    <Item textID="textTimeoutWarn" string="La operacion ha agotado el tiempo." />
+    <Item textID="textWAPWarn" string="El punto de acceso inalámbrico designado no está disponible. Intenta más tarde..." />
+    <Item textID="textUploadDataFail" string="No se pueden escribir datos en la conexión de transporte: el host remoto cerró a la fuerza una conexión existente." />
+    <Item textID="textDownloadUpdateFail" string="Error al descargar la actualización" />
+    <Item textID="textFileNotFoundCallCDS" string="Archivo no encontrado.&#xD;&#xA;Llame al soporte de CopTrax para asistencia &#xD;&#xA;al +1-800-782-5537. " />
+
+    <!--ResourceConfirmDialog -->
+    <Item textID="ResourceConfirmDialogTitle" string="CopTrax - Aviso de recursos" />
+    <Item textID="ResourceConfirmDialogMessageWarning" string=" Debes reiniciar,  la grabadora tiene poca memoria. Por favor, haga una selección" />
+    <Item textID="ResourceConfirmDialogMessageCritical" string="Su grabadora está agotando en memoria, se reiniciará automáticamente en 60 segundos" />
+    <Item textID="ResourceConfirmDialogRestartLater" string="Reiniciar más tarde" />
+    <Item textID="ResourceConfirmDialogRestartNow" string="Reiniciar ahora" />
+
+    <Item textID="textUSBDriveMSIWarn" string="Por favor, conecte USB para continuar." />
+
+    <!--CameraPropertiesForm-->
+    <Item textID="buttonDefault" string="Predet" />
+    <Item textID="textCameraPropTitle" string="A justes de la cámara" />
+    <Item textID="textCameraPropAuto" string="Auto" />
+    <Item textID="textCameraPropExposure" string="Exposición" />
+    <Item textID="textCameraPropBrightness" string="Brillo" />
+    <Item textID="textCameraPropContrast" string="Contraste" />
+    <Item textID="textCameraPropHue" string="Matiz" />
+    <Item textID="textCameraPropSaturation" string="Saturación" />
+    <Item textID="textCameraPropSharpness" string="Nitidez" />
+    <Item textID="textCameraPropGamma" string="Gama" />
+    <Item textID="textCameraPropWhiteBalance" string="Balance de Blanco" />
+    <Item textID="textCameraPropGain" string="Aumento" />
+
+	<!--CustomFileOpenDialog-->
+	  <Item textID="textSelectFile" string="Seleccione archivo" />
+    <Item textID="textDrive" string="Drive:" />
+	  <Item textID="textFileType" string="Tipo de archivo" />
+	  <Item textID="textName" string="Nombre" />
+	  <Item textID="textDate" string="Fecha" />
+	  <Item textID="textSize" string="Tamaño" />
+	  <Item textID="textOpen" string="Abrir" />
+	  <Item textID="textChange" string="Cambiar" />
+
+	<!--AboutDialog-->
+	<Item textID="textSoftwareVersion" string="Versión del Software" />
+
+    <!--NewStrings-->
+    <Item textID="textEraseVideoWarning" string="Habilitar esta configuración podría borrar previas grabaciones de eventos.&#xD;&#xA; ¿Estás seguro?" />
+    <Item textID="textEraseVideoGroupBox" string="Sobre-escribir archivos cuando almacenamiento está % lleno" />
+    <Item textID="textOptions" string="Opciones:" />
+    <Item textID="textSelDefaultUser" string="Elegir Usuario Predeterminado" />
+  </Items>
+</CopTrax>
