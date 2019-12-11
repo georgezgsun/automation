@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.0.0.0)
+#pragma compile(FileVersion, 3.0.0.1)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -838,7 +838,7 @@ Func TestSettingsFunction($arg)
 			EndSwitch
 
 			If StringInStr($cam2, "able") Then
-				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:4]", "2")	; select Camera 2, it is instance 4 for V3.0.0
+				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "2")	; select Camera 2, it is instance 4 for V3.0.0
 				sleep(2500)
 
 				If StringInStr($cam2, "enable") Then	; compatible with both enable and enabled
@@ -856,7 +856,7 @@ Func TestSettingsFunction($arg)
 			EndIf
 
 			If StringInStr($cam3, "able") Then
-				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:4]", "3")	; select Camera 3
+				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "3")	; select Camera 3
 				sleep(2500)
 
 				If StringInStr($cam3, "enable") Then	; compatible with both enable and enabled
@@ -2043,6 +2043,8 @@ Func Configure($arg)
 	If $ct Or $release Then
 		If Not QuitCopTrax() Then Return $rst
 
+		Sleep(5000) ; Leaving room for CopTrax to fully stop
+
 		If $ct Then
 			LogUpload("Configuring CopTrax App to " & $ct & ".")
 			$rst = CopyOver("CT-" & $ct, $CopTraxAppDir)
@@ -2116,6 +2118,7 @@ Func CopyOver($config, $destDir)
 			Else
 				LogUpload($list[$i] & " was not copied to " & $destDir & ". Try again.")
 				$end -= 1
+				Sleep(1000) ; leaving room for OS to recover
 			EndIf
 		Until $end <= 0
 	Next
