@@ -838,7 +838,7 @@ Func TestSettingsFunction($arg)
 			EndSwitch
 
 			If StringInStr($cam2, "able") Then
-				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "2")	; select Camera 2, it is instance 4 for V3.0.0
+				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:4]", "2")	; select Camera 2, it is instance 4 for V3.0.0
 				sleep(2500)
 
 				If StringInStr($cam2, "enable") Then	; compatible with both enable and enabled
@@ -856,7 +856,7 @@ Func TestSettingsFunction($arg)
 			EndIf
 
 			If StringInStr($cam3, "able") Then
-				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:3]", "3")	; select Camera 3
+				ControlSend($hWnd, "", "[REGEXPCLASS:(.*COMBOBOX.*); INSTANCE:4]", "3")	; select Camera 3
 				sleep(2500)
 
 				If StringInStr($cam3, "enable") Then	; compatible with both enable and enabled
@@ -2088,7 +2088,7 @@ Func Configure($arg)
 	If $bwc Then
 		LogUpload("Configuring Body Worn Camera to turn " & $bwc & ".")
 		If StringInStr($bwc, "on") Then
-			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "BWC Manager Startup" /TR "C:\Program Files\Applied Concepts Inc\CopTrax Body Camera Manager\MobileCam.exe" /F')	; Enable the BWC next time
+			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "BWC Manager Startup" /TR "C:\Program Files\Applied Concepts Inc\CopTrax Body Camera Manager\CoptraxCam.exe" /F')	; Enable the BWC next time
 			LogUpload("Body Worn Camera Manager is configured to startup.")
 		Else
 			Run(@ComSpec & ' /c schtasks /Delete /TN "BWC Manager Startup" /F')	; delete the BWC scheduled task next time
