@@ -10,10 +10,20 @@
 ::*           .-"-.   \      |      /   .-"-.              *
 ::*.---------{     }--|  /,.-'-.,\  |--{     }--------.    *
 ::* )       (_)_)_)  \_/`~-===-~`\_/  (_(_(_)         (    *
-::*(  By: George Sun And Duc T. Nguyen, 2019/01        )   *
+::*(  By: George Sun And Duc T. Nguyen, 2020/01        )   *
 ::* ) Applied Concepts Inc.                           (    *
 ::*'---------------------------------------------------'   *
 ::**********************************************************
+
+::Tasks list for updating 3.0.0 to 3.0.1
+:: Task 1: Update automation client to 3.0.1, which has the correct scheduler task setup. ## Manually Done.
+:: Task 2: Update CopTraxCam.exe.config to enableBWCM sync with coptrax. ## Manually Done
+:: Task 3: Update the IncaXPCApp.exe.config in Automation\Configures\IRoom to have the default audio and video devices specified as
+::            <setting name="deviceName" serializeAs="String">
+::                <value>Covert MS</value>
+::            </setting>
+::            <setting name="audioDeviceName" serializeAs="String">
+::                <value>Microphone (UM02)</value>
 
 ::Task list migrate from 2.8.7 to 3.0.0
 :: Task 1: Get Interview Room configurations copied ## Manually Done
@@ -121,7 +131,8 @@ CALL :log All the Wi-Fi profiles and the Ethernet have been setup.
 
 SCHTASKS /DELETE /TN Automation /F || CALL :log Cannot Delete the previous Automation scheduler.
 SCHTASKS /CREATE /SC ONLOGON /TN "ACI\CopTrax Welcome" /TR "%Welcome%\CopTraxWelcome.exe" /F /RL HIGHEST || (CALL :log Cannot create scheduler task for CopTrax Welcome. && PAUSE && EXIT /B 1)
-CALL :log Setup the scheduler tasks of CopTrax Welcome.
+SCHTASKS /CREATE /SC ONLOGON /TN "BWC Manager Startup" /TR "C:\Program Files\Applied Concepts Inc\CopTrax Body Camera Manager\CoptraxCam.exe" /F /RL HIGHEST' || (CALL :log Cannot create scheduler task for BWC Manager. && PAUSE && EXIT /B 1)
+CALL :log Setup the scheduler tasks for CopTrax Welcome and BWC Manager.
 
 :: update the registery key
 ::REGEDIT.EXE /S "%Automation%\SetupAutoEndTasks.reg" || (CALL :log Cannot modIFy the registry key. && EXIT /B 1)

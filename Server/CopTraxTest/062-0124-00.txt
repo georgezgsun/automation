@@ -1,5 +1,5 @@
 ;=============================================================================================================================================================================
-;	Automation Test Case Version 2.8.7				
+;	Automation Test Case Version 3.0.1				
 ;=============================================================================================================================================================================
 ;	The supported test command are
 ;	No.	Command		Parameters			function
@@ -81,7 +81,7 @@ OnFailure reboot
 
 settings pre=60 chunk=10 cam2=enabled cam3=enabled keyboard=disable	; enable and enabled are of the same meaning
 about
-checkapp 3.0.0
+checkapp 3.0.1
 checkfirmware 2.1.4
 OnFailure reboot	
 
@@ -90,6 +90,7 @@ camera
 OnFailure reboot
 
 upload C:\CopTrax\_Support\BoardTest.log
+;update C:\Program\_Files\Applied\_Concepts\_Inc\CopTrax\_Body\_Camera\_Manager\CoptraxCam.exe.config
 record duration=35
 
 OnFailure reboot

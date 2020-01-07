@@ -1,5 +1,5 @@
 ;=============================================================================================================================================================================
-;	Automation Test Case Version 3.0.0				
+;	Automation Test Case Version 3.0.1				
 ;=============================================================================================================================================================================
 ;	The supported test command are
 ;	No.	Command		Parameters			function
@@ -81,7 +81,7 @@ OnFailure reboot
 
 settings pre=60 chunk=10 cam2=enabled cam3=enabled keyboard=disable	; enable and enabled are of the same meaning
 about
-checkapp 3.0.0
+checkapp 3.0.1
 checkfirmware 2.1.4
 OnFailure reboot	
 
@@ -94,7 +94,8 @@ record duration=35
 OnFailure reboot	
 
 update C:\Program\_Files\_(x86)\IncaX\CopTrax\IncaXPCApp.exe.config
-update C:\Program\_Files\Applied\_Concepts\_Inc\CopTrax\_Body\_Camera\_Manager\MobileCam.exe.config
+update C:\Users\coptraxadmin\AppData\Local\Microsoft\CoptraxCam.exe_Url_kyxbz0ucf0px45wpoeetda51hglgi2qd\1.2.0.0\user.config
+update C:\Program\_Files\Applied\_Concepts\_Inc\CopTrax\_Body\_Camera\_Manager\CopTraxCam.exe.config
 update C:\CopTrax\_Support\Tools\CopTraxWelcome\CopTraxWelcome.exe.config
 
 OnFailure reboot

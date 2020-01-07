@@ -31,6 +31,15 @@ SET me=BoardTest
 SET log=C:\CopTrax Support\%me%.log
 ECHO %date%  %~0 > "%log%"
 
+:: prepare the Wi-Fi profile, modify the ethernet ip addrass
+NETSH wlan Delete profile name="ACI-CopTrax"
+NETSH wlan Delete profile name="ACI-CopTrax1"
+NETSH wlan Delete profile name="ACI-CopTrax2"
+NETSH wlan add profile filename="C:\CopTraxAutomation\ACI-CopTrax.xml" && (CALL :log Setup the Wi-Fi profile of ACI-CopTrax.) || (CALL :log Cannot create Wi-Fi profile of ACI-CopTrax. && PAUSE && EXIT /B 1)
+NETSH wlan add profile filename="C:\CopTraxAutomation\ACI-CopTrax2.xml" && (CALL :log Setup the Wi-Fi profile of ACI-CopTrax2.) || (CALL :log Cannot create Wi-Fi profile of ACI-CopTrax2. && PAUSE && EXIT /B 1)
+NETSH interface ip set address "CopTrax" static 10.25.50.100 255.255.255.0 && (CALL :log Setup the Ethernet to static IP address.) || (CALL :log Cannot restore static setting for Ethernet. && EXIT /B 1)
+CALL :log All the Wi-Fi profiles and the Ethernet have been setup.
+
 ECHO Checking for the patch.bat exist
 IF EXIST D:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL D:\Patch.bat)
 IF EXIST E:\Patch.bat (CALL :log Found a patch in thumb drive. Launch it. && CALL E:\Patch.bat)

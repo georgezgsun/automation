@@ -81,7 +81,7 @@ OnFailure reboot
 
 settings pre=60 chunk=10  keyboard=disable	; enable and enabled are of the same meaning
 about
-checkapp 3.0.0
+checkapp 3.0.1
 checkfirmware 2.1.4
 OnFailure reboot	
 

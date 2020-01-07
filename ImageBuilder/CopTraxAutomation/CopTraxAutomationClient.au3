@@ -1,6 +1,6 @@
 #RequireAdmin
 
-#pragma compile(FileVersion, 3.0.0.1)
+#pragma compile(FileVersion, 3.0.1.0)
 #pragma compile(FileDescription, Automation test client)
 #pragma compile(ProductName, AutomationTest)
 #pragma compile(ProductVersion, 3.5)
@@ -2088,7 +2088,7 @@ Func Configure($arg)
 	If $bwc Then
 		LogUpload("Configuring Body Worn Camera to turn " & $bwc & ".")
 		If StringInStr($bwc, "on") Then
-			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "BWC Manager Startup" /TR "C:\Program Files\Applied Concepts Inc\CopTrax Body Camera Manager\CoptraxCam.exe" /F')	; Enable the BWC next time
+			Run(@ComSpec & ' /c schtasks /Create /SC ONLOGON /TN "BWC Manager Startup" /TR "C:\Program Files\Applied Concepts Inc\CopTrax Body Camera Manager\CoptraxCam.exe" /F /RL HIGHEST')	; Enable the BWC next time
 			LogUpload("Body Worn Camera Manager is configured to startup.")
 		Else
 			Run(@ComSpec & ' /c schtasks /Delete /TN "BWC Manager Startup" /F')	; delete the BWC scheduled task next time
